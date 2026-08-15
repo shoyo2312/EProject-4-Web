@@ -4,11 +4,40 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * TikTok's breakpoints are inclusive `max-width` queries, so a rule applies AT
+ * 1280/1024/768 as well as below. Tailwind's `max-xl` / `max-[1280px]` both emit
+ * `not (min-width: 1280px)`, which is exclusive — that renders the wrong branch
+ * at exactly the boundary width. These variants reproduce the site's own queries.
+ */
+/* The sidebar footer has its own breakpoint: `@media screen and (max-width:
+ * 1071px) { display: none }`. It is 1071, not 1024 — do not fold them. */
+@custom-variant tt-1071 (@media (max-width: 1071px));
+@custom-variant tt-1280 (@media (max-width: 1280px));
+@custom-variant tt-1024 (@media (max-width: 1024px));
+@custom-variant tt-768 (@media (max-width: 768px));
+
+/* The profile page is on a different ladder from the feed: its layout padding
+ * and video grid step at 1200 / 1024 / 840 / 600 (measured — see
+ * `docs/research/tiktok.com/PROFILE.md`). Only 1024 is shared. */
+@custom-variant tt-1200 (@media (max-width: 1200px));
+@custom-variant tt-840 (@media (max-width: 840px));
+@custom-variant tt-600 (@media (max-width: 600px));
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  --font-sans: var(--font-tiktok), Arial, Tahoma, "PingFang SC", sans-serif;
+  --font-mono: ui-monospace, monospace;
+
+  /* --- TikTok brand ------------------------------------------------------ */
+  --color-tt-red: var(--tt-red);
+  --color-tt-red-active: var(--tt-red-active);
+  --color-tt-red-hover: var(--tt-red-hover);
+  --color-tt-text: var(--tt-text);
+  --color-tt-text-secondary: var(--tt-text-secondary);
+  --color-tt-icon: var(--tt-icon);
+  --color-tt-field: var(--tt-field);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -117,14 +146,217 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* ==========================================================================
+   TikTok design tokens — extracted from www.tiktok.com
+   Source of truth: docs/research/tiktok.com/DESIGN_TOKENS.md
+   ========================================================================== */
+
+:root {
+  /* Brand */
+  --tt-red: #fe2c55; /* --ui-shape-primary — follow button, badges */
+  --tt-red-active: #ff3b5c; /* active sidebar nav item */
+  --tt-red-hover: #ea284e; /* --tux-colorPrimary-tint-8 — follow button :hover */
+
+  /* Surfaces & text (TUX tokens) */
+  --tt-page: #000; /* --ui-page-flat-1 */
+  --tt-text: rgb(255 255 255 / 0.9); /* body default */
+  --tt-text-secondary: rgb(255 255 255 / 0.75); /* action-rail counts */
+  --tt-text-muted: rgb(255 255 255 / 0.5); /* footer headings */
+  --tt-text-display: #f0f0f0; /* --ui-text-1-display */
+  --tt-icon: #f6f6f6; /* inactive nav icon */
+  --tt-placeholder: rgb(255 255 255 / 0.4); /* --ui-text-placeholder */
+  --tt-field: rgb(255 255 255 / 0.13); /* --ui-shape-neutral-4, search bg */
+  --tt-shape-neutral-3: rgb(255 255 255 / 0.19);
+  --tt-sheet-3: #3a3a3a;
+  --tt-divider: rgb(255 255 255 / 0.12); /* collapsed sidebar border */
+
+  /* Player progress bar */
+  --tt-progress-elapsed: #fe2c55; /* --ui-shape-primary */
+  --tt-progress-track: rgb(255 255 255 / 0.4); /* --ui-image-overlay-white-a40 */
+  --tt-scrub-shadow: rgb(0 0 0 / 0.15); /* --ui-image-overlay-black-a15 */
+
+  /* Layout */
+  --side-nav-width: 15rem; /* 240px */
+  --feed-nav-button-width: 3rem; /* 48px */
+  --one-column-top-content-height: 0px;
+  --one-column-item-bottom-content-height: 0px;
+  --comment-sidebar-width: 0px;
+
+  /*
+   * Vertical space one media card may occupy. Both of TikTok's card branches
+   * are expressed against this exact sub-expression, repeated verbatim inside
+   * every max-width/max-height on `.SectionMediaCardContainer`; naming it once
+   * keeps the portrait and landscape formulas readable.
+   */
+  --one-column-available-height: calc(
+    100vh - var(--one-column-top-content-height, 0px) -
+      var(--one-column-item-bottom-content-height, 0px) - (1rem * 2)
+  );
+
+  /* Motion */
+  --tt-ease: cubic-bezier(0.25, 0, 0.25, 1);
+  --tt-duration: 300ms;
+}
+
+/*
+ * Comment sidebar width. `Feed` toggles `.comments-open` on <html> so this
+ * cascades to both the sidebar itself and to the TopBar, which must step aside
+ * for it — the two are siblings, so a variable on the root is the only way to
+ * share one source of truth.
+ *
+ * Widths are the live site's `.DivCommentSidebarTransitionWrapper` values, and
+ * the queries are inclusive `max-width` to match (see the tt-* variants above).
+ */
+.comments-open {
+  --comment-sidebar-width: 24rem; /* 384px */
+}
+@media (max-width: 1280px) {
+  .comments-open {
+    --comment-sidebar-width: 21rem; /* 336px */
+  }
+}
+@media (max-width: 1024px) {
+  .comments-open {
+    --comment-sidebar-width: 18rem; /* 288px */
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: var(--tt-page);
+    color: var(--tt-text);
+    @apply font-sans;
   }
   html {
     @apply font-sans;
+  }
+  /*
+   * Tailwind v4's preflight ships `cursor: default` on buttons, so every
+   * control in the app would otherwise show an arrow. TikTok uses the hand on
+   * anything clickable — one base rule instead of a `cursor-pointer` class on
+   * each of them. Disabled controls keep the arrow.
+   */
+  button,
+  summary,
+  label,
+  [role="button"],
+  [role="tab"],
+  [role="option"] {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: default;
+  }
+  input[type="range"] {
+    cursor: pointer;
+  }
+}
+
+@layer utilities {
+  /* TikTok hides the feed scrollbar but keeps the container scrollable. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/*
+ * Double-tap heart.
+ *
+ * RECONSTRUCTION, not an extraction. TikTok drives this from JS, so there are no
+ * keyframes in its stylesheets to copy, and reproducing it on the live site
+ * would have meant liking a real video from the signed-in account.
+ *
+ * The one real value here is `transform-origin: 50% 100%`, read off the live
+ * `.HeartWrapper` (which also carries `display: inline-flex; will-change: auto`)
+ * — the heart grows from its bottom point, not its centre.
+ */
+/* A freshly posted comment or reply slides in from its own row. */
+@keyframes tt-comment-in {
+  0% {
+    opacity: 0;
+    translate: 0 -6px;
+    background-color: rgb(254 44 85 / 0.14);
+  }
+  60% {
+    opacity: 1;
+    translate: 0 0;
+  }
+  100% {
+    opacity: 1;
+    background-color: transparent;
+  }
+}
+
+/*
+ * `/video/[id]` steps between videos by navigating, so the incoming player has
+ * to carry the motion the feed gets for free from scroll-snap: it slides in
+ * from whichever edge the wheel came from.
+ */
+@keyframes tt-video-in-next {
+  0% {
+    opacity: 0.3;
+    translate: 0 8%;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes tt-video-in-previous {
+  0% {
+    opacity: 0.3;
+    translate: 0 -8%;
+  }
+  100% {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+/* Follow badge icon swap — the + / tick pops in when the state flips. */
+@keyframes tt-badge-pop {
+  0% {
+    opacity: 0;
+    scale: 0.4;
+  }
+  60% {
+    scale: 1.15;
+  }
+  100% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes tt-heart-pop {
+  0% {
+    opacity: 0;
+    scale: 0.3;
+    translate: 0 0;
+  }
+  15% {
+    opacity: 1;
+    scale: 1.15;
+  }
+  30% {
+    scale: 0.95;
+  }
+  45% {
+    scale: 1;
+    translate: 0 0;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.1;
+    translate: 0 -40px;
   }
 }
