@@ -57,6 +57,12 @@ export function clearTokens({ notify = true }: { notify?: boolean } = {}): void 
   if (notify) sessionEndedListeners.forEach((listener) => listener());
 }
 
+/**
+ * A refresh token alone is still a session: the access token can be gone while
+ * the refresh token outlives it, and `apiFetch` mints a new one on the first
+ * 401. Reading only the access token made those moments look signed-out to
+ * callers like the author cache, which then cached placeholders.
+ */
 export function hasSession(): boolean {
-  return getAccessToken() !== null;
+  return getAccessToken() !== null || getRefreshToken() !== null;
 }

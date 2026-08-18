@@ -13,10 +13,11 @@ import { useRouter } from "next/navigation";
 
 import { LoginModal } from "@/components/session/LoginModal";
 import { authorFromMe } from "@/lib/api/adapters";
+import { clearAuthorCache } from "@/lib/api/authors";
 import * as authApi from "@/lib/api/auth";
 import { isApiError } from "@/lib/api/errors";
 import { getAccessToken, getRefreshToken, onSessionEnded } from "@/lib/api/tokens";
-import { getProviderToken, type SocialProvider } from "@/lib/auth/social";
+import type { SocialProvider } from "@/lib/auth/social";
 import * as usersApi from "@/lib/api/users";
 import type { MeResponse } from "@/lib/api/types";
 import type { Author, LoginOption } from "@/types/tiktok";
@@ -24,7 +25,9 @@ import type { Author, LoginOption } from "@/types/tiktok";
 /** The viewer: an `Author` for rendering, plus what only the account knows. */
 export interface SessionUser extends Author {
   userId: string;
-  email: string;
+  /** Null for a social account the provider gave no address for — see
+   *  `requiresEmail` and `/signup/add-email`. */
+  email: string | null;
   bio: string;
   followerCount: number;
   followingCount: number;
@@ -53,12 +56,25 @@ interface SessionValue {
   /** Real login. Throws `ApiError` so the form can branch on `code`. */
   signIn: (usernameOrEmail: string, password: string) => Promise<void>;
   /**
-   * Google/Facebook login: runs the provider's SDK, then trades the token it
-   * yields for our session. Signs up on first use — the backend has one
-   * endpoint for both. Throws `SocialAuthError` when the provider side failed
-   * or was cancelled, `ApiError` when ours rejected the token.
+   * Trades a token the provider's SDK already issued for a session of ours.
+   * Signs up on first use — the backend has one endpoint for both.
+   *
+   * The token is passed in rather than fetched here so the caller still holds
+   * it if this throws 409 `SOCIAL_LINK_VERIFICATION_REQUIRED`, which is not a
+   * message to show but a code to collect and hand to `confirmSocialLink`.
+   *
+   * `requiresEmail` means the account has no address at all — the provider
+   * gave none — and should be sent to the add-email screen.
    */
-  signInWithProvider: (provider: SocialProvider) => Promise<void>;
+  signInWithProvider: (
+    provider: SocialProvider,
+    providerToken: string,
+  ) => Promise<{ requiresEmail: boolean }>;
+  /** Second half of that 409: the same provider token, plus the mailed code. */
+  confirmSocialLink: (
+    provider: SocialProvider,
+    input: { token: string; otp: string },
+  ) => Promise<{ requiresEmail: boolean }>;
   signOut: () => Promise<void>;
   /** Re-reads `/me`; call after anything that changes the profile server-side. */
   reload: () => Promise<void>;
@@ -154,6 +170,7 @@ export function SessionProvider({
   useEffect(
     () =>
       onSessionEnded(() => {
+        clearAuthorCache();
         setUser(null);
         setLoading(false);
       }),
@@ -163,51 +180,97 @@ export function SessionProvider({
   /**
    * A profile that was not ready at login (Kafka still catching up) is retried
    * a couple of times rather than leaving the viewer with a nameless account.
+   *
+   * Keyed on the two fields it reads, never on `user`: every `loadMe` builds a
+   * fresh object, so depending on the object re-ran this effect on its own
+   * result — `attempts` back to 0, three more timers — and an account whose
+   * `profileReady` never flipped polled `/me` forever, dragging every consumer
+   * of `user` along with it. The reassigned `timer` also means the cleanup
+   * cancels whichever tick is actually pending, not just the first.
    */
+  const userId = user?.userId;
+  const profileReady = user?.profileReady ?? true;
   useEffect(() => {
-    if (!user || user.profileReady) return;
+    if (!userId || profileReady) return;
 
-    let cancelled = false;
     let attempts = 0;
+    let timer = 0;
 
     const tick = () => {
       attempts += 1;
       loadMe().catch(() => undefined);
-      if (!cancelled && attempts < 3) window.setTimeout(tick, 1_500);
+      if (attempts < 3) timer = window.setTimeout(tick, 1_500);
     };
 
-    const timer = window.setTimeout(tick, 800);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [user, loadMe]);
+    timer = window.setTimeout(tick, 800);
+    return () => window.clearTimeout(timer);
+  }, [userId, profileReady, loadMe]);
+
+  /**
+   * Everything after the tokens are already stored.
+   *
+   * `/me` failing here is not a failed login — the session exists, and the
+   * credential that bought it has been spent. A single-use OTP is the sharp
+   * case: rethrowing left the confirmation screen up, asking again for a code
+   * the server had already consumed, so every retry answered `INVALID_OTP` and
+   * the flow could not be finished at all. The throw stops here instead; the
+   * profile fills in on the next `/me`.
+   */
+  const settleSignIn = useCallback(async () => {
+    // Every author resolved while signed out is a placeholder — user-service
+    // will not answer without a token — and those must not outlive the moment
+    // a token exists.
+    clearAuthorCache();
+    try {
+      await loadMe();
+    } catch {
+      // ponytail: swallowed, because the next navigation or reload re-reads
+      // `/me`. Retry here if a stale-looking header proves worth the machinery.
+    }
+    setLoginOpen(false);
+  }, [loadMe]);
 
   const signIn = useCallback(
     async (usernameOrEmail: string, password: string) => {
       await authApi.login({ usernameOrEmail, password });
-      await loadMe();
-      setLoginOpen(false);
+      await settleSignIn();
     },
-    [loadMe],
+    [settleSignIn],
   );
 
   const signInWithProvider = useCallback(
-    async (provider: SocialProvider) => {
-      // The provider dialog must open inside the click that started this, so
-      // nothing may be awaited before `getProviderToken`.
-      const token = await getProviderToken(provider);
-      await authApi.socialLogin(provider, token);
-      await loadMe();
-      setLoginOpen(false);
+    async (provider: SocialProvider, providerToken: string) => {
+      const result = await authApi.socialLogin(provider, providerToken);
+      await settleSignIn();
+      return { requiresEmail: result.requiresEmail };
     },
-    [loadMe],
+    [settleSignIn],
   );
 
+  const confirmSocialLink = useCallback(
+    async (provider: SocialProvider, input: { token: string; otp: string }) => {
+      const result = await authApi.confirmSocialLink(provider, input);
+      await settleSignIn();
+      return { requiresEmail: result.requiresEmail };
+    },
+    [settleSignIn],
+  );
+
+  /**
+   * `authApi.logout` drops the local tokens whatever happens, but still
+   * rethrows a network failure — so signing out with the gateway unreachable
+   * skipped everything below and left a signed-in-looking UI over a session
+   * that no longer had tokens. The local sign-out is what was asked for, so it
+   * happens either way.
+   */
   const signOut = useCallback(async () => {
-    await authApi.logout();
-    setUser(null);
-    router.push("/");
+    try {
+      await authApi.logout();
+    } finally {
+      clearAuthorCache();
+      setUser(null);
+      router.push("/");
+    }
   }, [router]);
 
   const updateUser = useCallback((patch: Partial<SessionUser>) => {
@@ -246,6 +309,7 @@ export function SessionProvider({
       openLogin,
       signIn,
       signInWithProvider,
+      confirmSocialLink,
       signOut,
       reload: async () => {
         try {
@@ -265,6 +329,7 @@ export function SessionProvider({
       openLogin,
       signIn,
       signInWithProvider,
+      confirmSocialLink,
       signOut,
       loadMe,
       updateProfile,

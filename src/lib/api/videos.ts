@@ -93,23 +93,46 @@ const POLL_TIMEOUT_MS = 5 * 60_000;
 export async function pollUntilReady(
   videoId: string,
   onUpdate?: (video: VideoResponse) => void,
+  signal?: AbortSignal,
 ): Promise<VideoResponse> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   let attempt = 0;
-  let latest = await getVideo(videoId);
+  let latest = await getVideo(videoId, signal);
   onUpdate?.(latest);
 
   while (
     latest.status === "PROCESSING" &&
-    Date.now() < deadline
+    Date.now() < deadline &&
+    !signal?.aborted
   ) {
     const delay = POLL_DELAYS_MS[Math.min(attempt, POLL_DELAYS_MS.length - 1)];
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    await sleep(delay, signal);
+    if (signal?.aborted) break;
     attempt += 1;
 
-    latest = await getVideo(videoId);
+    try {
+      latest = await getVideo(videoId, signal);
+    } catch {
+      // A blip on one poll says nothing about the video, which is transcoding
+      // regardless. Throwing here reported a successful upload as a failure,
+      // so the loop keeps the last state it knows and tries again.
+      continue;
+    }
     onUpdate?.(latest);
   }
 
   return latest;
+}
+
+/** Resolves early when `signal` aborts, so a five-minute poll can be dropped. */
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener("abort", done, { once: true });
+  });
 }

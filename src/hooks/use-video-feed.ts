@@ -71,15 +71,27 @@ export function useVideoFeed(): VideoFeedState {
     } catch (cause) {
       if (!signal?.aborted) setError(cause);
     } finally {
-      inFlight.current = false;
-      setLoading(false);
+      // An aborted attempt owns nothing: the cleanup that aborted it has
+      // already released the latch, and a `setLoading(false)` from a dead
+      // request would blank the feed while its replacement is still running.
+      if (!signal?.aborted) {
+        inFlight.current = false;
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     load(controller.signal);
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      // Synchronously, because the abort only rejects the fetch a microtask
+      // later — and StrictMode's remount calls `load` before that lands. Left
+      // to the `finally`, the second call found the latch still held, returned
+      // at once, and the For You page stayed empty with nothing to retry it.
+      inFlight.current = false;
+    };
   }, [load]);
 
   const loadMore = useCallback(() => {

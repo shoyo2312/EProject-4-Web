@@ -18,6 +18,20 @@ import { isApiError, messageFor } from "@/lib/api/errors";
 import { verifyEmailSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
 
+const VERIFIED_LOGIN_HREF = "/login/phone-or-email/email?verified=1";
+
+/**
+ * Keeps a `next` from the query string pointed at this site: exactly one
+ * leading slash, and nothing slash-like behind it. `https://evil.example` and
+ * `//evil.example` are plainly absolute; `/\evil.example` is too, because
+ * browsers read a backslash in that position as a slash. A redirect the
+ * attacker chooses, landing the moment a code was accepted, is exactly the
+ * opening a fake login page wants.
+ */
+function internalPath(next: string | null): string | null {
+  return next && /^\/(?![/\\])/.test(next) ? next : null;
+}
+
 /**
  * `/signup/verify` — the step between registering and being able to log in.
  *
@@ -56,7 +70,9 @@ export function VerifyEmailPage() {
       }
       // Verification does not create a session — the account still has to log
       // in, so the flow lands on the password form with nothing carried over.
-      router.push("/login/phone-or-email/email?verified=1");
+      // Unless `next` says otherwise: an account that got here from add-email
+      // is already signed in, and sending it to a login form would be absurd.
+      router.push(internalPath(params.get("next")) ?? VERIFIED_LOGIN_HREF);
     },
   });
 

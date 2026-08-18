@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { AuthShell } from "@/components/auth/AuthShell";
 import {
@@ -15,6 +15,7 @@ import {
   SubtleLink,
 } from "@/components/auth/AuthFields";
 import { AuthAgreement, AuthOptions } from "@/components/auth/AuthOptions";
+import { SocialLinkForm } from "@/components/auth/SocialLinkForm";
 import { useSocialSignIn } from "@/components/auth/use-social-sign-in";
 import { useSession } from "@/components/session/SessionProvider";
 import { isApiError } from "@/lib/api/errors";
@@ -77,6 +78,18 @@ function OptionsStep({ options }: { options: LoginOption[] }) {
     redirectTo: "/",
   });
 
+  if (social.challenge) {
+    return (
+      <SocialLinkForm
+        challenge={social.challenge}
+        onConfirm={social.confirm}
+        onCancel={social.cancel}
+        error={social.error}
+        busy={social.pending !== null}
+      />
+    );
+  }
+
   return (
     <AuthOptions
       title="Log in to TikTok"
@@ -110,6 +123,9 @@ function PhoneNotice() {
 function EmailForm() {
   const router = useRouter();
   const { signIn } = useSession();
+  // Set by the OTP screen on its way here. Without it, confirming an address
+  // dropped the viewer on a bare login form with no sign the code worked.
+  const justVerified = useSearchParams().get("verified") === "1";
 
   const form = useForm({
     schema: loginSchema,
@@ -143,6 +159,12 @@ function EmailForm() {
 
   return (
     <form onSubmit={form.handleSubmit} noValidate>
+      {justVerified && (
+        <FormNotice>
+          Your email address is verified — log in to finish.
+        </FormNotice>
+      )}
+
       <FieldLabel switchTo={{ label: "Log in with phone", href: PHONE_HREF }}>
         Email or username
       </FieldLabel>

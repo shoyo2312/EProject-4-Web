@@ -10,9 +10,7 @@ Point it at a URL, run `/clone-website`, and your AI agent will inspect the site
 
 ## Demo
 
-[![Watch the demo](docs/design-references/comparison.png)](https://youtu.be/O669pVZ_qr0)
-
-> Click the image above to watch the full demo on YouTube.
+[Watch the full demo on YouTube](https://youtu.be/O669pVZ_qr0)
 
 ## Quick Start
 
@@ -124,7 +122,6 @@ public/
   seo/              # Favicons, OG images
 docs/
   research/         # Extraction output & component specs
-  design-references/ # Screenshots
 scripts/
   sync-agent-rules.sh  # Regenerate agent instruction files
   sync-skills.mjs      # Regenerate /clone-website for all platforms

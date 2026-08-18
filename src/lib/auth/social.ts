@@ -114,13 +114,24 @@ interface GoogleAccountsId {
 }
 
 /**
+ * Nothing settles a prompt Google decides not to show. Under FedCM the two
+ * notification predicates below are deprecated and answer nothing, so a
+ * suppressed prompt fires no callback, no notification and no error — which
+ * left the caller's `pending` flag on "Connecting…" and every login row
+ * disabled until a reload. This is the backstop that ends that wait.
+ */
+const GOOGLE_PROMPT_TIMEOUT_MS = 60_000;
+
+/**
  * The account chooser, via `google.accounts.id.prompt()`.
  *
  * ponytail: this is the One Tap / FedCM prompt rather than a rendered Google
  * button, so the TikTok-styled row stays the thing the viewer clicks. The cost
  * is that a viewer who has dismissed the prompt repeatedly gets suppressed by
- * Google and lands in the `unavailable` branch; if that shows up in practice,
- * swap to `google.accounts.id.renderButton` over the row.
+ * Google, and now lands in the `unavailable` branch via the timeout instead of
+ * hanging. If that shows up in practice, swap to
+ * `google.accounts.id.renderButton` over the row — the only flow Google does
+ * not suppress that still yields the ID token auth-service verifies.
  */
 async function googleIdToken(): Promise<string> {
   await loadScript(GOOGLE_SDK_SRC);
@@ -130,15 +141,32 @@ async function googleIdToken(): Promise<string> {
   }
 
   return new Promise<string>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      accounts.cancel();
+      fail(
+        new SocialAuthError(
+          "unavailable",
+          "Google didn’t open its sign-in dialog. Check that third-party sign-in is allowed in this browser, or log in with your email instead.",
+        ),
+      );
+    }, GOOGLE_PROMPT_TIMEOUT_MS);
+
+    const done = (credential: string) => {
+      window.clearTimeout(timer);
+      resolve(credential);
+    };
+    const fail = (error: SocialAuthError) => {
+      window.clearTimeout(timer);
+      reject(error);
+    };
+
     accounts.initialize({
       client_id: GOOGLE_CLIENT_ID,
       auto_select: false,
       cancel_on_tap_outside: true,
       callback: (response) => {
-        if (response.credential) resolve(response.credential);
-        else {
-          reject(new SocialAuthError("cancelled", "Google sign-in cancelled."));
-        }
+        if (response.credential) done(response.credential);
+        else fail(new SocialAuthError("cancelled", "Google sign-in cancelled."));
       },
     });
 
@@ -146,14 +174,14 @@ async function googleIdToken(): Promise<string> {
       // Both predicates are optional under FedCM, hence the guards. When one
       // does answer true, the callback above will never fire, so settle here.
       if (notification.isNotDisplayed?.()) {
-        reject(
+        fail(
           new SocialAuthError(
             "unavailable",
             "Google didn’t open its sign-in dialog. Check that third-party sign-in is allowed in this browser.",
           ),
         );
       } else if (notification.isSkippedMoment?.()) {
-        reject(new SocialAuthError("cancelled", "Google sign-in cancelled."));
+        fail(new SocialAuthError("cancelled", "Google sign-in cancelled."));
       }
     });
   });

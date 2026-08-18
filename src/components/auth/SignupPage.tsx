@@ -16,6 +16,7 @@ import {
   SubtleLink,
 } from "@/components/auth/AuthFields";
 import { AuthAgreement, AuthOptions } from "@/components/auth/AuthOptions";
+import { SocialLinkForm } from "@/components/auth/SocialLinkForm";
 import { useSocialSignIn } from "@/components/auth/use-social-sign-in";
 import { register } from "@/lib/api/auth";
 import { isApiError, messageFor } from "@/lib/api/errors";
@@ -76,6 +77,18 @@ function OptionsStep({ options }: { options: LoginOption[] }) {
     onFallback: useCallback(() => router.push(EMAIL_HREF), [router]),
     redirectTo: "/",
   });
+
+  if (social.challenge) {
+    return (
+      <SocialLinkForm
+        challenge={social.challenge}
+        onConfirm={social.confirm}
+        onCancel={social.cancel}
+        error={social.error}
+        busy={social.pending !== null}
+      />
+    );
+  }
 
   return (
     <AuthOptions

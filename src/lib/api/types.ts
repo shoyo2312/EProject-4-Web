@@ -52,7 +52,12 @@ export interface UserAccount {
   /** Snowflake, as a string — see `lib/api/json.ts` for why never a number. */
   id: string;
   username: string;
-  email: string;
+  /**
+   * Null when the account came from a social login the provider gave no
+   * address for. Nothing forces one to exist — `POST /auth/email` is how one
+   * arrives later — so every reader has to cope with its absence.
+   */
+  email: string | null;
   role: UserRole;
   status: UserStatus;
   emailVerified: boolean;
@@ -102,7 +107,8 @@ export interface FollowResponse {
 export interface MeResponse {
   id: string;
   username: string;
-  email: string;
+  /** Null for the same reason as `UserAccount.email`. */
+  email: string | null;
   role: UserRole;
   status: UserStatus;
   createdAt: string;

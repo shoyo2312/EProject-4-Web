@@ -6,8 +6,6 @@ browser already had — the page has no signed-out state at all.
 
 Reached from the cog in the owner's profile header, which is a link to `/setting`, not a menu.
 
-Reference: `docs/design-references/tiktok.com/clone-settings.png` (our build).
-
 ## Shell
 
 The live page **replaces the sidebar with a header of its own** — a 60px bar holding the logo,

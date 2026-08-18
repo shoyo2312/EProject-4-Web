@@ -75,6 +75,45 @@ export async function socialLogin(
   return result;
 }
 
+/**
+ * `POST /api/v1/auth/oauth/{provider}/link` — the second half of a login that
+ * came back 409 `SOCIAL_LINK_VERIFICATION_REQUIRED`.
+ *
+ * The provider token goes back up unchanged: the server re-verifies it, so the
+ * merge rests on the provider account *and* the mailed code, never on the
+ * client's word. It succeeds into a session, so the pair is stored here too.
+ */
+export async function confirmSocialLink(
+  provider: SocialProvider,
+  input: { token: string; otp: string },
+): Promise<SocialLoginResponse> {
+  const result = await apiFetch<SocialLoginResponse>(
+    `/auth/oauth/${provider}/link`,
+    { method: "POST", body: input, auth: "none" },
+  );
+
+  storeTokens({
+    accessToken: result.tokens.accessToken,
+    refreshToken: result.tokens.refreshToken,
+  });
+
+  return result;
+}
+
+/**
+ * `POST /api/v1/auth/email` — 204, and authenticated, unlike the rest of the
+ * email flow: the account being given an address is the one holding the token,
+ * and it has no address to name itself by. An OTP follows, spent at
+ * `verify-email` like any other.
+ */
+export function addEmail(email: string): Promise<void> {
+  return apiFetch<void>("/auth/email", {
+    method: "POST",
+    body: { email },
+    auth: "required",
+  });
+}
+
 /** `POST /api/v1/auth/verify-email` — 204. Six digits, 15-minute lifetime. */
 export function verifyEmail(input: {
   email: string;

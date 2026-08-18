@@ -53,8 +53,18 @@ export async function apiFetch<T>(
    * A 401 on an authenticated call means the 15-minute access token is gone.
    * Refresh **once**, replay **once**. The retry uses the token that
    * `refreshAccessToken` has already persisted, never the one captured above.
+   *
+   * A refresh token with no access token beside it is the ordinary bootstrap
+   * shape — the access token expired and was dropped — so the refresh must be
+   * reachable without one. Gating on `token` signed those sessions out on load.
+   * A visitor holding neither is a guest, not an expired session, so that case
+   * falls through to the server's own 401 instead.
    */
-  if (response.status === 401 && auth !== "none" && token) {
+  if (
+    response.status === 401 &&
+    auth !== "none" &&
+    (token || getRefreshToken())
+  ) {
     const fresh = await refreshAccessToken();
     if (!fresh) {
       throw new ApiError(401, "INVALID_REFRESH_TOKEN", "Session expired");

@@ -6,9 +6,6 @@ below is a CSS pixel. Screenshots come back 1568 wide, a 0.8167 scale.
 The pages render the same signed out or signed in, so they were measured on the
 browser's existing session without touching it.
 
-References: `docs/design-references/tiktok.com/clone-login.jpg`,
-`clone-signup-email.jpg` (our build).
-
 ## Six URLs, not two
 
 Each step of each flow is its own route, and the live site pushes real history
