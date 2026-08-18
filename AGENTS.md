@@ -57,7 +57,6 @@ public/
   seo/              # Favicons, OG images, webmanifest
 docs/
   research/         # Inspection output (design tokens, components, layout)
-  design-references/ # Screenshots and visual references
 scripts/            # Asset download scripts
 ```
 

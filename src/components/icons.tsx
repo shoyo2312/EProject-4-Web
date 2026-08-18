@@ -233,10 +233,10 @@ export function ArrowPostIcon(props: IconProps) {
  * The `/video/[id]` overflow menu's row icons.
  *
  * Unlike everything above, these paths are NOT extracted from the live site —
- * they are drawn from `docs/design-references/tiktok.com/more-menu.png`, which
- * is a screenshot rather than a DOM capture, so the real `d` attributes were
- * never available. They match the reference's outline style (24 viewBox, 1.6px
- * stroke, round caps) at the sizes the menu renders them.
+ * they are drawn from a screenshot of the menu rather than a DOM capture, so
+ * the real `d` attributes were never available. They match that reference's
+ * outline style (24 viewBox, 1.6px stroke, round caps) at the sizes the menu
+ * renders them.
  */
 
 function StrokeIcon({ children, ...props }: IconProps) {
@@ -523,8 +523,8 @@ export function EditPencilIcon(props: IconProps) {
 
 /**
  * Owner-view settings cog. NOT extracted — drawn to the 48 grid at the same
- * optical weight as the icons above, from
- * `docs/design-references/tiktok.com/desktop-profile-owner-empty.jpg`.
+ * optical weight as the icons above, from a screenshot of the owner's profile
+ * header.
  */
 export function SettingsIcon(props: IconProps) {
   return (
@@ -645,7 +645,7 @@ export function PushNotificationsIcon(props: IconProps) {
 /**
  * Business verification's storefront. NOT extracted — the live glyph is a
  * 3.2KB multi-part mark on a 20 viewBox; this is the same shape redrawn on the
- * 48 grid, from `docs/design-references/tiktok.com/clone-settings.png`.
+ * 48 grid, from a screenshot of the settings page.
  */
 export function BusinessVerificationIcon(props: IconProps) {
   return (

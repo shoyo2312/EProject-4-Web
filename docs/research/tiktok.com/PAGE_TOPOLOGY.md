@@ -296,8 +296,8 @@ column count falls out of the wrap rather than out of a media query.
 The live grid is 20 real accounts. Their names, handles, avatars and cover frames are real
 people's data read from an authenticated session, so — as with `FEED_COMMENTS` — only the shape
 is reproduced (`SUGGESTED_CREATORS` in `lib/mock-feed.ts`); the identities are invented from the
-same three fictional creators the rest of the mock data uses. For the same reason there is no
-`desktop-1280-following.jpg` reference shot in `docs/design-references/`, only the clone's.
+same three fictional creators the rest of the mock data uses. For the same reason there is no reference shot of
+the signed-in Following feed at all, only the clone's.
 
 ---
 

@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
  * menu ends in Not interested/Report — so what is shared is the chrome and the
  * row vocabulary, and each caller composes its own list.
  *
- * Laid out from `docs/design-references/tiktok.com/more-menu.png` and the two
- * feed captures beside it: 44px rows, an outline icon then its label, with a
+ * Laid out from screenshots of the overflow menu and the two feed captures
+ * beside it: 44px rows, an outline icon then its label, with a
  * full-bleed divider before the trailing group. Only the speed group and the
  * auto-scroll switch carry a trailing control.
  *

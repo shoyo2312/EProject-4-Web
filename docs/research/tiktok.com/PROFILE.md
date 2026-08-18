@@ -11,9 +11,6 @@ Viewport at measurement: **1920×992, DPR 1**. Screenshots returned by the exten
 scaled to 1518px wide — multiply screenshot coordinates by **1.265** to compare them with the
 `getBoundingClientRect()` numbers below.
 
-References: `docs/design-references/tiktok.com/desktop-profile-owner-empty.jpg`,
-`desktop-profile-visitor-grid.jpg`, `desktop-profile-skeleton.jpg`.
-
 ## Page shell
 
 `.DivShareLayoutBase--StyledShareLayoutV2` — the content column beside the sidebar.
@@ -146,8 +143,6 @@ that scrolls the row. Not cloned — no mock account has playlists.
 Opened by `[data-e2e="edit-profile-entrance"]`, the first pill in the owner header. Measured
 on **2026-08-11** against `@mihhuq1223` (the signed-in account). The browser sat at **80%
 zoom**, so every number below is from `getComputedStyle` — the rects are 0.8× these.
-
-Reference: `docs/design-references/tiktok.com/clone-edit-profile.png` (our build).
 
 ```
 .DivModalMask            fixed, rgba(0, 0, 0, .68)
