@@ -50,6 +50,15 @@ const MESSAGES: Record<string, string> = {
   INVALID_OTP: "That code is incorrect or has expired.",
   TOO_MANY_OTP_REQUESTS:
     "Too many code attempts. Try again in about 15 minutes.",
+  INVALID_SOCIAL_TOKEN: "That sign-in expired. Please try again.",
+  EMAIL_ALREADY_LINKED: "This account already has a verified email address.",
+  /**
+   * Not really an error: the login stopped to mail a code, and the UI puts up
+   * the code form instead of a message. Kept here so an unhandled path still
+   * reads sensibly.
+   */
+  SOCIAL_LINK_VERIFICATION_REQUIRED:
+    "Enter the code we emailed to confirm this address is yours.",
 
   // user-service
   CANNOT_FOLLOW_SELF: "You cannot follow yourself.",

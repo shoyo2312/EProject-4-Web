@@ -158,7 +158,11 @@ export function useVideoPlayback({
       };
     }
 
-    if (!isPlaying) return;
+    // A backend video still transcoding has no duration and no HLS url, which
+    // lands it here with `durationSeconds: 0` — and `% 0` is `NaN`, which the
+    // card renders as `NaN:NaN` and reports as `aria-valuenow={NaN}`. Nothing
+    // to simulate against, so the clock simply does not start.
+    if (!isPlaying || durationSeconds <= 0) return;
     let frame = 0;
     let last = performance.now();
     const tick = (now: number) => {

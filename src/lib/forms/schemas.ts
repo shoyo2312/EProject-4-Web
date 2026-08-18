@@ -189,6 +189,9 @@ export const verifyEmailSchema = z.object({
 
 export const forgotPasswordSchema = z.object({ email: emailField });
 
+/** `/signup/add-email` — the address a social account is claiming. */
+export const addEmailSchema = z.object({ email: emailField });
+
 /** The new password is being *set*, so the full strength rule applies. */
 export const resetPasswordSchema = z.object({
   otp: otpField,

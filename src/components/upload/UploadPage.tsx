@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import { isApiError } from "@/lib/api/errors";
@@ -28,6 +28,13 @@ export function UploadPage() {
   const { user, isLoading, openLogin } = useSession();
 
   const [video, setVideo] = useState<VideoResponse | null>(null);
+
+  // The poll outlives the submit, so unmounting is what stops it.
+  const pollAbort = useRef(new AbortController());
+  useEffect(() => {
+    const controller = pollAbort.current;
+    return () => controller.abort();
+  }, []);
 
   const form = useForm({
     schema: uploadSchema,
@@ -70,8 +77,13 @@ export function UploadPage() {
        * The poll backs off (2s → 5s → 10s) and gives up after five minutes,
        * because the gateway's 20 req/s IP budget is shared with everything
        * else the app is doing.
+       *
+       * Deliberately not awaited. The post is already made; awaiting held the
+       * form `submitting` — button disabled, "Posting…" — for up to those five
+       * minutes over work nobody has to sit through. The status arrives via
+       * `setVideo`, and leaving the page aborts the poll.
        */
-      await pollUntilReady(created.id, setVideo);
+      void pollUntilReady(created.id, setVideo, pollAbort.current.signal);
     },
   });
 
