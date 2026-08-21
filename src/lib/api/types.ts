@@ -43,6 +43,17 @@ export function isLastPage(page: PageResponse<unknown>["page"]): boolean {
   return page.number + 1 >= page.totalPages;
 }
 
+/**
+ * The feed's own page shape — positioned by what the last page ended on, not by
+ * how many pages preceded it. There is no total and no page number: `nextCursor`
+ * is passed back verbatim, and its being null is the end of the feed. That is
+ * the whole protocol, so `isLastPage` does not apply here.
+ */
+export interface CursorPage<T> {
+  items: T[];
+  nextCursor: string | null;
+}
+
 /* --- auth-service -------------------------------------------------------- */
 
 export type UserRole = "USER" | "ADMIN";
@@ -152,4 +163,42 @@ export interface CreateVideoRequest {
   /** Must come from a real upload flow: the server allow-lists host/bucket. */
   rawFileUrl: string;
   visibility: VideoVisibility;
+}
+
+/* --- recommendation-service ---------------------------------------------- */
+
+/**
+ * `GET /api/v1/recommendations/feed` — a **ranking**, not videos. This service
+ * has no read path into video-service's data, so it returns ids and the client
+ * hydrates them (`getVideosByIds`). The order is the ranking and must survive.
+ *
+ * There is no page parameter: the server remembers what it served this viewer
+ * for 30 minutes and excludes it, so asking again *is* the next page. It runs
+ * out — the candidate pool is finite — and answers `[]`, which is the signal to
+ * fall back to the chronological feed rather than an error.
+ */
+export interface FeedItemResponse {
+  videoId: string;
+  score: number;
+  /** Why this video ranked: `trending`, `tag:<name>`, `model`. Debug aid. */
+  reasons: string[];
+}
+
+/* --- interaction-service -------------------------------------------------- */
+
+/**
+ * `POST /api/v1/interactions/videos/{videoId}/watch`. One row of training data
+ * per viewing session, sent once when playback ends — not per progress tick.
+ *
+ * `watchedMs` is time actually played, summed across replays, so a looping clip
+ * reports more than its own length. `durationMs` is what the player saw, sent
+ * alongside rather than looked up: what matters is the fraction of what was
+ * playable, and the two can disagree while a re-transcode is in flight.
+ */
+export interface WatchResponse {
+  videoId: string;
+  /** What the server stored — the reported figure, clamped to the video's length. */
+  watchedMs: number;
+  /** Whether this counted as watching to the end. The threshold is server-side. */
+  completed: boolean;
 }

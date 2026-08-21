@@ -3,6 +3,7 @@
 import { apiFetch } from "@/lib/api/client";
 import type {
   CreateVideoRequest,
+  CursorPage,
   PageResponse,
   VideoResponse,
 } from "@/lib/api/types";
@@ -13,15 +14,47 @@ import type {
  * is right on every GET here, not `"none"`.
  */
 
-/** `GET /api/v1/videos/feed` — PUBLISHED + PUBLIC only, newest first. */
+/**
+ * `GET /api/v1/videos/feed` — PUBLISHED + PUBLIC only, newest first, **cursor
+ * paged**. Pass the previous response's `nextCursor` to continue and stop when
+ * it comes back null; there is no page number and no total to count against.
+ *
+ * The distinction matters because the feed grows at the head: with offsets, a
+ * video seen on page 0 slides down into page 1 and gets served twice. A cursor
+ * is positioned on a video, so newer uploads cannot shift it.
+ */
 export function getFeed(
-  page = 0,
+  cursor?: string,
   size = 20,
   signal?: AbortSignal,
-): Promise<PageResponse<VideoResponse>> {
-  return apiFetch<PageResponse<VideoResponse>>("/videos/feed", {
+): Promise<CursorPage<VideoResponse>> {
+  return apiFetch<CursorPage<VideoResponse>>("/videos/feed", {
     auth: "optional",
-    query: { page, size },
+    query: { cursor, size },
+    signal,
+  });
+}
+
+/**
+ * `GET /api/v1/videos/batch?ids=…` — hydrates a ranking in one round trip, in
+ * the order asked.
+ *
+ * One request rather than one per id on purpose: the gateway rate-limits 20
+ * req/s per **IP**, and behind the Next proxy every viewer shares one, so a
+ * twenty-id feed fetched individually spends the whole budget on one scroll.
+ *
+ * Ids that resolve to nothing the viewer may see are **absent** from the reply
+ * rather than failing it, so the result can be shorter than the input — a feed
+ * naming a video deleted seconds ago is the normal case here.
+ */
+export function getVideosByIds(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<VideoResponse[]> {
+  if (ids.length === 0) return Promise.resolve([]);
+  return apiFetch<VideoResponse[]>("/videos/batch", {
+    auth: "optional",
+    query: { ids: ids.join(",") },
     signal,
   });
 }
