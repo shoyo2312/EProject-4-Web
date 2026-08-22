@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { ProfileDraft } from "@/components/profile/EditProfileModal";
 import { ProfilePage } from "@/components/profile/ProfilePage";
+import { ProfileSkeleton } from "@/components/profile/ProfileSkeleton";
 import { useSession } from "@/components/session/SessionProvider";
 import {
   authorFromProfile,
@@ -96,13 +97,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
   }
 
   if (!profile) {
-    return (
-      <Centered>
-        <span className="text-[16px] text-[var(--tt-text-secondary)]">
-          Loading profile…
-        </span>
-      </Centered>
-    );
+    return <ProfileSkeleton />;
   }
 
   const saveProfile = async (draft: ProfileDraft) => {

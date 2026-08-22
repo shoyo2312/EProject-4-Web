@@ -2,6 +2,7 @@
 
 import { BackendProfilePage } from "@/components/profile/BackendProfilePage";
 import { ProfilePage } from "@/components/profile/ProfilePage";
+import { ProfileSkeleton } from "@/components/profile/ProfileSkeleton";
 import { useSession } from "@/components/session/SessionProvider";
 import { isBackendHandle } from "@/lib/api/adapters";
 import type { UserProfile } from "@/types/tiktok";
@@ -40,13 +41,7 @@ export function ProfileRouter({
   // Waiting matters: deciding before `/me` settles would render the mock page
   // for the viewer's own handle and then swap it out under them.
   if (isLoading) {
-    return (
-      <main className="flex h-screen flex-1 items-center justify-center">
-        <span className="text-[16px] text-[var(--tt-text-secondary)]">
-          Loading profile…
-        </span>
-      </main>
-    );
+    return <ProfileSkeleton />;
   }
 
   if (user && user.username === handle) {
