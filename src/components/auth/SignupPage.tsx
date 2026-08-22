@@ -13,7 +13,6 @@ import {
   GoBack,
   PasswordInput,
   Selector,
-  SubtleLink,
 } from "@/components/auth/AuthFields";
 import { AuthAgreement, AuthOptions } from "@/components/auth/AuthOptions";
 import { SocialLinkForm } from "@/components/auth/SocialLinkForm";
@@ -25,7 +24,6 @@ import { useForm } from "@/lib/forms/use-form";
 import type { LoginOption } from "@/types/tiktok";
 
 const OPTIONS_HREF = "/signup";
-const PHONE_HREF = "/signup/phone-or-email/phone";
 const EMAIL_HREF = "/signup/phone-or-email/email";
 
 /**
@@ -40,7 +38,7 @@ export function SignupPage({
   step,
   options,
 }: {
-  step: "options" | "phone" | "email";
+  step: "options" | "email";
   options: LoginOption[];
 }) {
   return (
@@ -56,7 +54,7 @@ export function SignupPage({
         ) : (
           <div className="text-left">
             <AuthTitle>Sign up</AuthTitle>
-            {step === "phone" ? <PhoneNotice /> : <SignupForm />}
+            <SignupForm />
             <GoBack href={OPTIONS_HREF} />
           </div>
         )}
@@ -99,19 +97,6 @@ function OptionsStep({ options }: { options: LoginOption[] }) {
       pending={social.pending}
       error={social.error}
     />
-  );
-}
-
-/** auth-service registers a username + email + password. No phone column. */
-function PhoneNotice() {
-  return (
-    <div className="mt-4">
-      <FormNotice>
-        Phone signup isn’t available on this deployment. Accounts are created
-        with a username, an email address and a password.
-      </FormNotice>
-      <SubtleLink href={EMAIL_HREF}>Sign up with email</SubtleLink>
-    </div>
   );
 }
 
@@ -209,12 +194,7 @@ function SignupForm() {
         </p>
       )}
 
-      <FieldLabel
-        className="mb-[5px]"
-        switchTo={{ label: "Sign up with phone", href: PHONE_HREF }}
-      >
-        Email
-      </FieldLabel>
+      <FieldLabel className="mb-[5px]">Email</FieldLabel>
 
       <AuthInput
         {...form.field("email")}

@@ -48,7 +48,7 @@ export function LoginModal({
   const social = useSocialSignIn({
     onFallback: useCallback(
       (option: LoginOption) => {
-        if (option.icon === "person") router.push("/login/phone-or-email");
+        if (option.icon === "person") router.push("/login/phone-or-email/email");
         else onSignIn();
       },
       [router, onSignIn],

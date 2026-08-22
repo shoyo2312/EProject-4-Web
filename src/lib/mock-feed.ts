@@ -44,7 +44,7 @@ export const CURRENT_SESSION: Author | null = CURRENT_USER;
  */
 export const LOGIN_OPTIONS: LoginOption[] = [
   { label: "Use QR code", icon: "qr" },
-  { label: "Use phone or email", icon: "person" },
+  { label: "Use email or username", icon: "person" },
   { label: "Continue with Facebook", icon: "brand", tint: "#1877F2", provider: "facebook" },
   { label: "Continue with Google", icon: "brand", tint: "#FFFFFF", provider: "google" },
   { label: "Continue with LINE", icon: "brand", tint: "#06C755" },
@@ -54,12 +54,12 @@ export const LOGIN_OPTIONS: LoginOption[] = [
 
 /**
  * `/login`'s option list. Same seven rows as the modal, but the page words the
- * phone row differently ("Use phone / email / username") and flags the row the
- * viewer last used — so it is a separate list, not a reference to the modal's.
+ * email row differently ("Use email / username") and flags the row the viewer
+ * last used — so it is a separate list, not a reference to the modal's.
  */
 export const LOGIN_PAGE_OPTIONS: LoginOption[] = [
   { label: "Use QR code", icon: "qr" },
-  { label: "Use phone / email / username", icon: "person", lastLogin: true },
+  { label: "Use email / username", icon: "person", lastLogin: true },
   { label: "Continue with Facebook", icon: "brand", tint: "#1877F2", provider: "facebook" },
   { label: "Continue with Google", icon: "brand", tint: "#FFFFFF", provider: "google" },
   { label: "Continue with LINE", icon: "brand", tint: "#06C755" },
@@ -69,11 +69,11 @@ export const LOGIN_PAGE_OPTIONS: LoginOption[] = [
 
 /**
  * `/signup`'s option list, verbatim from the live page. It is not the login
- * list minus a row: there is no QR option, the phone/email row is worded
+ * list minus a row: there is no QR option, the email row is worded
  * differently, and no row carries a "Last login" flag.
  */
 export const SIGNUP_OPTIONS: LoginOption[] = [
-  { label: "Use phone or email", icon: "person" },
+  { label: "Use email", icon: "person" },
   { label: "Continue with Facebook", icon: "brand", tint: "#1877F2", provider: "facebook" },
   { label: "Continue with Google", icon: "brand", tint: "#FFFFFF", provider: "google" },
   { label: "Continue with LINE", icon: "brand", tint: "#06C755" },
