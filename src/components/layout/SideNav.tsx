@@ -19,6 +19,7 @@ import {
   UploadIcon,
 } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
+import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import { cn } from "@/lib/utils";
 import type { ActivityGroup, FooterSection, NavItem } from "@/types/tiktok";
 
@@ -131,7 +132,7 @@ export function SideNav({
             <NavRow
               key={item.label}
               item={item}
-              avatarUrl={user?.avatarUrl ?? "/images/avatars/avatar-1.jpeg"}
+              avatarUrl={user?.avatarUrl ?? DEFAULT_AVATAR}
               collapsed={activityOpen}
               active={item.href === pathname}
               selected={item.label === "Activity" && activityOpen}

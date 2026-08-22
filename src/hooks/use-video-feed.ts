@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
-import { videoToFeedVideo } from "@/lib/api/adapters";
+import { DEFAULT_AVATAR, videoToFeedVideo } from "@/lib/api/adapters";
 import { resolveAuthors } from "@/lib/api/authors";
 import { getPersonalizedFeed } from "@/lib/api/recommendations";
 import { getFeed, getVideosByIds } from "@/lib/api/videos";
@@ -78,7 +78,7 @@ export function useVideoFeed(): VideoFeedState {
         authors.get(video.userId) ?? {
           username: video.userId,
           nickname: `user${video.userId}`,
-          avatarUrl: "/images/avatars/avatar-1.jpeg",
+          avatarUrl: DEFAULT_AVATAR,
         },
       );
     });
