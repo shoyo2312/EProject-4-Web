@@ -1,8 +1,11 @@
 "use client";
 
 import { apiFetch } from "@/lib/api/client";
+import { ApiError } from "@/lib/api/errors";
 import type {
   CreateVideoRequest,
+  UploadUrlRequest,
+  UploadUrlResponse,
   CursorPage,
   PageResponse,
   VideoResponse,
@@ -89,6 +92,77 @@ export function getUserVideos(
     auth: "optional",
     query: { page, size },
     signal,
+  });
+}
+
+/** Video MIME types the backend presigns for, and what to put in `accept`. */
+export const ACCEPTED_UPLOAD_TYPES = [
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+] as const;
+
+/**
+ * `POST /api/v1/videos/upload-url` — step one of posting a video.
+ *
+ * The file goes straight from the browser to object storage with the presigned
+ * PUT this returns; nothing but the URL passes through the API. Step two is
+ * `uploadToStorage`, step three is `createVideo` with the `fileUrl` from here.
+ */
+export function createUploadUrl(
+  input: UploadUrlRequest,
+): Promise<UploadUrlResponse> {
+  return apiFetch<UploadUrlResponse>("/videos/upload-url", {
+    method: "POST",
+    body: input,
+    auth: "required",
+  });
+}
+
+/**
+ * PUTs the file at a presigned URL, reporting progress 0–1.
+ *
+ * XHR rather than `fetch` because only XHR reports **upload** progress, and a
+ * multi-hundred-megabyte upload with no progress bar reads as a frozen page.
+ * The presigned signature covers the key and expiry, not headers, so sending
+ * `Content-Type` is safe — storage keeps it for media-worker to read back.
+ */
+export function uploadToStorage(
+  uploadUrl: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl);
+    xhr.setRequestHeader("Content-Type", file.type);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(event.loaded / event.total);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(1);
+        resolve();
+        return;
+      }
+      // Storage answers in XML, and its wording ("NoSuchBucket") is for us, not
+      // the uploader — the status is all the caller needs to tell them.
+      reject(new ApiError(xhr.status, "UPLOAD_FAILED", "Upload failed"));
+    };
+    xhr.onerror = () =>
+      reject(new ApiError(0, "NETWORK_ERROR", "Cannot reach the storage host"));
+    xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
+
+    // Reject rather than return: a promise settled by nobody leaves the caller
+    // showing "uploading" for as long as the page is open.
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.send(file);
   });
 }
 

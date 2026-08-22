@@ -157,6 +157,23 @@ export interface VideoResponse {
   createdAt: string;
 }
 
+/**
+ * `POST /api/v1/videos/upload-url` — asks video-service to presign a PUT the
+ * browser sends the file to directly, so the bytes never cross the gateway.
+ */
+export interface UploadUrlRequest {
+  /** MIME type of the file. Only `video/mp4`, `video/quicktime` and `video/webm`. */
+  contentType: string;
+}
+
+export interface UploadUrlResponse {
+  /** Presigned PUT. Expires — upload straight away, do not store it. */
+  uploadUrl: string;
+  /** The `s3://` location to send back as `rawFileUrl` once the PUT succeeds. */
+  fileUrl: string;
+  expiresInSeconds: number;
+}
+
 export interface CreateVideoRequest {
   title: string;
   description?: string;
