@@ -130,7 +130,7 @@ export function ProfileHeader({
           {isOwner ? (
             <>
               <PillButton onClick={onEditProfile}>Edit profile</PillButton>
-              <PillButton onClick={requireSignIn}>Promote post</PillButton>
+              {/*<PillButton onClick={requireSignIn}>Promote post</PillButton>*/}
               {/* The one owner control that is a real destination. */}
               <Link
                 href="/setting"
