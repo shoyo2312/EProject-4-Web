@@ -108,7 +108,7 @@ export function LoginModal({
         <button
           type="button"
           onClick={dismiss}
-          aria-label="Close"
+          aria-label={challenge ? "Cancel verification" : "Close"}
           className="absolute top-6 right-6 flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.04] text-[var(--tt-text)] transition-colors hover:bg-white/10"
         >
           <CloseIcon className="h-5 w-5" />
@@ -156,7 +156,10 @@ export function LoginModal({
         )}
 
         {challenge ? (
-          <div className="mx-auto mt-14 w-[380px] max-w-full px-8">
+          <div
+            className="mx-auto mt-14 w-[380px] max-w-full px-8"
+            inert={confirmingCancel || undefined}
+          >
             <SocialLinkForm
               challenge={challenge}
               onConfirm={social.confirm}
