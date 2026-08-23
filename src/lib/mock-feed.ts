@@ -43,13 +43,13 @@ export const CURRENT_SESSION: Author | null = CURRENT_USER;
  * for why their logos are not vendored.
  */
 export const LOGIN_OPTIONS: LoginOption[] = [
-  { label: "Use QR code", icon: "qr" },
+  // { label: "Use QR code", icon: "qr" },
   { label: "Use email or username", icon: "person" },
   { label: "Continue with Facebook", icon: "brand", tint: "#1877F2", provider: "facebook" },
   { label: "Continue with Google", icon: "brand", tint: "#FFFFFF", provider: "google" },
-  { label: "Continue with LINE", icon: "brand", tint: "#06C755" },
-  { label: "Continue with KakaoTalk", icon: "brand", tint: "#FEE500" },
-  { label: "Continue with Apple", icon: "brand", tint: "#FFFFFF" },
+  // { label: "Continue with LINE", icon: "brand", tint: "#06C755" },
+  // { label: "Continue with KakaoTalk", icon: "brand", tint: "#FEE500" },
+  // { label: "Continue with Apple", icon: "brand", tint: "#FFFFFF" },
 ];
 
 /**
@@ -58,13 +58,13 @@ export const LOGIN_OPTIONS: LoginOption[] = [
  * last used — so it is a separate list, not a reference to the modal's.
  */
 export const LOGIN_PAGE_OPTIONS: LoginOption[] = [
-  { label: "Use QR code", icon: "qr" },
+  // { label: "Use QR code", icon: "qr" },
   { label: "Use email / username", icon: "person", lastLogin: true },
   { label: "Continue with Facebook", icon: "brand", tint: "#1877F2", provider: "facebook" },
   { label: "Continue with Google", icon: "brand", tint: "#FFFFFF", provider: "google" },
-  { label: "Continue with LINE", icon: "brand", tint: "#06C755" },
-  { label: "Continue with KakaoTalk", icon: "brand", tint: "#FEE500" },
-  { label: "Continue with Apple", icon: "brand", tint: "#FFFFFF" },
+  // { label: "Continue with LINE", icon: "brand", tint: "#06C755" },
+  // { label: "Continue with KakaoTalk", icon: "brand", tint: "#FEE500" },
+  // { label: "Continue with Apple", icon: "brand", tint: "#FFFFFF" },
 ];
 
 /**
@@ -76,9 +76,9 @@ export const SIGNUP_OPTIONS: LoginOption[] = [
   { label: "Use email", icon: "person" },
   { label: "Continue with Facebook", icon: "brand", tint: "#1877F2", provider: "facebook" },
   { label: "Continue with Google", icon: "brand", tint: "#FFFFFF", provider: "google" },
-  { label: "Continue with LINE", icon: "brand", tint: "#06C755" },
-  { label: "Continue with KakaoTalk", icon: "brand", tint: "#FEE500" },
-  { label: "Continue with Apple", icon: "brand", tint: "#FFFFFF" },
+  // { label: "Continue with LINE", icon: "brand", tint: "#06C755" },
+  // { label: "Continue with KakaoTalk", icon: "brand", tint: "#FEE500" },
+  // { label: "Continue with Apple", icon: "brand", tint: "#FFFFFF" },
 ];
 
 /**

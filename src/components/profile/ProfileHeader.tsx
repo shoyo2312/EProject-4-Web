@@ -142,7 +142,7 @@ export function ProfileHeader({
           <Stat value={profile.stats.likes} label="Likes" last />
         </h3>
 
-        <div className="mt-3.5 flex items-center gap-3">
+        <div className="mt-2 flex items-center gap-3">
           {isOwner ? (
             <>
               <PillButton onClick={onEditProfile}>Edit profile</PillButton>
@@ -213,24 +213,19 @@ function Stat({
   /** Opens the Followers/Following dialog. Absent for the plain Likes stat. */
   onClick?: () => void;
 }) {
-  const content = (
-    <>
-      <strong className="font-bold">{formatCount(value)}</strong>
-      <span className="ml-1.5 font-normal">{label}</span>
-    </>
-  );
-
   if (!onClick) {
-    return <div className={cn("flex", !last && "mr-5")}>{content}</div>;
+    return (
+      <div className={cn("flex", !last && "mr-5")}>
+        <strong className="font-bold">{formatCount(value)}</strong>
+        <span className="ml-1.5 font-normal">{label}</span>
+      </div>
+    );
   }
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn("flex hover:underline", !last && "mr-5")}
-    >
-      {content}
+    <button type="button" onClick={onClick} className={cn("flex", !last && "mr-5")}>
+      <strong className="font-bold">{formatCount(value)}</strong>
+      <span className="ml-1.5 font-normal hover:underline">{label}</span>
     </button>
   );
 }

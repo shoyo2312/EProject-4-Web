@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { SocialLinkForm } from "@/components/auth/SocialLinkForm";
 import { useSocialSignIn } from "@/components/auth/use-social-sign-in";
@@ -48,10 +48,12 @@ export function LoginModal({
   const social = useSocialSignIn({
     onFallback: useCallback(
       (option: LoginOption) => {
-        if (option.icon === "person") router.push("/login/phone-or-email/email");
-        else onSignIn();
+        if (option.icon === "person") {
+          onClose();
+          router.push("/login/phone-or-email/email");
+        } else onSignIn();
       },
-      [router, onSignIn],
+      [router, onSignIn, onClose],
     ),
   });
 
@@ -67,26 +69,30 @@ export function LoginModal({
    * stepping back first still leaves the modal one click from closed.
    */
   const { challenge, cancel } = social;
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const dismiss = useCallback(() => {
-    if (challenge) cancel();
+    if (challenge) setConfirmingCancel(true);
     else onClose();
-  }, [challenge, cancel, onClose]);
+  }, [challenge, onClose]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") dismiss();
+      if (event.key !== "Escape") return;
+      if (confirmingCancel) setConfirmingCancel(false);
+      else dismiss();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [dismiss]);
+  }, [dismiss, confirmingCancel]);
 
   return (
     <div className="fixed inset-0 z-[3001] flex items-center justify-center">
       <button
         type="button"
-        aria-label={challenge ? "Back to login options" : "Close"}
-        onClick={dismiss}
-        className="absolute inset-0 cursor-default bg-black/[0.68]"
+        aria-label="Close"
+        onClick={challenge ? undefined : dismiss}
+        disabled={Boolean(challenge)}
+        className="absolute inset-0 cursor-default bg-black/[0.68] disabled:cursor-not-allowed"
       />
 
       <div
@@ -102,11 +108,46 @@ export function LoginModal({
         <button
           type="button"
           onClick={dismiss}
-          aria-label={challenge ? "Back to login options" : "Close"}
+          aria-label="Close"
           className="absolute top-6 right-6 flex h-8 w-8 items-center justify-center rounded-full bg-white/[0.04] text-[var(--tt-text)] transition-colors hover:bg-white/10"
         >
           <CloseIcon className="h-5 w-5" />
         </button>
+
+        {confirmingCancel && (
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Cancel verification?"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[#1e1e1e] px-10 text-center"
+          >
+            <h3 className="text-[18px] leading-6 font-bold text-[var(--tt-text)]">
+              Cancel verification?
+            </h3>
+            <p className="text-[14px] leading-5 text-[var(--tt-text-secondary)]">
+              You&rsquo;ll need to request a new code to log in.
+            </p>
+            <div className="mt-2 flex w-full flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmingCancel(false)}
+                className="h-11 w-full rounded-[2px] bg-[var(--tt-text)] text-[16px] font-semibold text-[#1e1e1e] transition-opacity hover:opacity-90"
+              >
+                Keep verifying
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmingCancel(false);
+                  cancel();
+                }}
+                className="h-11 w-full rounded-[2px] bg-white/[0.08] text-[16px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-white/[0.13]"
+              >
+                Cancel verification
+              </button>
+            </div>
+          </div>
+        )}
 
         {!challenge && (
           <h2 className="mx-auto mt-14 mb-4 w-[380px] max-w-full text-center text-[33px] leading-[49.5px] font-bold text-[var(--tt-text)]">
@@ -129,7 +170,7 @@ export function LoginModal({
           /* The list scrolls inside the card — the live modal shows five of
              the seven options and clips the sixth, which is how the scroll is
              signalled. */
-          <div className="no-scrollbar mx-auto h-[296px] w-[380px] max-w-full overflow-y-auto pt-2 pr-8 pl-10">
+          <div className="no-scrollbar mx-auto w-[380px] max-w-full overflow-y-auto pt-2 pr-8 pl-10">
             {options.map((option) => (
               <button
                 key={option.label}
