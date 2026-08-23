@@ -36,6 +36,8 @@ export function ProfileHeader({
   requireSignIn,
   onEditProfile,
   onToggleFollow,
+  onOpenFollowers,
+  onOpenFollowing,
 }: {
   profile: UserProfile;
   isOwner: boolean;
@@ -52,6 +54,12 @@ export function ProfileHeader({
    * only local. Rejecting puts the button back where it was.
    */
   onToggleFollow?: (next: boolean) => Promise<void>;
+  /**
+   * Opens the Followers/Following dialog on that stat. Absent for mock
+   * profiles — there is no backend account to list connections for.
+   */
+  onOpenFollowers?: () => void;
+  onOpenFollowing?: () => void;
 }) {
   const [following, setFollowing] = useState(profile.isFollowing);
   const [followPending, setFollowPending] = useState(false);
@@ -121,8 +129,16 @@ export function ProfileHeader({
 
         {/* `h3.H3Count` — the three stat groups. */}
         <h3 className="mt-1.5 flex flex-wrap text-[16px] leading-[21px] text-[var(--tt-icon)]">
-          <Stat value={profile.stats.following} label="Following" />
-          <Stat value={profile.stats.followers} label="Followers" />
+          <Stat
+            value={profile.stats.following}
+            label="Following"
+            onClick={onOpenFollowing}
+          />
+          <Stat
+            value={profile.stats.followers}
+            label="Followers"
+            onClick={onOpenFollowers}
+          />
           <Stat value={profile.stats.likes} label="Likes" last />
         </h3>
 
@@ -189,16 +205,33 @@ function Stat({
   value,
   label,
   last,
+  onClick,
 }: {
   value: number;
   label: string;
   last?: boolean;
+  /** Opens the Followers/Following dialog. Absent for the plain Likes stat. */
+  onClick?: () => void;
 }) {
-  return (
-    <div className={cn("flex", !last && "mr-5")}>
+  const content = (
+    <>
       <strong className="font-bold">{formatCount(value)}</strong>
       <span className="ml-1.5 font-normal">{label}</span>
-    </div>
+    </>
+  );
+
+  if (!onClick) {
+    return <div className={cn("flex", !last && "mr-5")}>{content}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn("flex hover:underline", !last && "mr-5")}
+    >
+      {content}
+    </button>
   );
 }
 
