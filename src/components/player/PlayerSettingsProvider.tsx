@@ -83,7 +83,12 @@ export function PlayerSettingsProvider({ children }: { children: React.ReactNode
   const mute = useCallback(() => {
     const current = getSnapshot();
     if (current.muted) return;
-    write({ ...current, muted: true });
+    // Deliberately not persisted: this is the browser refusing unmuted
+    // autoplay, not the viewer asking for silence. Writing it through stored
+    // "muted: true" on every cold load and permanently overwrote the choice —
+    // which is why sound always came back off while speed survived.
+    write({ ...current, muted: true }, false);
+    restoreSoundOnGesture();
   }, []);
 
   const changeVolume = useCallback((volume: number) => {
@@ -154,15 +159,55 @@ function subscribe(onChange: () => void) {
   };
 }
 
-function write(next: PlayerSettings) {
+/**
+ * @param persist false for state this tab is forced into, which every other tab
+ *   and the next load must not inherit.
+ */
+function write(next: PlayerSettings, persist = true) {
   snapshot = next;
   loaded = true;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // Private mode or a full quota — the preference just stops persisting.
+  if (persist) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Private mode or a full quota — the preference just stops persisting.
+    }
   }
   listeners.forEach((listener) => listener());
+}
+
+/** True while a listener is already waiting for the first gesture. */
+let awaitingGesture = false;
+
+/**
+ * Puts the sound back on as soon as the viewer touches the page.
+ *
+ * The autoplay policy only refuses *before* the first interaction, so the mute
+ * it forces has no reason to outlive that moment. Without this the stored
+ * preference survived the reload but never took effect: sound came back muted
+ * every single time and had to be switched on by hand, which is the bug as the
+ * viewer experiences it.
+ *
+ * The preference is re-read at that point rather than captured now — muting by
+ * hand in between is a real choice and must win.
+ */
+function restoreSoundOnGesture() {
+  if (awaitingGesture) return;
+  awaitingGesture = true;
+
+  const events = ["pointerdown", "keydown", "wheel", "touchstart"] as const;
+  const restore = () => {
+    events.forEach((event) => window.removeEventListener(event, restore));
+    awaitingGesture = false;
+
+    const stored = readSettings();
+    if (!stored || stored.muted) return;
+    write({ ...getSnapshot(), muted: false, volume: stored.volume }, false);
+  };
+
+  events.forEach((event) =>
+    window.addEventListener(event, restore, { once: true, passive: true }),
+  );
 }
 
 function clampVolume(volume: number) {

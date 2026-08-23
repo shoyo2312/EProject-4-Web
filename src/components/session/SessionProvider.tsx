@@ -171,6 +171,7 @@ export function SessionProvider({
     () =>
       onSessionEnded(() => {
         clearAuthorCache();
+        usersApi.clearFollowCache();
         setUser(null);
         setLoading(false);
       }),
@@ -221,6 +222,7 @@ export function SessionProvider({
     // will not answer without a token — and those must not outlive the moment
     // a token exists.
     clearAuthorCache();
+    usersApi.clearFollowCache();
     try {
       await loadMe();
     } catch {
@@ -268,6 +270,7 @@ export function SessionProvider({
       await authApi.logout();
     } finally {
       clearAuthorCache();
+      usersApi.clearFollowCache();
       setUser(null);
       router.push("/");
     }

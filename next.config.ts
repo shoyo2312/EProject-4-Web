@@ -16,11 +16,44 @@ const GATEWAY_URL = process.env.API_GATEWAY_URL ?? "http://localhost:8080";
  */
 const MEDIA_CDN_HOST = process.env.MEDIA_CDN_HOST ?? "cdn.tiktok-clone.local";
 
+/**
+ * Where the identity providers host the picture a social signup arrives with.
+ * user-service stores that URL as-is on the new profile — it is not our media,
+ * so it is not on the CDN and deliberately not on the `avatarUrl` allow-list —
+ * which leaves this the only place deciding whether such an avatar renders.
+ * Without it a Google or Facebook signup shows a broken image instead of the
+ * default avatar, which is worse than the problem the picture was to solve.
+ */
+const PROVIDER_AVATAR_HOSTS = [
+  "lh3.googleusercontent.com",
+  "platform-lookaside.fbsbx.com",
+];
+
+/**
+ * The object storage itself, which in development is MinIO on :9000 with no CDN
+ * in front of it. media-worker copies each provider avatar there and hands
+ * user-service that URL, so a mirrored avatar is served from this origin rather
+ * than from the CDN host above — different port, so `next/image` treats it as a
+ * different pattern.
+ */
+const MEDIA_ORIGIN = new URL(process.env.MEDIA_ORIGIN ?? "http://localhost:9000");
+
 const nextConfig: NextConfig = {
   output: "standalone",
 
   images: {
-    remotePatterns: [{ protocol: "https", hostname: MEDIA_CDN_HOST }],
+    remotePatterns: [
+      { protocol: "https", hostname: MEDIA_CDN_HOST },
+      {
+        protocol: MEDIA_ORIGIN.protocol.replace(":", "") as "http" | "https",
+        hostname: MEDIA_ORIGIN.hostname,
+        port: MEDIA_ORIGIN.port,
+      },
+      ...PROVIDER_AVATAR_HOSTS.map((hostname) => ({
+        protocol: "https" as const,
+        hostname,
+      })),
+    ],
   },
 
   /**

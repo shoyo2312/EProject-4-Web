@@ -3,6 +3,7 @@
 import Link from "next/link";
 
 import { Feed } from "@/components/feed/Feed";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useVideoFeed } from "@/hooks/use-video-feed";
 import type { Comment, FeedVideo } from "@/types/tiktok";
 
@@ -30,13 +31,7 @@ export function LiveFeed({
   const { videos, isLoading, error, loadMore } = useVideoFeed();
 
   if (isLoading) {
-    return (
-      <Centered>
-        <span className="text-[16px] text-[var(--tt-text-secondary)]">
-          Loading videos…
-        </span>
-      </Centered>
-    );
+    return <FeedSkeleton />;
   }
 
   if (error) {
@@ -67,8 +62,8 @@ export function LiveFeed({
   return (
     <Feed
       videos={videos}
-      // Comments belong to interaction-service, which is not built yet, so the
-      // panel opens empty rather than showing another video's mock thread.
+      // `CommentPanel` fetches real comments itself for these (numeric)
+      // ids — this map only ever serves the mock fallback branch above.
       comments={{}}
       onReachEnd={loadMore}
     />
@@ -79,6 +74,28 @@ function Centered({ children }: { children: React.ReactNode }) {
   return (
     <main className="flex flex-1 flex-col items-center justify-center">
       {children}
+    </main>
+  );
+}
+
+/** Stands in for a single scroll-snap video card while the feed loads. */
+function FeedSkeleton() {
+  return (
+    <main className="flex flex-1 items-center justify-center">
+      <div className="relative h-[calc(100vh-24px)] max-h-[932px] w-[calc((100vh-24px)*9/16)] max-w-[calc(932px*9/16)]">
+        <Skeleton className="h-full w-full rounded-[12px]" />
+        <div className="absolute bottom-8 left-4 flex flex-col gap-3">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-4 w-56" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+        <div className="absolute bottom-8 right-[-64px] flex flex-col items-center gap-5">
+          <Skeleton className="h-12 w-12 rounded-full" />
+          <Skeleton className="h-10 w-10 rounded-full" />
+          <Skeleton className="h-10 w-10 rounded-full" />
+          <Skeleton className="h-10 w-10 rounded-full" />
+        </div>
+      </div>
     </main>
   );
 }

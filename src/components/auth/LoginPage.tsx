@@ -25,23 +25,23 @@ import type { LoginOption } from "@/types/tiktok";
 
 /** The live routes, which this clone keeps. */
 const OPTIONS_HREF = "/login";
-const PHONE_HREF = "/login/phone-or-email";
 const EMAIL_HREF = "/login/phone-or-email/email";
 
 /**
- * `/login`, in its three live steps. Each is its own URL, so the browser's
+ * `/login`, in its two live steps. Each is its own URL, so the browser's
  * back button walks the flow exactly as it does on the live site.
  *
  * The email step is wired to `POST /api/v1/auth/login` through the gateway,
  * and the Facebook and Google rows to `POST /api/v1/auth/oauth/{provider}`.
  * The rest are not: there is no SMS sender, and no LINE/Kakao/Apple app
  * registered, so they lead to the email form rather than faking a session.
+ * There is no phone step — auth-service has no phone column.
  */
 export function LoginPage({
   step,
   options,
 }: {
-  step: "options" | "phone" | "email";
+  step: "options" | "email";
   options: LoginOption[];
 }) {
   return (
@@ -57,7 +57,7 @@ export function LoginPage({
         ) : (
           <div className="text-left">
             <AuthTitle>Log in</AuthTitle>
-            {step === "phone" ? <PhoneNotice /> : <EmailForm />}
+            <EmailForm />
             <GoBack href={OPTIONS_HREF} />
           </div>
         )}
@@ -99,23 +99,6 @@ function OptionsStep({ options }: { options: LoginOption[] }) {
       pending={social.pending}
       error={social.error}
     />
-  );
-}
-
-/**
- * `/login/phone-or-email`. auth-service authenticates on username/email and
- * password only — there is no phone column and no SMS sender — so this step
- * points at the form that works instead of collecting a number nothing reads.
- */
-function PhoneNotice() {
-  return (
-    <div className="mt-4">
-      <FormNotice>
-        Phone login isn’t available on this deployment. The backend signs you in
-        with a username or email address and a password.
-      </FormNotice>
-      <SubtleLink href={EMAIL_HREF}>Log in with email or username</SubtleLink>
-    </div>
   );
 }
 
@@ -165,9 +148,7 @@ function EmailForm() {
         </FormNotice>
       )}
 
-      <FieldLabel switchTo={{ label: "Log in with phone", href: PHONE_HREF }}>
-        Email or username
-      </FieldLabel>
+      <FieldLabel>Email or username</FieldLabel>
 
       <AuthInput
         {...form.field("identifier")}

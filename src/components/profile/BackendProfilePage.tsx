@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { ProfileDraft } from "@/components/profile/EditProfileModal";
 import { ProfilePage } from "@/components/profile/ProfilePage";
+import { ProfileSkeleton } from "@/components/profile/ProfileSkeleton";
 import { useSession } from "@/components/session/SessionProvider";
 import {
   authorFromProfile,
@@ -96,13 +97,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
   }
 
   if (!profile) {
-    return (
-      <Centered>
-        <span className="text-[16px] text-[var(--tt-text-secondary)]">
-          Loading profile…
-        </span>
-      </Centered>
-    );
+    return <ProfileSkeleton />;
   }
 
   const saveProfile = async (draft: ProfileDraft) => {
@@ -158,7 +153,29 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       }
       throw cause;
     } finally {
-      load();
+      /**
+       * Only the target's counts can have moved, so this re-reads the profile
+       * alone. `load()` here also refetched thirty videos and walked the
+       * following list again — three requests against a gateway that allows
+       * twenty a second for every viewer sharing the Next proxy's IP.
+       */
+      usersApi
+        .getProfile(targetId)
+        .then((raw) =>
+          setProfile((current) =>
+            current
+              ? {
+                  ...current,
+                  stats: {
+                    ...current.stats,
+                    followers: raw.followerCount,
+                    following: raw.followingCount,
+                  },
+                }
+              : current,
+          ),
+        )
+        .catch(() => undefined);
     }
   };
 

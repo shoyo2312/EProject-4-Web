@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ArrowPostIcon,
@@ -12,10 +12,29 @@ import {
   HeartIcon,
 } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
+import { Skeleton } from "@/components/ui/skeleton";
+import { isBackendHandle } from "@/lib/api/adapters";
+import { resolveAuthor } from "@/lib/api/authors";
+import {
+  addComment,
+  deleteComment as deleteCommentApi,
+  listComments,
+} from "@/lib/api/interactions";
 import { cn } from "@/lib/utils";
-import { formatCount } from "@/lib/format";
+import { formatCount, formatRelativeTime } from "@/lib/format";
 import { CURRENT_USER } from "@/lib/mock-feed";
 import type { Comment } from "@/types/tiktok";
+
+/** Removes a comment wherever it lives — top-level, or nested one reply deep. */
+function removeCommentById(list: Comment[], id: string): Comment[] {
+  return list
+    .filter((comment) => comment.id !== id)
+    .map((comment) =>
+      comment.replies
+        ? { ...comment, replies: removeCommentById(comment.replies, id) }
+        : comment,
+    );
+}
 
 /** Which comment thread the composer is aimed at, if any. */
 interface ReplyTarget {
@@ -50,18 +69,24 @@ interface ReplyTarget {
  * live site, so they are kept different here.
  */
 export function CommentPanel({
+  videoId,
   comments: initialComments,
   commentCount,
   onClose,
   onCommentAdded,
+  onCommentDeleted,
   variant = "sidebar",
 }: {
-  /** This video's comments as loaded by the page. */
+  /** Backend id (numeric) fetches real comments; a mock id keeps `comments` as-is. */
+  videoId: string;
+  /** This video's comments as loaded by the page — used only for mock ids. */
   comments: Comment[];
   /** Total shown in the header — the loaded count plus anything posted here. */
   commentCount: number;
   onClose: () => void;
   onCommentAdded: () => void;
+  /** Fired after a comment is removed, so the caller's count stays in sync. */
+  onCommentDeleted: () => void;
   /**
    * `sidebar` is the feed's collapsible panel, sized and shadowed as above.
    * `detail` is the lower half of `/video/[id]`'s right column, which is wider
@@ -71,19 +96,119 @@ export function CommentPanel({
   variant?: "sidebar" | "detail";
 }) {
   const isDetail = variant === "detail";
-  const [comments, setComments] = useState<Comment[]>(initialComments);
+  const isBackend = isBackendHandle(videoId);
+  const { user } = useSession();
+  const [comments, setComments] = useState<Comment[]>(isBackend ? [] : initialComments);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   /** Newest locally-posted comment — drives the slide-in and the auto-expand. */
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(isBackend);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const composerRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  /** interaction-service's flat DTO → the UI's `Comment`, author resolved by id. */
+  const toUiComment = useCallback(async (raw: {
+    commentId: string;
+    userId: string;
+    content: string;
+    createdAt: string;
+  }): Promise<Comment> => ({
+    id: raw.commentId,
+    author: await resolveAuthor(raw.userId),
+    text: raw.content,
+    timestamp: formatRelativeTime(raw.createdAt),
+    likes: 0,
+  }), []);
+
+  // Real comments load once per video; the mock path keeps the prop as its
+  // whole state, unchanged from before this was wired up.
+  useEffect(() => {
+    if (!isBackend) return;
+    let cancelled = false;
+    setLoading(true);
+
+    listComments(videoId)
+      .then(async (page) => {
+        const items = await Promise.all(page.items.map(toUiComment));
+        if (cancelled) return;
+        setComments(items);
+        setCursor(page.nextCursor);
+        setHasMore(page.hasMore);
+      })
+      .catch(() => {
+        // Leave the list empty — the header count still comes from video-service.
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [videoId, isBackend, toUiComment]);
+
+  const loadMore = async () => {
+    if (!cursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await listComments(videoId, cursor);
+      const items = await Promise.all(page.items.map(toUiComment));
+      setComments((current) => [...current, ...items]);
+      setCursor(page.nextCursor);
+      setHasMore(page.hasMore);
+    } catch {
+      // Stay put — the button is still there to retry.
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const startReply = (target: ReplyTarget) => {
     setReplyTo(target);
     composerRef.current?.focus();
   };
 
+  const postBackendComment = async (text: string) => {
+    if (!user) return;
+    const optimistic: Comment = {
+      id: `pending-${Date.now()}`,
+      author: user,
+      text,
+      timestamp: "now",
+      likes: 0,
+    };
+    setComments((current) => [optimistic, ...current]);
+    setJustAddedId(optimistic.id);
+    listRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    onCommentAdded();
+
+    try {
+      const saved = await addComment(videoId, text);
+      setComments((current) =>
+        current.map((comment) =>
+          comment.id === optimistic.id ? { ...comment, id: saved.commentId } : comment,
+        ),
+      );
+    } catch {
+      // Silent rollback: undo both the optimistic row and the count bump.
+      setComments((current) => removeCommentById(current, optimistic.id));
+      onCommentDeleted();
+    }
+  };
+
   const post = (text: string) => {
+    // A reply has nowhere to live on the backend — CommentByVideo is flat —
+    // so a reply always stays a local, this-session-only addition, on both a
+    // mock video and a real one.
+    if (isBackend && !replyTo) {
+      void postBackendComment(text);
+      setReplyTo(null);
+      return;
+    }
+
     const entry: Comment = {
       id: `local-${Date.now()}`,
       author: CURRENT_USER,
@@ -106,6 +231,20 @@ export function CommentPanel({
     if (!replyTo) listRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     setReplyTo(null);
     onCommentAdded();
+  };
+
+  const deleteOwnComment = async (id: string) => {
+    const previous = comments;
+    setComments((current) => removeCommentById(current, id));
+    onCommentDeleted();
+    if (!isBackend) return;
+    try {
+      await deleteCommentApi(videoId, id);
+    } catch {
+      // Silent rollback, same as everywhere else here.
+      setComments(previous);
+      onCommentAdded();
+    }
   };
 
   return (
@@ -148,14 +287,29 @@ export function CommentPanel({
         ref={listRef}
         className="no-scrollbar flex-1 overflow-y-scroll [overscroll-behavior:contain]"
       >
+        {loading && comments.length === 0 && <CommentListSkeleton />}
+
         {comments.map((comment) => (
           <CommentItem
             key={comment.id}
             comment={comment}
             onReply={startReply}
             justAddedId={justAddedId}
+            currentUserId={user?.userId}
+            onDelete={deleteOwnComment}
           />
         ))}
+
+        {hasMore && (
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="w-full py-2 text-center text-[14px] font-medium text-white/60 hover:underline disabled:opacity-40"
+          >
+            {loadingMore ? "Loading…" : "Load more comments"}
+          </button>
+        )}
       </div>
 
       <CommentComposer
@@ -206,6 +360,22 @@ export function CommentPanel({
  *   like count 14px / 400 / 21px     rgba(255,255,255,.6)
  *
  */
+function CommentListSkeleton() {
+  return (
+    <div className="flex flex-col gap-4 py-2">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex gap-3">
+          <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+          <div className="flex flex-1 flex-col gap-2">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function CommentItem({
   comment,
   isReply = false,
@@ -213,15 +383,23 @@ function CommentItem({
   justAddedId,
   /** Thread this item belongs to — a reply's replies go to its parent. */
   parentId,
+  currentUserId,
+  onDelete,
 }: {
   comment: Comment;
   isReply?: boolean;
   onReply?: (target: ReplyTarget) => void;
   justAddedId?: string | null;
   parentId?: string;
+  /** The signed-in viewer's id — only their own comments can be deleted. */
+  currentUserId?: string;
+  onDelete?: (id: string) => void;
 }) {
   const [liked, setLiked] = useState(false);
   const avatarSize = isReply ? 24 : 32;
+  // Mock authors carry no `userId`, so this is false for every mock comment —
+  // the "⋯" stays decorative there, same as before this was wired up.
+  const canDelete = Boolean(currentUserId) && comment.author.userId === currentUserId;
 
   return (
     <div
@@ -259,7 +437,8 @@ function CommentItem({
             </div>
             <button
               type="button"
-              aria-label="More options"
+              onClick={canDelete ? () => onDelete?.(comment.id) : undefined}
+              aria-label={canDelete ? "Delete comment" : "More options"}
               className="flex h-5 w-3.5 flex-none items-center justify-center text-white/60 hover:text-[var(--tt-text)]"
             >
               <MoreDotsGlyph />

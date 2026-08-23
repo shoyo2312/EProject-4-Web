@@ -199,10 +199,10 @@ export const resetPasswordSchema = z.object({
 });
 
 /**
- * video-service allow-lists the media URL — `https` on a configured CDN host or
- * `s3://` on a configured bucket. The scheme is the half the client can check
- * without knowing the deployment's host list; the host itself stays the
- * server's call, and comes back as a form-level error.
+ * The file itself is not validated here: it is picked, not typed, so its type
+ * and size are checked where it is chosen and the URL is whatever the upload
+ * came back with. What is left is the metadata, and the limits mirror
+ * video-service's DTO.
  */
 export const uploadSchema = z.object({
   title: z
@@ -214,14 +214,6 @@ export const uploadSchema = z.object({
     .string()
     .trim()
     .max(2000, "Descriptions can be at most 2000 characters."),
-  rawFileUrl: z
-    .string()
-    .trim()
-    .min(1, "Paste the URL of the media file.")
-    .refine(
-      (value) => value.startsWith("https://") || value.startsWith("s3://"),
-      "The URL must start with https:// or s3://.",
-    ),
   visibility: z.enum(["PUBLIC", "PRIVATE"]),
 });
 

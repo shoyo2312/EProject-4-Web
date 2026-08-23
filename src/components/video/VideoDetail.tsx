@@ -14,7 +14,7 @@ import {
   Switch,
 } from "@/components/player/PlayerMenu";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
-import { useSession } from "@/components/session/SessionProvider";
+import { useFollow } from "@/hooks/use-follow";
 import {
   ArrowPostIcon,
   AutoScrollIcon,
@@ -32,6 +32,8 @@ import {
   SpeedIcon,
   VolumeIcon,
 } from "@/components/icons";
+import { isBackendHandle } from "@/lib/api/adapters";
+import { getLikeStatus, likeVideo, shareVideo, unlikeVideo } from "@/lib/api/interactions";
 import { formatCount } from "@/lib/format";
 import { getOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
@@ -113,7 +115,61 @@ export function VideoDetail({
     setAutoScroll,
   } = usePlayerSettings();
   const [liked, setLiked] = useState(false);
+  /**
+   * Server-known count, overriding the rendered one. `stats.likes` already
+   * counts the viewer's own like, so a filled heart must not add another.
+   */
+  const [likeCount, setLikeCount] = useState(video.stats.likes);
   const [extraComments, setExtraComments] = useState(0);
+  const [extraShares, setExtraShares] = useState(0);
+
+  // Seed the heart for a returning viewer. Mock videos have no backend to ask.
+  useEffect(() => {
+    if (!isBackendHandle(video.id)) return;
+    let cancelled = false;
+    getLikeStatus(video.id)
+      .then((status) => {
+        if (cancelled) return;
+        setLiked(status.liked);
+        setLikeCount(status.likeCount);
+      })
+      .catch(() => {
+        // No session, or the call failed — the heart just starts unfilled.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [video.id]);
+
+  const setLike = useCallback(
+    (next: boolean) => {
+      setLiked(next);
+      setLikeCount((count) => count + (next ? 1 : -1));
+      if (!isBackendHandle(video.id)) return;
+
+      (next ? likeVideo(video.id) : unlikeVideo(video.id))
+        // The optimistic bump above is only a guess at the shared count.
+        .then((status) => setLikeCount(status.likeCount))
+        .catch(() => {
+          // Silent rollback, matching the feed's like button.
+          setLiked(!next);
+          setLikeCount((count) => count + (next ? -1 : 1));
+        });
+    },
+    [video.id],
+  );
+
+  const toggleLike = useCallback(() => setLike(!liked), [liked, setLike]);
+
+  const likeOnly = useCallback(() => {
+    if (!liked) setLike(true);
+  }, [liked, setLike]);
+
+  const recordShare = useCallback(() => {
+    setExtraShares((n) => n + 1);
+    if (!isBackendHandle(video.id)) return;
+    shareVideo(video.id).catch(() => setExtraShares((n) => n - 1));
+  }, [video.id]);
 
   /**
    * `router.back()` keeps the Explore scroll position, so it is preferred — but
@@ -257,7 +313,7 @@ export function VideoDetail({
           >
             <VideoCard
               video={video}
-              onLike={() => setLiked(true)}
+              onLike={likeOnly}
               showCaption={false}
               showVolumeControl={false}
               showContextMenu={false}
@@ -275,17 +331,22 @@ export function VideoDetail({
         <VideoSummary
           video={video}
           liked={liked}
-          onToggleLike={() => setLiked((l) => !l)}
+          likes={likeCount}
+          onToggleLike={toggleLike}
           commentCount={video.stats.comments + extraComments}
+          shareCount={video.stats.shares + extraShares}
+          onShare={recordShare}
         />
 
         <div className="min-h-0 flex-1">
           <CommentPanel
             variant="detail"
+            videoId={video.id}
             comments={comments}
             commentCount={video.stats.comments + extraComments}
             onClose={close}
             onCommentAdded={() => setExtraComments((n) => n + 1)}
+            onCommentDeleted={() => setExtraComments((n) => n - 1)}
           />
         </div>
       </aside>
@@ -538,16 +599,26 @@ function MoreMenu({
 function VideoSummary({
   video,
   liked,
+  likes,
   onToggleLike,
   commentCount,
+  shareCount,
+  onShare,
 }: {
   video: FeedVideo;
   liked: boolean;
+  /** Reconciled with the server by the page — never derived from `liked`. */
+  likes: number;
   onToggleLike: () => void;
   commentCount: number;
+  shareCount: number;
+  onShare: () => void;
 }) {
-  const [following, setFollowing] = useState(video.isFollowing);
-  const { requireSignIn } = useSession();
+  const {
+    isSelf,
+    following,
+    toggle: toggleFollow,
+  } = useFollow(video.author.userId, video.isFollowing);
   const [bookmarked, setBookmarked] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -563,6 +634,7 @@ function VideoSummary({
     try {
       await navigator.clipboard.writeText(new URL(sharePath, window.location.origin).href);
       setCopied(true);
+      onShare();
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard access can be denied (insecure origin, permission) — the
@@ -588,21 +660,21 @@ function VideoSummary({
             {video.author.nickname}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            if (!requireSignIn()) return;
-            setFollowing((f) => !f);
-          }}
-          className={cn(
-            "h-8 flex-none rounded-[8px] px-4 text-[15px] font-medium transition-colors",
-            following
-              ? "border border-[var(--tt-divider)] text-[var(--tt-text)] hover:bg-[var(--tt-field)]"
-              : "bg-[var(--tt-red)] text-white hover:bg-[var(--tt-red-hover)]",
-          )}
-        >
-          {following ? "Following" : "Follow"}
-        </button>
+        {/* Absent on your own video — see the rail's badge. */}
+        {!isSelf && (
+          <button
+            type="button"
+            onClick={toggleFollow}
+            className={cn(
+              "h-8 flex-none rounded-[8px] px-4 text-[15px] font-medium transition-colors",
+              following
+                ? "border border-[var(--tt-divider)] text-[var(--tt-text)] hover:bg-[var(--tt-field)]"
+                : "bg-[var(--tt-red)] text-white hover:bg-[var(--tt-red-hover)]",
+            )}
+          >
+            {following ? "Following" : "Follow"}
+          </button>
+        )}
       </div>
 
       <p className="mt-3 text-[16px] leading-[22px] text-[var(--tt-text)]">
@@ -628,7 +700,7 @@ function VideoSummary({
         <CountButton
           label={liked ? "Unlike" : "Like"}
           onClick={onToggleLike}
-          count={video.stats.likes + (liked ? 1 : 0)}
+          count={likes}
           active={liked}
         >
           <HeartIcon className="h-5 w-5" />
@@ -647,7 +719,7 @@ function VideoSummary({
           <BookmarkIcon className="h-5 w-5" />
         </CountButton>
 
-        <CountButton label="Share video" count={video.stats.shares}>
+        <CountButton label="Share video" onClick={onShare} count={shareCount}>
           <ShareIcon className="h-5 w-5" />
         </CountButton>
       </div>

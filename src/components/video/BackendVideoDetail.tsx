@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { VideoDetail } from "@/components/video/VideoDetail";
 import { videoToFeedVideo } from "@/lib/api/adapters";
 import { resolveAuthor } from "@/lib/api/authors";
 import { messageFor } from "@/lib/api/errors";
-import { getVideo } from "@/lib/api/videos";
+import { getUserVideos, getVideo } from "@/lib/api/videos";
 import type { VideoStatus } from "@/lib/api/types";
 import type { FeedVideo } from "@/types/tiktok";
 
@@ -23,9 +24,23 @@ export function BackendVideoDetail({ videoId }: { videoId: string }) {
   const [video, setVideo] = useState<FeedVideo | null>(null);
   const [status, setStatus] = useState<VideoStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The ids either side of this one, for the up/down controls. Both were pinned
+   * to null, which left the buttons permanently disabled — a backend video had
+   * no collection to step through at all.
+   *
+   * The collection is the author's own videos, in the order their profile grid
+   * lists them: this page is reached by tapping a tile on that grid, so
+   * stepping walks the grid the viewer just came from.
+   */
+  const [neighbours, setNeighbours] = useState<{
+    previousId: string | null;
+    nextId: string | null;
+  }>({ previousId: null, nextId: null });
 
   useEffect(() => {
     const controller = new AbortController();
+    let rendered = false;
 
     (async () => {
       try {
@@ -33,8 +48,22 @@ export function BackendVideoDetail({ videoId }: { videoId: string }) {
         const author = await resolveAuthor(raw.userId);
         setStatus(raw.status);
         setVideo(videoToFeedVideo(raw, author));
+        rendered = true;
+
+        // After the video is on screen, not before: a slow or failed listing
+        // must cost the page nothing but two disabled buttons.
+        const page = await getUserVideos(raw.userId, 0, 30, controller.signal);
+        const ids = page.content.map((entry) => entry.id);
+        const index = ids.indexOf(videoId);
+        if (index === -1) return;
+        setNeighbours({
+          previousId: index > 0 ? ids[index - 1] : null,
+          nextId: index < ids.length - 1 ? ids[index + 1] : null,
+        });
       } catch (cause) {
-        if (!controller.signal.aborted) setError(messageFor(cause));
+        // Only the first fetch can leave the page with nothing to show; a
+        // listing that failed after it just leaves the buttons disabled.
+        if (!controller.signal.aborted && !rendered) setError(messageFor(cause));
       }
     })();
 
@@ -42,7 +71,7 @@ export function BackendVideoDetail({ videoId }: { videoId: string }) {
   }, [videoId]);
 
   if (error) return <Centered>{error}</Centered>;
-  if (!video) return <Centered>Loading video…</Centered>;
+  if (!video) return <VideoDetailSkeleton />;
 
   return (
     <>
@@ -53,10 +82,11 @@ export function BackendVideoDetail({ videoId }: { videoId: string }) {
       )}
       <VideoDetail
         video={video}
-        // interaction-service owns comments and is not wired up yet.
+        // `VideoDetail`'s `CommentPanel` fetches real comments itself from
+        // this video's (numeric) id — this prop only serves mock ids.
         comments={[]}
-        previousId={null}
-        nextId={null}
+        previousId={neighbours.previousId}
+        nextId={neighbours.nextId}
       />
     </>
   );
@@ -74,6 +104,22 @@ function Centered({ children }: { children: React.ReactNode }) {
   return (
     <main className="flex h-screen flex-1 items-center justify-center text-[16px] text-[var(--tt-text-secondary)]">
       {children}
+    </main>
+  );
+}
+
+function VideoDetailSkeleton() {
+  return (
+    <main className="flex h-screen flex-1 items-center justify-center gap-6">
+      <Skeleton className="h-[85vh] w-[calc(85vh*9/16)] rounded-[12px]" />
+      <div className="flex w-[400px] flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-11 w-11 rounded-full" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+      </div>
     </main>
   );
 }

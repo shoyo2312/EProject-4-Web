@@ -6,6 +6,10 @@ import {
   EditProfileModal,
   type ProfileDraft,
 } from "@/components/profile/EditProfileModal";
+import {
+  FollowListModal,
+  type FollowTab,
+} from "@/components/profile/FollowListModal";
 import { ProfileBody } from "@/components/profile/ProfileBody";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { useSession } from "@/components/session/SessionProvider";
@@ -50,6 +54,7 @@ export function ProfilePage({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [followTab, setFollowTab] = useState<FollowTab | null>(null);
 
   // Backend accounts are matched on id — a handle cannot identify them, since
   // user-service stores none. Mock profiles still match on their handle.
@@ -105,10 +110,26 @@ export function ProfilePage({
           requireSignIn={requireSignIn}
           onEditProfile={() => setEditing(true)}
           onToggleFollow={onToggleFollow}
+          // The dialog lists real connections via user-service, so it only
+          // makes sense once the profile is a real backend account.
+          onOpenFollowers={
+            current.author.userId ? () => setFollowTab("followers") : undefined
+          }
+          onOpenFollowing={
+            current.author.userId ? () => setFollowTab("following") : undefined
+          }
         />
 
         <ProfileBody profile={current} isOwner={isOwner} />
       </div>
+
+      {followTab && current.author.userId && (
+        <FollowListModal
+          targetUserId={current.author.userId}
+          initialTab={followTab}
+          onClose={() => setFollowTab(null)}
+        />
+      )}
 
       {editing && (
         <EditProfileModal

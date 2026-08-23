@@ -1,0 +1,132 @@
+"use client";
+
+import { apiFetch } from "@/lib/api/client";
+import type {
+  CommentPageResponse,
+  CommentResponse,
+  LikeStatusResponse,
+  ShareResponse,
+  ViewResponse,
+  WatchResponse,
+} from "@/lib/api/types";
+
+/**
+ * interaction-service. Everything here needs a token: both endpoints are
+ * per-viewer, and an anonymous one has no identity to deduplicate or learn from.
+ */
+
+/**
+ * `POST /interactions/videos/{videoId}/watch` — sent **once**, when a viewing
+ * session ends: the card scrolls away, the tab closes, the feed unmounts.
+ *
+ * This is the training label the ranking model learns from, one row per session.
+ * A per-second progress ping would flood the topic with rows describing the same
+ * session and teach the model nothing.
+ *
+ * @param watchedMs time actually played, summed across replays inside the
+ *   session — a looping clip reports more than its own length, which is the
+ *   point: it says the viewer stayed.
+ * @param durationMs the clip's length as the player measured it.
+ */
+export function recordWatch(
+  videoId: string,
+  watchedMs: number,
+  durationMs: number,
+): Promise<WatchResponse> {
+  return apiFetch<WatchResponse>(`/interactions/videos/${videoId}/watch`, {
+    method: "POST",
+    body: { watchedMs: Math.round(watchedMs), durationMs: Math.round(durationMs) },
+    auth: "required",
+  });
+}
+
+/**
+ * `POST /interactions/videos/{videoId}/view` — the profile grid's view count.
+ *
+ * Separate from `recordWatch`: this one is deduplicated per `playId` (one
+ * playback = one count, a replay counts again) and moves the counter, the
+ * other is one row per session for the ranker. The owner's own view counts,
+ * exactly as it does on the live site.
+ *
+ * @param playId opaque id for this playback, generated client-side once per
+ *   session — the backend rejects the request without it.
+ */
+export function recordView(videoId: string, playId: string): Promise<ViewResponse> {
+  return apiFetch<ViewResponse>(`/interactions/videos/${videoId}/view`, {
+    method: "POST",
+    body: { playId },
+    auth: "required",
+  });
+}
+
+/** `POST /interactions/videos/{videoId}/like`. */
+export function likeVideo(videoId: string): Promise<LikeStatusResponse> {
+  return apiFetch<LikeStatusResponse>(`/interactions/videos/${videoId}/like`, {
+    method: "POST",
+    auth: "required",
+  });
+}
+
+/** `DELETE /interactions/videos/{videoId}/like`. */
+export function unlikeVideo(videoId: string): Promise<LikeStatusResponse> {
+  return apiFetch<LikeStatusResponse>(`/interactions/videos/${videoId}/like`, {
+    method: "DELETE",
+    auth: "required",
+  });
+}
+
+/** `GET /interactions/videos/{videoId}/like-status` — whether the viewer liked it. */
+export function getLikeStatus(videoId: string): Promise<LikeStatusResponse> {
+  return apiFetch<LikeStatusResponse>(
+    `/interactions/videos/${videoId}/like-status`,
+    { auth: "required" },
+  );
+}
+
+/** `POST /interactions/videos/{videoId}/share`. */
+export function shareVideo(videoId: string): Promise<ShareResponse> {
+  return apiFetch<ShareResponse>(`/interactions/videos/${videoId}/share`, {
+    method: "POST",
+    auth: "required",
+  });
+}
+
+/**
+ * `GET /interactions/videos/{videoId}/comments` — cursor paged, newest first.
+ * Public: a guest can read comments, just not post one.
+ */
+export function listComments(
+  videoId: string,
+  cursor?: string,
+  size = 20,
+  signal?: AbortSignal,
+): Promise<CommentPageResponse> {
+  return apiFetch<CommentPageResponse>(`/interactions/videos/${videoId}/comments`, {
+    auth: "optional",
+    query: { cursor, size },
+    signal,
+  });
+}
+
+/** `POST /interactions/videos/{videoId}/comments`. */
+export function addComment(
+  videoId: string,
+  content: string,
+): Promise<CommentResponse> {
+  return apiFetch<CommentResponse>(`/interactions/videos/${videoId}/comments`, {
+    method: "POST",
+    body: { content },
+    auth: "required",
+  });
+}
+
+/** `DELETE /interactions/videos/{videoId}/comments/{commentId}` — owner only. */
+export function deleteComment(
+  videoId: string,
+  commentId: string,
+): Promise<void> {
+  return apiFetch<void>(
+    `/interactions/videos/${videoId}/comments/${commentId}`,
+    { method: "DELETE", auth: "required" },
+  );
+}

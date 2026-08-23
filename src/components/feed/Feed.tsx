@@ -7,6 +7,8 @@ import { CommentPanel } from "@/components/feed/CommentPanel";
 import { VideoCard } from "@/components/feed/VideoCard";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
+import { isBackendHandle } from "@/lib/api/adapters";
+import { getLikeStatus, likeVideo, unlikeVideo } from "@/lib/api/interactions";
 import { cn } from "@/lib/utils";
 import type { Comment, FeedVideo } from "@/types/tiktok";
 
@@ -57,31 +59,116 @@ export function Feed({
    */
   const [likedIds, setLikedIds] = useState<ReadonlySet<string>>(new Set());
 
+  /**
+   * Server-known like counts, by video id, overriding the count the feed was
+   * rendered with. Needed because `stats.likes` already counts the viewer's own
+   * like: the heart cannot add one on top without showing 2 for a single like.
+   */
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
+
   // Liking needs an account: signed out, the live site swallows the tap and
   // opens the login modal instead. Both entry points funnel through here, so
   // the gate only has to exist once.
-  const { requireSignIn } = useSession();
+  const { user, requireSignIn } = useSession();
+
+  // Seed hearts for videos the viewer already liked in a previous session.
+  // Backend videos only — mock ids have no like-status endpoint to ask.
+  // interaction-service has no batch endpoint, so this is one request per
+  // backend video on the page; bounded by the feed's own page size (20).
+  useEffect(() => {
+    if (!user) return;
+    const backendIds = videos.filter((v) => isBackendHandle(v.id)).map((v) => v.id);
+    if (backendIds.length === 0) return;
+    let cancelled = false;
+
+    Promise.allSettled(backendIds.map((id) => getLikeStatus(id))).then((results) => {
+      if (cancelled) return;
+      setLikedIds((current) => {
+        const next = new Set(current);
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled" && result.value.liked) {
+            next.add(backendIds[index]);
+          }
+        });
+        return next;
+      });
+      setLikeCounts((current) => {
+        const next = { ...current };
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled") {
+            next[backendIds[index]] = result.value.likeCount;
+          }
+        });
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [videos, user]);
+
+  /**
+   * Moves one video's count by `delta` from whatever is on screen — the server
+   * count if we have one, the count the feed was rendered with otherwise.
+   */
+  const bumpCount = useCallback(
+    (id: string, delta: number) => {
+      const rendered = videos.find((video) => video.id === id)?.stats.likes ?? 0;
+      setLikeCounts((current) => ({
+        ...current,
+        [id]: (current[id] ?? rendered) + delta,
+      }));
+    },
+    [videos],
+  );
+
+  const setLike = useCallback(
+    (id: string, liked: boolean) => {
+      setLikedIds((current) => {
+        const next = new Set(current);
+        if (liked) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+      bumpCount(id, liked ? 1 : -1);
+      if (!isBackendHandle(id)) return;
+
+      (liked ? likeVideo(id) : unlikeVideo(id))
+        // The reply carries the true count, which the optimistic bump only
+        // guessed — it is stale the moment anyone else likes the same video.
+        .then((status) =>
+          setLikeCounts((current) => ({ ...current, [id]: status.likeCount })),
+        )
+        .catch(() => {
+          // Silent rollback — see brainstorming design: no toast, just undo.
+          setLikedIds((current) => {
+            const next = new Set(current);
+            if (liked) next.delete(id);
+            else next.add(id);
+            return next;
+          });
+          bumpCount(id, liked ? -1 : 1);
+        });
+    },
+    [bumpCount],
+  );
 
   const toggleLike = useCallback(
     (id: string) => {
       if (!requireSignIn()) return;
-      setLikedIds((current) => {
-        const next = new Set(current);
-        if (!next.delete(id)) next.add(id);
-        return next;
-      });
+      setLike(id, !likedIds.has(id));
     },
-    [requireSignIn],
+    [likedIds, requireSignIn, setLike],
   );
 
   const likeOnly = useCallback(
     (id: string) => {
       if (!requireSignIn()) return;
-      setLikedIds((current) =>
-        current.has(id) ? current : new Set(current).add(id),
-      );
+      if (likedIds.has(id)) return;
+      setLike(id, true);
     },
-    [requireSignIn],
+    [likedIds, requireSignIn, setLike],
   );
 
   /**
@@ -92,6 +179,10 @@ export function Feed({
 
   const countComment = useCallback((id: string) => {
     setExtraComments((current) => ({ ...current, [id]: (current[id] ?? 0) + 1 }));
+  }, []);
+
+  const uncountComment = useCallback((id: string) => {
+    setExtraComments((current) => ({ ...current, [id]: (current[id] ?? 0) - 1 }));
   }, []);
 
   /**
@@ -241,6 +332,7 @@ export function Feed({
                   commentsOpen={commentsOpen && commentVideo?.id === video.id}
                   onCommentClick={() => toggleComments(video)}
                   liked={likedIds.has(video.id)}
+                  likes={likeCounts[video.id] ?? video.stats.likes}
                   onToggleLike={() => toggleLike(video.id)}
                 />
               </div>
@@ -268,12 +360,14 @@ export function Feed({
           // comment list instead of carrying the previous one's state over.
           <CommentPanel
             key={commentVideo.id}
+            videoId={commentVideo.id}
             comments={comments[commentVideo.id] ?? []}
             commentCount={
               commentVideo.stats.comments + (extraComments[commentVideo.id] ?? 0)
             }
             onClose={closeComments}
             onCommentAdded={() => countComment(commentVideo.id)}
+            onCommentDeleted={() => uncountComment(commentVideo.id)}
           />
         )}
       </aside>

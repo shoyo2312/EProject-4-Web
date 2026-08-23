@@ -75,6 +75,11 @@ const MESSAGES: Record<string, string> = {
 
   // video-service
   NOT_VIDEO_OWNER: "You can only delete your own videos.",
+  UNSUPPORTED_UPLOAD_TYPE: "That file type isn’t supported. Use MP4, MOV or WebM.",
+  UPLOAD_URL_UNAVAILABLE: "Uploads are unavailable right now. Try again shortly.",
+  FOREIGN_UPLOAD: "That upload belongs to another account.",
+  ALREADY_PUBLISHED: "This file was already posted.",
+  UPLOAD_FAILED: "The file couldn’t be uploaded. Try again.",
   VIDEO_NOT_FOUND: "This video is unavailable.",
 
   // shared

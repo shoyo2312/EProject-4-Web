@@ -17,8 +17,11 @@ import type { Author, FeedVideo, ProfileVideo, UserProfile } from "@/types/tikto
  *  2. **No media dimensions or duration until transcoding lands.** The card
  *     needs an aspect ratio to size itself, so portrait 1080×1920 is assumed
  *     until `durationSeconds` and a thumbnail exist.
- *  3. **No music, no bookmark/share counters.** Those belong to services that
- *     are not built yet; they render as neutral placeholders.
+ *  3. **No music, no bookmark counter, no baseline share counter.** Bookmarking
+ *     has no backing service at all. Sharing does — interaction-service records
+ *     it — but `VideoResponse` carries no denormalized share count the way it
+ *     does like/comment counts, so `shares` starts at 0 here and the UI adds
+ *     this-session's shares on top (`ActionRail`, `VideoDetail`).
  */
 
 /** The route segment for a backend account: its id, since there is no handle. */
@@ -31,7 +34,13 @@ export function isBackendHandle(handle: string): boolean {
   return /^\d+$/.test(handle);
 }
 
-const FALLBACK_AVATAR = "/images/avatars/avatar-1.jpeg";
+/**
+ * Shown wherever an account has no avatar of its own — user-service leaves
+ * `avatarUrl` null until someone uploads one. Exported because the same picture
+ * has to stand in outside this module (the nav's own row, an author lookup that
+ * failed); a second literal elsewhere is how one of them ends up stale.
+ */
+export const DEFAULT_AVATAR = "/images/avatars/avatar-default.png";
 const FALLBACK_POSTER = "/images/posters/poster-1.jpg";
 
 export function authorFromProfile(profile: UserProfileResponse): Author {
@@ -39,7 +48,7 @@ export function authorFromProfile(profile: UserProfileResponse): Author {
     userId: profile.userId,
     username: handleFor(profile.userId),
     nickname: profile.displayName ?? `user${profile.userId}`,
-    avatarUrl: profile.avatarUrl ?? FALLBACK_AVATAR,
+    avatarUrl: profile.avatarUrl ?? DEFAULT_AVATAR,
   };
 }
 
@@ -52,7 +61,7 @@ export function authorFromMe(me: MeResponse): Author {
     userId: me.id,
     username: me.username,
     nickname: me.displayName ?? me.username,
-    avatarUrl: me.avatarUrl ?? FALLBACK_AVATAR,
+    avatarUrl: me.avatarUrl ?? DEFAULT_AVATAR,
   };
 }
 
@@ -62,7 +71,7 @@ export function unknownAuthor(userId: string): Author {
     userId,
     username: handleFor(userId),
     nickname: `user${userId}`,
-    avatarUrl: FALLBACK_AVATAR,
+    avatarUrl: DEFAULT_AVATAR,
   };
 }
 
@@ -87,7 +96,8 @@ export function videoToFeedVideo(
     stats: {
       likes: video.likeCount,
       comments: video.commentCount,
-      // interaction-service is not wired up yet; these have no source.
+      // See the module doc: bookmarks have no source at all; shares does,
+      // but not as a count on this DTO — the UI tracks it from a 0 baseline.
       bookmarks: 0,
       shares: 0,
     },

@@ -13,6 +13,9 @@ import {
 } from "@/components/icons";
 import { ShareSheet } from "@/components/feed/ShareSheet";
 import { useSession } from "@/components/session/SessionProvider";
+import { useFollow } from "@/hooks/use-follow";
+import { isBackendHandle } from "@/lib/api/adapters";
+import { shareVideo } from "@/lib/api/interactions";
 import { cn } from "@/lib/utils";
 import { formatCount } from "@/lib/format";
 import type { FeedVideo } from "@/types/tiktok";
@@ -28,6 +31,7 @@ export function ActionRail({
   commentsOpen = false,
   onCommentClick,
   liked,
+  likes,
   onToggleLike,
 }: {
   video: FeedVideo;
@@ -38,15 +42,37 @@ export function ActionRail({
   onCommentClick?: () => void;
   /** Controlled by `Feed` so double-tapping the video updates this heart too. */
   liked: boolean;
+  /**
+   * The count to show, already reconciled with the server by `Feed`. Not derived
+   * from `liked` here: `video.stats.likes` comes back from the API *including*
+   * the viewer's own like, so adding one for a filled heart showed 2 for a video
+   * one account had liked once.
+   */
+  likes: number;
   onToggleLike: () => void;
 }) {
   const [bookmarked, setBookmarked] = useState(false);
-  const [following, setFollowing] = useState(video.isFollowing);
+  const {
+    isSelf,
+    following,
+    toggle: toggleFollow,
+  } = useFollow(video.author.userId, video.isFollowing);
   const [shareOpen, setShareOpen] = useState(false);
+  const [extraShares, setExtraShares] = useState(0);
 
   // Following and bookmarking both need an account; sharing does not, and the
   // comment button only opens a panel a guest is allowed to read.
   const { requireSignIn } = useSession();
+
+  // Opening the sheet is itself the share, on the live site as much as here —
+  // there is no further "confirm" step, so it is recorded the moment the rail
+  // button is tapped.
+  const recordShare = () => {
+    setShareOpen(true);
+    setExtraShares((n) => n + 1);
+    if (!isBackendHandle(video.id)) return;
+    shareVideo(video.id).catch(() => setExtraShares((n) => n - 1));
+  };
 
   return (
     <section className="flex w-12 flex-none flex-col items-center gap-2">
@@ -59,41 +85,42 @@ export function ActionRail({
           height={48}
           className="h-12 w-12 rounded-full object-cover"
         />
-        <button
-          type="button"
-          onClick={() => {
-            if (!requireSignIn()) return;
-            setFollowing((prev) => !prev);
-          }}
-          aria-label={
-            following
-              ? `Unfollow ${video.author.nickname}`
-              : `Follow ${video.author.nickname}`
-          }
-          aria-pressed={following}
-          className={cn(
-            "absolute -bottom-2.5 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full transition-colors duration-200",
-            following
-              ? "bg-white hover:bg-white/85"
-              : "bg-[var(--tt-red)] hover:bg-[var(--tt-red-hover)]",
-          )}
-        >
-          {/* Key swaps the node so the icon replays its pop-in on every toggle. */}
-          <span
-            key={following ? "following" : "follow"}
-            className="flex animate-[tt-badge-pop_200ms_ease-out] items-center justify-center"
-          >
-            {following ? (
-              <CheckIcon className="h-3.5 w-3.5 text-[var(--tt-red)]" />
-            ) : (
-              <PlusIcon className="h-3.5 w-3.5 text-white" />
+        {/* Hidden on your own video: following yourself is not a thing the
+            backend allows, and the badge would only ever error. */}
+        {!isSelf && (
+          <button
+            type="button"
+            onClick={toggleFollow}
+            aria-label={
+              following
+                ? `Unfollow ${video.author.nickname}`
+                : `Follow ${video.author.nickname}`
+            }
+            aria-pressed={following}
+            className={cn(
+              "absolute -bottom-2.5 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full transition-colors duration-200",
+              following
+                ? "bg-white hover:bg-white/85"
+                : "bg-[var(--tt-red)] hover:bg-[var(--tt-red-hover)]",
             )}
-          </span>
-        </button>
+          >
+            {/* Key swaps the node so the icon replays its pop-in on every toggle. */}
+            <span
+              key={following ? "following" : "follow"}
+              className="flex animate-[tt-badge-pop_200ms_ease-out] items-center justify-center"
+            >
+              {following ? (
+                <CheckIcon className="h-3.5 w-3.5 text-[var(--tt-red)]" />
+              ) : (
+                <PlusIcon className="h-3.5 w-3.5 text-white" />
+              )}
+            </span>
+          </button>
+        )}
       </div>
 
       <RailButton
-        label={formatCount(video.stats.likes + (liked ? 1 : 0))}
+        label={formatCount(likes)}
         onClick={onToggleLike}
         active={liked}
         ariaLabel="Like"
@@ -125,8 +152,8 @@ export function ActionRail({
       </RailButton>
 
       <RailButton
-        label={formatCount(video.stats.shares)}
-        onClick={() => setShareOpen(true)}
+        label={formatCount(video.stats.shares + extraShares)}
+        onClick={recordShare}
         active={shareOpen}
         activeColor="text-[var(--tt-icon)]"
         ariaLabel="Share video"
@@ -136,7 +163,7 @@ export function ActionRail({
 
       {shareOpen && (
         <ShareSheet
-          shares={video.stats.shares}
+          shares={video.stats.shares + extraShares}
           onClose={() => setShareOpen(false)}
         />
       )}

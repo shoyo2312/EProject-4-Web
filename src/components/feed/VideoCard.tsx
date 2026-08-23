@@ -9,8 +9,10 @@ import {
 } from "@/components/feed/VideoContextMenu";
 import { MutedIcon, VolumeIcon } from "@/components/icons";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
+import { useSession } from "@/components/session/SessionProvider";
 import { useHlsSource, isHlsManifest } from "@/hooks/use-hls-source";
 import { useVideoPlayback } from "@/hooks/use-video-playback";
+import { useWatchSession } from "@/hooks/use-watch-session";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/lib/format";
 import type { FeedVideo } from "@/types/tiktok";
@@ -94,6 +96,7 @@ export function VideoCard({
   const {
     containerRef,
     videoRef,
+    isActive,
     isPlaying,
     currentTime,
     duration,
@@ -111,6 +114,25 @@ export function VideoCard({
   // Backend videos arrive as HLS playlists, which need hls.js everywhere but
   // Safari; the mock feed's .mp4 files keep using the plain `src` below.
   useHlsSource(videoRef, video.videoUrl);
+
+  /*
+   * How long this card was watched, reported once the viewer moves on. It is the
+   * label the ranking model learns from, so it is gathered here — the only place
+   * that knows when playback actually ran — rather than inferred from scrolling.
+   *
+   * Signed out it does nothing: the endpoint records per viewer and has no
+   * identity to attach an anonymous session to. Poster-only cards are excluded
+   * for the same reason the server rejects them: a video still transcoding has
+   * no length, and a fraction of an unknown duration means nothing.
+   */
+  const { isSignedIn } = useSession();
+  useWatchSession({
+    videoId: video.id,
+    isActive,
+    isPlaying,
+    duration,
+    enabled: isSignedIn && hasSource,
+  });
 
   const fraction = duration > 0 ? currentTime / duration : 0;
 
