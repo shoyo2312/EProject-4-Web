@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
-import { recordWatch } from "@/lib/api/interactions";
+import { recordView, recordWatch } from "@/lib/api/interactions";
 
 interface UseWatchSessionOptions {
   videoId: string;
@@ -39,6 +39,7 @@ export function useWatchSession({
   const watchedMs = useRef(0);
   const startedAt = useRef(0);
   const sent = useRef(false);
+  const viewed = useRef(false);
 
   /**
    * What the flush needs to know, kept in a ref so it can stay a stable callback
@@ -50,6 +51,24 @@ export function useWatchSession({
   useEffect(() => {
     latest.current = { videoId, duration, enabled };
   }, [videoId, duration, enabled]);
+
+  /**
+   * The view counter, which nothing else was moving — the watch report above is
+   * the ranker's label and never touches it, so every video sat at 0 views.
+   *
+   * Sent when playback actually starts rather than when the card mounts, so
+   * scrolling past a card at speed does not count as watching it. One `playId`
+   * per session, generated here — the backend deduplicates by `playId`, so a
+   * retry of this same call is harmless but a genuine replay (leaving the card
+   * and scrolling back) needs a fresh one, which the reset below provides.
+   */
+  const playId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isPlaying || viewed.current || !latest.current.enabled) return;
+    viewed.current = true;
+    playId.current ??= crypto.randomUUID();
+    void recordView(latest.current.videoId, playId.current).catch(() => undefined);
+  }, [isPlaying]);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -103,6 +122,8 @@ export function useWatchSession({
       flush();
       watchedMs.current = 0;
       sent.current = false;
+      viewed.current = false;
+      playId.current = null;
     }
     wasActive.current = isActive;
   }, [isActive, flush]);

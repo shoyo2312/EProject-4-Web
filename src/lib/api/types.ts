@@ -212,10 +212,50 @@ export interface FeedItemResponse {
  * alongside rather than looked up: what matters is the fraction of what was
  * playable, and the two can disagree while a re-transcode is in flight.
  */
+export interface ViewResponse {
+  videoId: string;
+  /** False when the same viewer already counted for this video inside the window. */
+  counted: boolean;
+  /** The count after this call — the value to render, not a delta to add. */
+  viewCount: number;
+}
+
 export interface WatchResponse {
   videoId: string;
   /** What the server stored — the reported figure, clamped to the video's length. */
   watchedMs: number;
   /** Whether this counted as watching to the end. The threshold is server-side. */
   completed: boolean;
+}
+
+export interface LikeStatusResponse {
+  videoId: string;
+  liked: boolean;
+  likeCount: number;
+}
+
+export interface ShareResponse {
+  shareId: string;
+  videoId: string;
+  shareCount: number;
+}
+
+/**
+ * A comment as interaction-service stores it: flat, no reply nesting, no
+ * per-comment like count. `userId` is all it knows about the author — the
+ * client resolves a name and avatar itself via `resolveAuthor`.
+ */
+export interface CommentResponse {
+  commentId: string;
+  videoId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+}
+
+/** `GET .../comments` — cursor paged like the feed, but also reports `hasMore`. */
+export interface CommentPageResponse {
+  items: CommentResponse[];
+  nextCursor: string | null;
+  hasMore: boolean;
 }
