@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState, type ComponentType, type SVGProps } from "react";
 
 import { ActivityDrawer } from "@/components/layout/ActivityDrawer";
-import { TikTokWordmark } from "@/components/layout/TikTokWordmark";
+import { NowaWordmark } from "@/components/layout/NowaWordmark";
 import {
   ActivityIcon,
   ExploreIcon,
@@ -70,11 +70,15 @@ export function SideNav({
   // The highlighted row follows the URL, so every new route lights itself up
   // without touching the nav data.
   const pathname = usePathname();
-  const { user, openLogin } = useSession();
+  const { user, isLoading, openLogin } = useSession();
+  // Until `/me` settles the viewer is unknown, not signed out. Rendering the
+  // guest sidebar first and then swapping it made the nav jump twice on every
+  // reload: three auth-only rows appearing, and the Log in block leaving.
+  const showGuest = !user && !isLoading;
 
   // Guest sidebar: Friends, Messages and Activity are absent, leaving the seven
   // rows measured on the live signed-out nav.
-  const visibleNavItems = (user ? navItems : navItems.filter((item) => !item.authOnly))
+  const visibleNavItems = (showGuest ? navItems.filter((item) => !item.authOnly) : navItems)
     // Two rows are session-dependent rather than static: Profile has to point
     // at whoever is signed in, and Upload at the route that actually exists
     // here (the live site's is `/tiktokstudio/upload`).
@@ -100,8 +104,8 @@ export function SideNav({
       {/* Fixed header block: logo (48px) + search (40px), 208px content width */}
       <div className={cn("flex-none", activityOpen ? "w-auto" : "w-52 tt-1024:w-auto")}>
         <div className="relative z-[100] flex h-12 items-center">
-          <Link href="/" aria-label="TikTok" className="flex items-center gap-1.5">
-            <TikTokWordmark
+          <Link href="/" aria-label="Nowa" className="flex items-center gap-1.5">
+            <NowaWordmark
               className={cn(
                 "h-6 w-auto text-white",
                 activityOpen ? "hidden" : "tt-1024:hidden",
@@ -149,7 +153,7 @@ export function SideNav({
             only for a signed-out viewer. Measured 200 × 40, `#FE2C55`,
             `border-radius: 6px`, 16px/500/21px, `margin-bottom: 24px`, which is
             what pushes the footer down to where the guest sidebar has it. */}
-        {!user && (
+        {showGuest && (
           <div
             className={cn(
               // 16px above the button, 24px below it, and the 4px inset that
@@ -368,7 +372,7 @@ function SidebarFooter({
       })}
 
       <span className="mt-[5px] inline-block pb-6 text-[12px] font-semibold leading-4 text-[var(--tt-text-muted)]">
-        © 2026 TikTok
+        © 2026 Nowa
       </span>
     </div>
   );

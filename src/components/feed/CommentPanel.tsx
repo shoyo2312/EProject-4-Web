@@ -360,7 +360,7 @@ export function CommentPanel({
  *   like count 14px / 400 / 21px     rgba(255,255,255,.6)
  *
  */
-function CommentListSkeleton() {
+export function CommentListSkeleton() {
   return (
     <div className="flex flex-col gap-4 py-2">
       {Array.from({ length: 5 }).map((_, i) => (

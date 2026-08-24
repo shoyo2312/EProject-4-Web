@@ -1,28 +1,58 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-/** Placeholder for `ProfilePage` while the profile + video grid load. */
+/**
+ * Placeholder for `ProfilePage` while the profile + video grid load.
+ *
+ * Every box below is a block the real page occupies, measured in Chrome at
+ * 1920px against `/@sashtalk` — so the skeleton and the page it becomes sit on
+ * the same baselines and nothing jumps when the data lands:
+ *
+ *   container  1296 max-width, content-box, 32px inline / 24px block padding
+ *   header     avatar 172, gap 28, mb 20; identity rows at +0 / +36 / +65 / +123
+ *   tabs       44 tall, label 86 wide inside 32px padding either side (so 64
+ *              between labels), 2px underline, 200×36 sort control
+ *   grid       6 columns, 16px column gap, 24px row gap, tile 1 / 1.3265, r8
+ */
 export function ProfileSkeleton() {
   return (
-    <main className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-[692px] px-4 pt-8">
-        <div className="flex items-center gap-6">
-          <Skeleton className="h-[116px] w-[116px] rounded-full" />
-          <div className="flex flex-col gap-3">
-            <Skeleton className="h-6 w-48" />
-            <Skeleton className="h-4 w-32" />
-            <Skeleton className="h-9 w-28 rounded-[4px]" />
-          </div>
-        </div>
-        <div className="mt-6 flex gap-6">
-          <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-4 w-20" />
-          <Skeleton className="h-4 w-20" />
-        </div>
-        <Skeleton className="mt-6 h-4 w-3/4" />
+    <main className="h-screen flex-1 overflow-y-auto">
+      <div className="mx-auto box-content max-w-[1296px] px-8 py-6 tt-1200:px-5 tt-1024:py-5 tt-840:p-3">
+        <header className="mt-3 mb-5 flex items-start gap-7 tt-840:gap-4">
+          <Skeleton className="h-[172px] w-[172px] flex-none rounded-full tt-840:h-24 tt-840:w-24" />
 
-        <div className="mt-8 grid grid-cols-6 gap-x-4 gap-y-6 tt-1200:grid-cols-4 tt-840:grid-cols-3 tt-600:grid-cols-2 tt-600:gap-3">
+          <div className="flex min-w-0 flex-col">
+            {/* h1 24/30 beside the handle */}
+            <Skeleton className="h-[30px] w-[240px]" />
+            {/* h3.H3Count, mt-1.5, 21px tall */}
+            <Skeleton className="mt-1.5 h-[21px] w-[340px]" />
+
+            <div className="mt-2 flex items-center gap-3">
+              <Skeleton className="h-11 w-[92px] rounded-full" />
+              <Skeleton className="h-11 w-[104px] rounded-full" />
+              <Skeleton className="h-11 w-11 flex-none rounded-full" />
+              <Skeleton className="h-11 w-11 flex-none rounded-full" />
+            </div>
+
+            {/* bio, mt-3.5, one 21px line */}
+            <Skeleton className="mt-3.5 h-[21px] w-[420px] max-w-full" />
+          </div>
+        </header>
+
+        <div className="relative flex items-center justify-between">
+          <div className="flex h-11 items-center gap-16 pl-8 tt-840:gap-8 tt-840:pl-4">
+            <Skeleton className="h-6 w-[86px]" />
+            <Skeleton className="h-6 w-[95px]" />
+            <Skeleton className="h-6 w-[105px]" />
+            <Skeleton className="h-6 w-[71px]" />
+          </div>
+          <Skeleton className="h-9 w-[200px] flex-none rounded-[6px] tt-600:hidden" />
+        </div>
+        {/* The tab underline is a real 2px element on the live page. */}
+        <Skeleton className="-mt-0.5 h-0.5 w-[150px] rounded-none" />
+
+        <div className="mt-4 grid grid-cols-6 gap-x-4 gap-y-6 tt-1200:grid-cols-4 tt-840:grid-cols-3 tt-600:grid-cols-2 tt-600:gap-3">
           {Array.from({ length: 12 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-[9/16] w-full rounded-[8px]" />
+            <Skeleton key={i} className="aspect-[1/1.3265] w-full rounded-[8px]" />
           ))}
         </div>
       </div>

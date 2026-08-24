@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 
+import { CommentListSkeleton } from "@/components/feed/CommentPanel";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { VideoDetail } from "@/components/video/VideoDetail";
 import { videoToFeedVideo } from "@/lib/api/adapters";
 import { resolveAuthor } from "@/lib/api/authors";
 import { messageFor } from "@/lib/api/errors";
-import { getUserVideos, getVideo } from "@/lib/api/videos";
+import { getUserVideos, getVideo, pollUntilReady } from "@/lib/api/videos";
 import type { VideoStatus } from "@/lib/api/types";
 import type { FeedVideo } from "@/types/tiktok";
 
@@ -20,10 +22,25 @@ import type { FeedVideo } from "@/types/tiktok";
  * deliberately ambiguous anyway — missing, deleted, private, or not published —
  * so the message never guesses which.
  */
-export function BackendVideoDetail({ videoId }: { videoId: string }) {
+export function BackendVideoDetail({
+  videoId,
+  justPosted = false,
+}: {
+  videoId: string;
+  /** `?posted=1`, set by `/upload` once the video finished transcoding. */
+  justPosted?: boolean;
+}) {
   const [video, setVideo] = useState<FeedVideo | null>(null);
   const [status, setStatus] = useState<VideoStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The "upload complete" banner, once it has had its five seconds. */
+  const [bannerDone, setBannerDone] = useState(false);
+
+  useEffect(() => {
+    if (!justPosted) return;
+    const timer = setTimeout(() => setBannerDone(true), 5_000);
+    return () => clearTimeout(timer);
+  }, [justPosted]);
   /**
    * The ids either side of this one, for the up/down controls. Both were pinned
    * to null, which left the buttons permanently disabled — a backend video had
@@ -50,6 +67,26 @@ export function BackendVideoDetail({ videoId }: { videoId: string }) {
         setVideo(videoToFeedVideo(raw, author));
         rendered = true;
 
+        /**
+         * Arriving straight from `/upload` the video is still PROCESSING and
+         * has no HLS URL, so the first fetch can only render a poster. Poll it
+         * — deliberately not awaited — and swap in the playable version the
+         * moment transcoding finishes, instead of leaving a dead frame until
+         * the viewer reloads.
+         */
+        if (raw.status === "PROCESSING") {
+          void pollUntilReady(
+            videoId,
+            (latest) => {
+              setStatus(latest.status);
+              setVideo(videoToFeedVideo(latest, author));
+            },
+            controller.signal,
+          ).catch(() => {
+            // A poll that dies changes nothing on screen: the banner stays.
+          });
+        }
+
         // After the video is on screen, not before: a slow or failed listing
         // must cost the page nothing but two disabled buttons.
         const page = await getUserVideos(raw.userId, 0, 30, controller.signal);
@@ -75,6 +112,14 @@ export function BackendVideoDetail({ videoId }: { videoId: string }) {
 
   return (
     <>
+      {justPosted && !bannerDone && (
+        <div
+          role="status"
+          className="fixed inset-x-0 top-0 z-[201] bg-[var(--tt-red-active)] px-4 py-2 text-center text-[13px] leading-5 font-semibold text-white"
+        >
+          Upload complete — your video is live.
+        </div>
+      )}
       {status !== "PUBLISHED" && (
         <div className="fixed inset-x-0 top-0 z-[200] bg-black/80 px-4 py-2 text-center text-[13px] leading-5 text-white">
           {STATUS_NOTE[status ?? "PROCESSING"]}
@@ -108,18 +153,78 @@ function Centered({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Placeholder for `VideoDetail` while `GET /videos/:id` is in flight.
+ *
+ * Measured in Chrome at 1920×936 against `/video/2` (a portrait clip), so the
+ * blocks land where the real page puts them:
+ *
+ *   left      flex-1 beside the 34rem column; player 509 × 904, r16, centred
+ *   overlays  close 40 at (16,16), menu 40 at top-right, two 40 nav buttons
+ *             centred vertically, 48 volume button bottom-right
+ *   summary   pt-14 clears the TopBar; rows at y 72 / 124 / 154 / 191 / 243,
+ *             then the divider at 296
+ *   comments  header 42 tall, list starts at 354
+ */
 function VideoDetailSkeleton() {
   return (
-    <main className="flex h-screen flex-1 items-center justify-center gap-6">
-      <Skeleton className="h-[85vh] w-[calc(85vh*9/16)] rounded-[12px]" />
-      <div className="flex w-[400px] flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-11 w-11 rounded-full" />
-          <Skeleton className="h-4 w-32" />
+    <main className="flex flex-1 flex-row">
+      <div className="relative h-screen flex-1 overflow-hidden bg-[var(--tt-page)]">
+        <Skeleton className="absolute top-4 left-4 z-20 h-10 w-10 rounded-full" />
+        <Skeleton className="absolute top-4 right-4 z-20 h-10 w-10 rounded-full" />
+
+        <div className="absolute top-1/2 right-4 z-20 flex -translate-y-1/2 flex-col gap-3">
+          <Skeleton className="h-10 w-10 rounded-full" />
+          <Skeleton className="h-10 w-10 rounded-full" />
         </div>
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-3/4" />
+
+        <Skeleton className="absolute right-4 bottom-4 z-20 h-12 w-12 rounded-full" />
+
+        <div className="flex h-full items-center justify-center px-4 py-4">
+          <Skeleton
+            className={cn(
+              "grow rounded-[1rem] [aspect-ratio:0.5625/1] min-w-[348px]",
+              "[height:var(--one-column-available-height)]",
+              "[max-height:var(--one-column-available-height)]",
+              "[max-width:calc(var(--one-column-available-height)*0.5625)]",
+            )}
+          />
+        </div>
       </div>
+
+      <aside className="flex h-screen w-[34rem] flex-none flex-col border-l border-[var(--tt-divider)] pt-14 tt-1280:w-[26rem] tt-1024:w-[22rem]">
+        <div className="flex-none border-b border-[var(--tt-divider)] px-4 pt-4 pb-3">
+          <div className="flex items-start gap-3">
+            <Skeleton className="h-10 w-10 flex-none rounded-full" />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <Skeleton className="h-[22px] w-32" />
+              <Skeleton className="h-[18px] w-40" />
+            </div>
+            <Skeleton className="h-8 w-[78px] flex-none rounded-[8px]" />
+          </div>
+
+          {/* caption, then the music row */}
+          <Skeleton className="mt-3 h-[22px] w-3/4" />
+          <Skeleton className="mt-2 h-[21px] w-48" />
+
+          {/* like / comment / save / share counts */}
+          <div className="mt-4 flex items-center gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-9 w-[72px] rounded-full" />
+            ))}
+          </div>
+
+          {/* the copy-link bar */}
+          <Skeleton className="mt-4 h-10 w-full rounded-[8px]" />
+        </div>
+
+        <div className="min-h-0 flex-1 px-4 pt-4">
+          <div className="pb-4">
+            <Skeleton className="h-[26px] w-40" />
+          </div>
+          <CommentListSkeleton />
+        </div>
+      </aside>
     </main>
   );
 }

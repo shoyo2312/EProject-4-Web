@@ -21,7 +21,7 @@ import { useSession } from "@/components/session/SessionProvider";
  * is identical in both states.
  */
 export function TopBar() {
-  const { user, openLogin } = useSession();
+  const { user, isLoading, openLogin } = useSession();
   const pathname = usePathname();
 
   // `/login` and `/signup` are the only routes with chrome of their own: the
@@ -53,6 +53,10 @@ export function TopBar() {
       <div className="ml-1 border-l border-[var(--tt-divider)] pl-3">
         {user ? (
           <AccountMenu />
+        ) : isLoading ? (
+          // Same footprint as the pill below, so the cluster does not slide
+          // sideways when `/me` answers.
+          <div className="h-8 w-[76px]" />
         ) : (
           <button
             type="button"
