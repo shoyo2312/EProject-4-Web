@@ -25,13 +25,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
   // Backend profiles need a token to read, which the server does not have, so
   // their title stays generic rather than attempting a fetch that would 401.
-  if (isBackendHandle(handle)) return { title: "Profile | TikTok" };
+  if (isBackendHandle(handle)) return { title: "Profile | Nowa" };
 
   const profile = await getProfile(handle);
-  if (!profile) return { title: "Profile not found | TikTok" };
+  if (!profile) return { title: "Profile not found | Nowa" };
 
   return {
-    title: `${profile.author.nickname} (@${profile.author.username}) | TikTok`,
+    title: `${profile.author.nickname} (@${profile.author.username}) | Nowa`,
     description: profile.bio || undefined,
   };
 }

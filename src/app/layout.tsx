@@ -17,9 +17,9 @@ const tiktokFont = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "TikTok - Make Your Day",
+  title: "Nowa - Make Your Day",
   description:
-    "TikTok - trends start here. On a device or on the web, viewers can watch and discover millions of personalized short videos. Download the app to get started.",
+    "Nowa - trends start here. On a device or on the web, viewers can watch and discover millions of personalized short videos. Download the app to get started.",
 };
 
 /**

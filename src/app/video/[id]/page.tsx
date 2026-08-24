@@ -9,7 +9,10 @@ import {
   getVideoNeighbours,
 } from "@/lib/data";
 
-type Params = { params: Promise<{ id: string }> };
+type Params = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ posted?: string }>;
+};
 
 /**
  * video-service ids are 19-digit Snowflakes; the mock feed's are "1", "x7",
@@ -20,15 +23,17 @@ function isBackendVideoId(id: string): boolean {
   return /^\d{15,}$/.test(id);
 }
 
-export async function generateMetadata({ params }: Params): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: Pick<Params, "params">): Promise<Metadata> {
   const { id } = await params;
-  if (isBackendVideoId(id)) return { title: "TikTok" };
+  if (isBackendVideoId(id)) return { title: "Nowa" };
 
   const video = await getVideoById(id);
-  if (!video) return { title: "Video not found | TikTok" };
+  if (!video) return { title: "Video not found | Nowa" };
 
   return {
-    title: `${video.author.nickname} on TikTok`,
+    title: `${video.author.nickname} on Nowa`,
     description: video.caption,
   };
 }
@@ -41,10 +46,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
  * whether their own PROCESSING or PRIVATE video is visible at all, and the
  * server rendering this page has no token.
  */
-export default async function VideoPage({ params }: Params) {
+export default async function VideoPage({ params, searchParams }: Params) {
   const { id } = await params;
 
-  if (isBackendVideoId(id)) return <BackendVideoDetail videoId={id} />;
+  if (isBackendVideoId(id)) {
+    const { posted } = await searchParams;
+    return <BackendVideoDetail videoId={id} justPosted={posted === "1"} />;
+  }
 
   const video = await getVideoById(id);
   if (!video) notFound();

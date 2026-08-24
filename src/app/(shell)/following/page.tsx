@@ -5,9 +5,9 @@ import { getSuggestedCreators } from "@/lib/data";
 
 export const metadata: Metadata = {
   // Verbatim from the live document title.
-  title: "Following - Watch videos from creators you follow | TikTok",
+  title: "Following - Watch videos from creators you follow | Nowa",
   description:
-    "Watch videos from the creators you follow on TikTok, and find new ones to follow.",
+    "Watch videos from the creators you follow on Nowa, and find new ones to follow.",
 };
 
 /**

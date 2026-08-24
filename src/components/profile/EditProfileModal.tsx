@@ -214,7 +214,7 @@ export function EditProfileModal({
               <>
                 <Field {...form.field("username")} placeholder="Username" />
                 <p className="mt-4 text-[12px] leading-[18px] text-[var(--tt-text-secondary)]">
-                  www.tiktok.com/@{draft.username}
+                  www.nowa.com/@{draft.username}
                 </p>
                 {errors.username ? (
                   <Tip error>{errors.username}</Tip>

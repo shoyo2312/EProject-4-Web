@@ -92,7 +92,7 @@ export function ActivityDrawer({
       <div className="flex h-full flex-col gap-4 px-2 pb-0 pt-5">
         {/* `.DivInboxHeaderContainer` — flex column, gap 16, flex 0 0 auto */}
         <div className="flex flex-none flex-col gap-4 px-2">
-          {/* `.H2InboxTitle` — TikTokDisplayFont 20px/25px/600 */}
+          {/* `.H2InboxTitle` — NowaDisplayFont 20px/25px/600 */}
           <h2 className="flex text-[20px] font-semibold leading-[25px] text-[var(--tt-text)]">
             Notifications
           </h2>

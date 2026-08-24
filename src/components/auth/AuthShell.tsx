@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { HelpCircleIcon } from "@/components/icons";
-import { TikTokWordmark } from "@/components/layout/TikTokWordmark";
+import { NowaWordmark } from "@/components/layout/NowaWordmark";
 
 /**
  * The chrome `/login` and `/signup` share. Neither page has the sidebar or the
@@ -43,12 +43,12 @@ export function AuthShell({
   return (
     <div className="flex h-screen w-full flex-col bg-[#121212]">
       <header className="flex h-15 flex-none items-center justify-between pr-5 pl-4">
-        <Link href="/" aria-label="TikTok" className="flex items-center">
-          <TikTokWordmark className="h-[42px] w-[118px] text-white" />
+        <Link href="/" aria-label="Nowa" className="flex items-center">
+          <NowaWordmark className="h-[42px] w-auto text-white" />
         </Link>
 
         <a
-          href="https://support.tiktok.com"
+          href="https://support.nowa.com"
           target="_blank"
           rel="noreferrer noopener"
           className="flex items-center text-[14px] leading-[17px] font-semibold text-[var(--tt-text)]"
@@ -76,7 +76,7 @@ export function AuthShell({
         <div className="flex h-21 items-center justify-between px-36 tt-840:px-6">
           <LanguageSelect />
           <span className="text-[14px] leading-7 font-medium text-[#8a8b91]">
-            &copy; 2026 TikTok
+            &copy; 2026 Nowa
           </span>
         </div>
       </footer>

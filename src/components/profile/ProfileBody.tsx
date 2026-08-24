@@ -8,6 +8,7 @@ import {
   FavoritesIcon,
   LikedIcon,
   PlayIcon,
+  PrivacyLockIcon,
   ProfileVideosIcon,
   RepostIcon,
 } from "@/components/icons";
@@ -202,13 +203,27 @@ function ProfileTile({ post }: { post: ProfileVideo }) {
         // A video still transcoding has no playable URL yet, and `src=""` makes
         // the browser re-request the page itself. The poster carries the tile.
         src={post.videoUrl || undefined}
-        poster={post.posterUrl}
+        // Backend videos come back without a thumbnail, and one shared
+        // fallback image made every tile identical. With no poster the browser
+        // paints the first frame instead — which needs the metadata, hence the
+        // preload here and nowhere else.
+        poster={post.posterUrl || undefined}
         muted
         loop
         playsInline
-        preload="none"
+        preload={post.posterUrl ? "none" : "metadata"}
         className="h-full w-full object-cover"
       />
+
+      {post.isPrivate && (
+        <div
+          title="Only you can watch this video"
+          className="pointer-events-none absolute top-2 left-2 flex items-center gap-1 rounded-[4px] bg-black/60 px-1.5 py-1 text-[12px] leading-4 font-semibold text-white"
+        >
+          <PrivacyLockIcon className="h-3.5 w-3.5" />
+          <span className="sr-only">Private</span>
+        </div>
+      )}
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/30 to-transparent px-3 pt-5 pb-2 text-[14px] font-semibold text-white">
         <PlayIcon className="h-3.5 w-3.5" />

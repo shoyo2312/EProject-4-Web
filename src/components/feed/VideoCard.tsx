@@ -255,7 +255,7 @@ export function VideoCard({
           // that case, and an `src` attribute would fight the MediaSource it
           // attaches.
           src={isHlsManifest(video.videoUrl) ? undefined : video.videoUrl}
-          poster={video.posterUrl}
+          poster={video.posterUrl || undefined}
           loop={!onEnded}
           onEnded={onEnded}
           playsInline
@@ -265,7 +265,7 @@ export function VideoCard({
             isLandscape ? "object-contain" : "object-cover",
           )}
         />
-      ) : (
+      ) : video.posterUrl ? (
         <Image
           src={video.posterUrl}
           alt=""
@@ -274,6 +274,10 @@ export function VideoCard({
           className={isLandscape ? "object-contain" : "object-cover"}
           priority
         />
+      ) : (
+        // Still transcoding and no thumbnail to stand in for it: black is
+        // honest, a borrowed stock poster is not.
+        <div className="absolute inset-0 bg-black" />
       )}
 
       {/* Tap = play/pause, double-tap = like. */}
