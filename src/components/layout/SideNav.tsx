@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ComponentType, type SVGProps } from "react";
+import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
 
 import { ActivityDrawer } from "@/components/layout/ActivityDrawer";
 import { NowaWordmark } from "@/components/layout/NowaWordmark";
@@ -20,6 +20,8 @@ import {
 } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
+import { searchUsers } from "@/lib/api/users";
+import type { UserProfileResponse } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import type { ActivityGroup, FooterSection, NavItem } from "@/types/tiktok";
 
@@ -379,26 +381,120 @@ function SidebarFooter({
 }
 
 /** Search field: 208×40, radius 999px, background rgba(255,255,255,.13). */
+/** How long the field sits still before it asks the server. */
+const SEARCH_DEBOUNCE_MS = 250;
+
 function SearchField({ collapsed = false }: { collapsed?: boolean }) {
+  const { user } = useSession();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<UserProfileResponse[]>([]);
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  const term = query.trim();
+
+  useEffect(() => {
+    // user-service has no public read, so there is nothing to ask for signed out.
+    if (!user || term.length === 0) return;
+
+    const controller = new AbortController();
+    // Debounced, and the in-flight request is aborted when the next keystroke lands: without
+    // it every character is a request, and the answers can arrive out of order and leave the
+    // list showing the results for a prefix the viewer has already typed past.
+    const timer = setTimeout(() => {
+      searchUsers(term, 8, controller.signal)
+        .then((page) => setResults(page.content))
+        .catch(() => {
+          // Aborted, or the call failed — the previous list stays until the next answer.
+        });
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [term, user]);
+
+  // A click anywhere else closes the list. Pointerdown rather than click so it closes before a
+  // result's own navigation, which would otherwise unmount the list mid-click.
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!boxRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
   return (
-    <div
-      className={cn(
-        "flex h-10 items-center rounded-full bg-[var(--tt-field)] py-1.5",
-        collapsed
-          ? "w-10 justify-center px-0"
-          : "w-full px-2.5 tt-1024:w-10 tt-1024:justify-center tt-1024:px-0",
-      )}
-    >
-      <SearchIcon className="h-4 w-4 flex-none text-[var(--tt-placeholder)]" />
-      <input
-        type="text"
-        placeholder="Search"
-        aria-label="Search"
+    <div ref={boxRef} className="relative w-full">
+      <div
         className={cn(
-          "ml-2 w-full bg-transparent text-[15px] text-[var(--tt-text)] placeholder:text-[var(--tt-placeholder)] focus:outline-none",
-          collapsed ? "hidden" : "tt-1024:hidden",
+          "flex h-10 items-center rounded-full bg-[var(--tt-field)] py-1.5",
+          collapsed
+            ? "w-10 justify-center px-0"
+            : "w-full px-2.5 tt-1024:w-10 tt-1024:justify-center tt-1024:px-0",
         )}
-      />
+      >
+        <SearchIcon className="h-4 w-4 flex-none text-[var(--tt-placeholder)]" />
+        <input
+          type="text"
+          placeholder="Search"
+          aria-label="Search"
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          className={cn(
+            "ml-2 w-full bg-transparent text-[15px] text-[var(--tt-text)] placeholder:text-[var(--tt-placeholder)] focus:outline-none",
+            collapsed ? "hidden" : "tt-1024:hidden",
+          )}
+        />
+      </div>
+
+      {open && term.length > 0 && !collapsed && (
+        <ul className="absolute top-11 left-0 z-50 max-h-80 w-full overflow-y-auto rounded-[8px] bg-[var(--tt-sheet-3)] py-2 shadow-lg tt-1024:hidden">
+          {/* Gated on the term rather than cleared in the effect: emptying the list on every
+              keystroke that clears the box is a render for something nothing reads, and the
+              next answer replaces it wholesale anyway. */}
+          {results.length === 0 || !user ? (
+            <li className="px-4 py-2 text-[14px] text-[var(--tt-text-secondary)]">
+              {user ? "No accounts found" : "Log in to search"}
+            </li>
+          ) : (
+            results.map((result) => (
+              <li key={result.userId}>
+                {/* Addressed by id: a handle only identifies an account to auth-service, so
+                    `/@<id>` is the one profile URL that always resolves — see ProfileRouter. */}
+                <Link
+                  href={`/@${result.userId}`}
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-[rgb(255_255_255/0.08)]"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- same reason as the profile row above: the avatar can be any CDN URL */}
+                  <img
+                    src={result.avatarUrl || DEFAULT_AVATAR}
+                    alt=""
+                    width={40}
+                    height={40}
+                    className="h-10 w-10 flex-none rounded-full object-cover"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[14px] font-semibold text-[var(--tt-text)]">
+                      {result.displayName ?? result.username ?? "Unknown"}
+                    </span>
+                    <span className="block truncate text-[13px] text-[var(--tt-text-secondary)]">
+                      {result.username ? `@${result.username}` : "\u00a0"}
+                    </span>
+                  </span>
+                </Link>
+              </li>
+            ))
+          )}
+        </ul>
+      )}
     </div>
   );
 }

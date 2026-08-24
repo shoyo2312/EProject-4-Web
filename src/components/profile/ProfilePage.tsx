@@ -13,7 +13,7 @@ import {
 import { ProfileBody } from "@/components/profile/ProfileBody";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { useSession } from "@/components/session/SessionProvider";
-import type { UserProfile } from "@/types/tiktok";
+import type { ProfileTab, UserProfile } from "@/types/tiktok";
 
 /**
  * `.StyledShareLayoutV2` — the profile's content column.
@@ -32,7 +32,7 @@ export function ProfilePage({
   onSaveProfile,
   onToggleFollow,
   usernameLocked,
-  avatarAsUrl,
+  onTabSelect,
 }: {
   profile: UserProfile;
   /** Persists an edit. Throwing leaves the modal open with the error shown. */
@@ -41,8 +41,8 @@ export function ProfilePage({
   onToggleFollow?: (next: boolean) => Promise<void>;
   /** auth-service has no rename endpoint, so backend handles are read-only. */
   usernameLocked?: boolean;
-  /** No upload service yet: the avatar is entered as an allow-listed URL. */
-  avatarAsUrl?: boolean;
+  /** Lets a backend-backed page load a tab's videos when it is opened. */
+  onTabSelect?: (tab: ProfileTab) => void;
 }) {
   const { user, requireSignIn, updateUser } = useSession();
 
@@ -120,7 +120,11 @@ export function ProfilePage({
           }
         />
 
-        <ProfileBody profile={current} isOwner={isOwner} />
+        <ProfileBody
+          profile={current}
+          isOwner={isOwner}
+          onTabSelect={onTabSelect}
+        />
       </div>
 
       {followTab && current.author.userId && (
@@ -137,7 +141,6 @@ export function ProfilePage({
           saving={saving}
           error={saveError}
           usernameLocked={usernameLocked}
-          avatarAsUrl={avatarAsUrl}
           onClose={() => {
             setEditing(false);
             setSaveError(null);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ProfileDraft } from "@/components/profile/EditProfileModal";
 import { ProfilePage } from "@/components/profile/ProfilePage";
@@ -12,9 +12,10 @@ import {
   videoToProfileVideo,
 } from "@/lib/api/adapters";
 import { isApiError, messageFor } from "@/lib/api/errors";
+import { listLikedVideos, listSavedVideos } from "@/lib/api/interactions";
 import * as usersApi from "@/lib/api/users";
-import { getUserVideos } from "@/lib/api/videos";
-import type { UserProfile } from "@/types/tiktok";
+import { getUserVideos, getUserVideoStats, getVideosByIds } from "@/lib/api/videos";
+import type { ProfileTab, UserProfile } from "@/types/tiktok";
 
 /**
  * A profile page built from user-service and video-service.
@@ -69,12 +70,16 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
           ? await usersApi.isFollowing(viewerId, raw.userId).catch(() => false)
           : false;
 
+      // The header's "Likes" total. Not fatal if it fails — the profile still renders, with a
+      // zero, rather than the whole page becoming an error over one number.
+      const stats = await getUserVideoStats(raw.userId).catch(() => null);
+
       setProfile(
         profileToUserProfile(
           raw,
           author,
           videos.content.map(videoToProfileVideo),
-          { isFollowing },
+          { isFollowing, totalLikes: stats?.totalLikes },
         ),
       );
     } catch (cause) {
@@ -83,6 +88,56 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       setError(messageFor(cause));
     }
   }, [userId, sessionSettled, session.user, viewerId]);
+
+  /**
+   * Which of the two interaction tabs have already been fetched. A ref, not
+   * state: it only ever guards the fetch, and re-rendering on it would be a
+   * render per tab opened for nothing.
+   */
+  const loadedTabs = useRef<Set<ProfileTab>>(new Set());
+
+  /**
+   * Favorites and Liked, filled when the tab is opened.
+   *
+   * Owner only, and not a privacy choice made here: interaction-service serves
+   * `/users/me` and nothing else, so another account's list is not fetchable at
+   * all — which is what the tab's empty copy already says.
+   *
+   * ponytail: the first page only, 50 videos. Add cursor paging when a profile
+   * grid needs to scroll past that.
+   */
+  const loadTab = useCallback(
+    async (tab: ProfileTab) => {
+      const isOwnPage = userId === undefined || userId === viewerId;
+      if (!isOwnPage || !viewerId) return;
+      if (tab !== "favorites" && tab !== "liked") return;
+      if (loadedTabs.current.has(tab)) return;
+      loadedTabs.current.add(tab);
+
+      try {
+        const page = tab === "liked" ? await listLikedVideos() : await listSavedVideos();
+        // Ids the viewer may no longer see — a deleted video — are simply
+        // absent from the reply, so the grid can be shorter than the list.
+        const videos = await getVideosByIds(page.videoIds);
+        setProfile((current) =>
+          current
+            ? {
+                ...current,
+                posts: {
+                  ...current.posts,
+                  [tab]: videos.map(videoToProfileVideo),
+                },
+              }
+            : current,
+        );
+      } catch {
+        // Leave the tab empty and let it be retried: the guard above is what
+        // stops a retry, so it has to be given back.
+        loadedTabs.current.delete(tab);
+      }
+    },
+    [userId, viewerId],
+  );
 
   useEffect(() => {
     load();
@@ -111,13 +166,24 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       patch.displayName = draft.nickname;
     }
     if (draft.bio !== profile.bio) patch.bio = draft.bio;
-    if (draft.avatarUrl !== profile.author.avatarUrl) {
-      patch.avatarUrl = draft.avatarUrl;
-    }
-    if (Object.keys(patch).length === 0) return;
 
     try {
-      await session.updateProfile(patch);
+      /**
+       * The photo is uploaded here and nowhere earlier: picking one only
+       * previewed a `blob:` URL, which is meaningless to the server and must
+       * never reach `avatarUrl`. The upload comes first so that a failing one
+       * aborts the whole save — the modal stays open with the error rather than
+       * reporting success for a name change that went through beside a photo
+       * that did not.
+       */
+      if (draft.avatarFile) {
+        const uploaded = await usersApi.uploadMyAvatar(draft.avatarFile);
+        session.updateUser({ avatarUrl: uploaded.avatarUrl ?? undefined });
+      } else if (Object.keys(patch).length === 0) {
+        return;
+      }
+
+      if (Object.keys(patch).length > 0) await session.updateProfile(patch);
       await load();
     } catch (cause) {
       throw new Error(messageFor(cause));
@@ -185,7 +251,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       onSaveProfile={isOwner ? saveProfile : undefined}
       onToggleFollow={toggleFollow}
       usernameLocked
-      avatarAsUrl
+      onTabSelect={loadTab}
     />
   );
 }

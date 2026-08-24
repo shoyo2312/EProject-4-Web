@@ -8,6 +8,7 @@ import type {
   UploadUrlResponse,
   CursorPage,
   PageResponse,
+  UserVideoStatsResponse,
   VideoResponse,
 } from "@/lib/api/types";
 
@@ -241,5 +242,23 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     };
     const timer = setTimeout(done, ms);
     signal?.addEventListener("abort", done, { once: true });
+  });
+}
+
+/**
+ * `GET /api/v1/videos/users/{userId}/stats` — the "Likes" figure under a profile's avatar,
+ * plus the video and view totals behind it.
+ *
+ * Summed over the same videos `getUserVideos` lists, so the number agrees with the grid: send
+ * the token and the owner's own PROCESSING/PRIVATE videos are included, exactly as they are in
+ * the grid below it.
+ */
+export function getUserVideoStats(
+  userId: string,
+  signal?: AbortSignal,
+): Promise<UserVideoStatsResponse> {
+  return apiFetch<UserVideoStatsResponse>(`/videos/users/${userId}/stats`, {
+    auth: "optional",
+    signal,
   });
 }

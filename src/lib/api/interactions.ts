@@ -5,7 +5,9 @@ import type {
   CommentPageResponse,
   CommentResponse,
   LikeStatusResponse,
+  SaveStatusResponse,
   ShareResponse,
+  VideoIdPageResponse,
   ViewResponse,
   WatchResponse,
 } from "@/lib/api/types";
@@ -129,4 +131,64 @@ export function deleteComment(
     `/interactions/videos/${videoId}/comments/${commentId}`,
     { method: "DELETE", auth: "required" },
   );
+}
+
+/** `POST /interactions/videos/{videoId}/save` — add to favourites. Idempotent. */
+export function saveVideo(videoId: string): Promise<SaveStatusResponse> {
+  return apiFetch<SaveStatusResponse>(`/interactions/videos/${videoId}/save`, {
+    method: "POST",
+    auth: "required",
+  });
+}
+
+/** `DELETE /interactions/videos/{videoId}/save`. Idempotent. */
+export function unsaveVideo(videoId: string): Promise<SaveStatusResponse> {
+  return apiFetch<SaveStatusResponse>(`/interactions/videos/${videoId}/save`, {
+    method: "DELETE",
+    auth: "required",
+  });
+}
+
+/**
+ * `GET /interactions/videos/{videoId}/save-status`.
+ *
+ * Authenticated even for reading, unlike like-status: a save is private to the
+ * viewer, so there is no anonymous answer and no public count to show.
+ */
+export function getSaveStatus(videoId: string): Promise<SaveStatusResponse> {
+  return apiFetch<SaveStatusResponse>(
+    `/interactions/videos/${videoId}/save-status`,
+    { auth: "required" },
+  );
+}
+
+/**
+ * `GET /interactions/users/me/saves` — cursor paged.
+ *
+ * Only "me": likes and saves are private, and interaction-service exposes no
+ * other user's list at all.
+ */
+export function listSavedVideos(
+  cursor?: string,
+  size = 50,
+  signal?: AbortSignal,
+): Promise<VideoIdPageResponse> {
+  return apiFetch<VideoIdPageResponse>("/interactions/users/me/saves", {
+    auth: "required",
+    query: { cursor, size },
+    signal,
+  });
+}
+
+/** `GET /interactions/users/me/likes` — cursor paged, same shape as the saves list. */
+export function listLikedVideos(
+  cursor?: string,
+  size = 50,
+  signal?: AbortSignal,
+): Promise<VideoIdPageResponse> {
+  return apiFetch<VideoIdPageResponse>("/interactions/users/me/likes", {
+    auth: "required",
+    query: { cursor, size },
+    signal,
+  });
 }

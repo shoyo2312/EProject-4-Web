@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { CloseIcon, EditPencilIcon } from "@/components/icons";
+import { DEFAULT_AVATAR } from "@/lib/api/adapters";
+import { ACCEPTED_AVATAR_TYPES, MAX_AVATAR_BYTES } from "@/lib/api/users";
 import { editProfileSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
 import { cn } from "@/lib/utils";
@@ -41,7 +43,6 @@ export function EditProfileModal({
   saving,
   error: saveError,
   usernameLocked,
-  avatarAsUrl,
 }: {
   profile: UserProfile;
   onClose: () => void;
@@ -56,13 +57,6 @@ export function EditProfileModal({
    * offering an edit that cannot be saved.
    */
   usernameLocked?: boolean;
-  /**
-   * The live site uploads a cropped file. There is no upload service here, and
-   * user-service only accepts https URLs on an allow-listed CDN host, so
-   * backend profiles type the URL instead of picking a file that has nowhere
-   * to go.
-   */
-  avatarAsUrl?: boolean;
 }) {
   /**
    * The same hook the auth forms use, so the rules and the focus behaviour are
@@ -77,7 +71,8 @@ export function EditProfileModal({
       bio: profile.bio,
       avatarUrl: profile.author.avatarUrl,
     },
-    onSubmit: (values) => onSave({ ...values, bio: values.bio.trim() }),
+    onSubmit: (values) =>
+      onSave({ ...values, bio: values.bio.trim(), avatarFile }),
   });
 
   const draft = form.values;
@@ -86,6 +81,13 @@ export function EditProfileModal({
   };
 
   const fileRef = useRef<HTMLInputElement>(null);
+  /**
+   * The picked file, held here until Save. Nothing is uploaded on pick: the
+   * preview below is a local object URL, so cancelling leaves the account
+   * exactly as it was.
+   */
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
   /**
    * Object URLs for avatars picked in this session. They are revoked on
    * unmount rather than on each pick, because the preview above is still
@@ -110,18 +112,33 @@ export function EditProfileModal({
     draft.username !== profile.author.username ||
     draft.nickname !== profile.author.nickname ||
     draft.bio !== profile.bio ||
-    draft.avatarUrl !== profile.author.avatarUrl;
+    draft.avatarUrl !== profile.author.avatarUrl ||
+    avatarFile !== null;
 
   const pickAvatar = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // The live site opens a crop modal here; without a backend to upload to,
-    // the picked file is previewed straight from an object URL instead.
+    // Reset first: re-picking after a rejected file must not keep the old
+    // complaint on screen next to a valid preview.
+    event.target.value = "";
+    setAvatarError(null);
+
+    if (!ACCEPTED_AVATAR_TYPES.some((type) => type === file.type)) {
+      setAvatarError("Choose a JPEG, PNG, or WebP image.");
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setAvatarError("That image is over 5 MB.");
+      return;
+    }
+
+    // The live site opens a crop modal here. Uncropped, but the same rule
+    // holds: this only previews. The upload happens inside the save.
     const url = URL.createObjectURL(file);
     objectUrls.current.push(url);
+    setAvatarFile(file);
     setDraft({ avatarUrl: url });
-    event.target.value = "";
   };
 
   // Read off `errors` rather than off a bound field object: a variable holding
@@ -163,42 +180,33 @@ export function EditProfileModal({
             rows fit a 700px card without scrolling. */}
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-2">
           <Row label="Profile photo">
-            {avatarAsUrl ? (
-              <>
-                <Field {...form.field("avatarUrl")} placeholder="https://…" />
-                {errors.avatarUrl ? (
-                  <Tip error>{errors.avatarUrl}</Tip>
-                ) : (
-                  <Tip>
-                    Must be an https URL on an allowed CDN host — the server
-                    rejects anything else.
-                  </Tip>
-                )}
-              </>
+            <div className="relative h-24 w-[224px]">
+              {/* eslint-disable-next-line @next/next/no-img-element -- may be an object: URL from the file picker */}
+              <img
+                src={draft.avatarUrl || DEFAULT_AVATAR}
+                alt=""
+                className="ml-32 h-24 w-24 rounded-full bg-white/[0.12] object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                aria-label="Change profile photo"
+                className="absolute top-16 left-48 flex h-8 w-8 items-center justify-center rounded-full border border-[#d0d0d3] bg-[#2e2e2e] text-[var(--tt-text)]"
+              >
+                <EditPencilIcon className="h-4 w-4" />
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept={ACCEPTED_AVATAR_TYPES.join(",")}
+                onChange={pickAvatar}
+                className="sr-only"
+              />
+            </div>
+            {avatarError ? (
+              <Tip error>{avatarError}</Tip>
             ) : (
-              <div className="relative h-24 w-[224px]">
-                {/* eslint-disable-next-line @next/next/no-img-element -- may be an object: URL from the file picker */}
-                <img
-                  src={draft.avatarUrl}
-                  alt=""
-                  className="ml-32 h-24 w-24 rounded-full object-cover"
-                />
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  aria-label="Change profile photo"
-                  className="absolute top-16 left-48 flex h-8 w-8 items-center justify-center rounded-full border border-[#d0d0d3] bg-[#2e2e2e] text-[var(--tt-text)]"
-                >
-                  <EditPencilIcon className="h-4 w-4" />
-                </button>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={pickAvatar}
-                  className="sr-only"
-                />
-              </div>
+              avatarFile && null
             )}
           </Row>
 
@@ -279,7 +287,10 @@ export interface ProfileDraft {
   username: string;
   nickname: string;
   bio: string;
+  /** Preview only when `avatarFile` is set — it is then a `blob:` URL. */
   avatarUrl: string;
+  /** Set only when a new photo was picked; the save uploads it. */
+  avatarFile?: File | null;
 }
 
 const BIO_LIMIT = 80;

@@ -95,6 +95,11 @@ export interface SocialLoginResponse {
 
 export interface UserProfileResponse {
   userId: string;
+  /**
+   * The account's handle. Null for accounts created before user-service began copying it off
+   * the registration event, so never render it without a fallback.
+   */
+  username: string | null;
   displayName: string | null;
   bio: string | null;
   avatarUrl: string | null;
@@ -135,6 +140,15 @@ export interface MeResponse {
 
 export type VideoStatus = "PROCESSING" | "PUBLISHED" | "FAILED" | "TAKEN_DOWN";
 export type VideoVisibility = "PUBLIC" | "PRIVATE";
+
+/** The profile header's counters — `GET /videos/users/{userId}/stats`. */
+export interface UserVideoStatsResponse {
+  userId: string;
+  videoCount: number;
+  /** Likes summed over the creator's videos. The owner's own hidden videos count for them only. */
+  totalLikes: number;
+  totalViews: number;
+}
 
 export interface VideoResponse {
   /**
@@ -232,6 +246,23 @@ export interface LikeStatusResponse {
   videoId: string;
   liked: boolean;
   likeCount: number;
+}
+
+export interface SaveStatusResponse {
+  videoId: string;
+  /** Whether the *viewer* has this video in their favourites — it is private to them. */
+  saved: boolean;
+}
+
+/**
+ * A page of the viewer's own likes or saves. Ids only: interaction-service
+ * stores no video metadata, so the ids are handed to `getVideosByIds` to become
+ * something renderable.
+ */
+export interface VideoIdPageResponse {
+  videoIds: string[];
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
 export interface ShareResponse {

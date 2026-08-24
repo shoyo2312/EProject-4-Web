@@ -12,7 +12,6 @@ import {
   ShareIcon,
 } from "@/components/icons";
 import { ShareSheet } from "@/components/feed/ShareSheet";
-import { useSession } from "@/components/session/SessionProvider";
 import { useFollow } from "@/hooks/use-follow";
 import { isBackendHandle } from "@/lib/api/adapters";
 import { shareVideo } from "@/lib/api/interactions";
@@ -33,6 +32,8 @@ export function ActionRail({
   liked,
   likes,
   onToggleLike,
+  saved,
+  onToggleSave,
 }: {
   video: FeedVideo;
   /** Mock count plus anything the viewer posted this session. */
@@ -50,8 +51,10 @@ export function ActionRail({
    */
   likes: number;
   onToggleLike: () => void;
+  /** Controlled by `Feed` so one saved-set answers every card on the page. */
+  saved: boolean;
+  onToggleSave: () => void;
 }) {
-  const [bookmarked, setBookmarked] = useState(false);
   const {
     isSelf,
     following,
@@ -59,10 +62,6 @@ export function ActionRail({
   } = useFollow(video.author.userId, video.isFollowing);
   const [shareOpen, setShareOpen] = useState(false);
   const [extraShares, setExtraShares] = useState(0);
-
-  // Following and bookmarking both need an account; sharing does not, and the
-  // comment button only opens a panel a guest is allowed to read.
-  const { requireSignIn } = useSession();
 
   // Opening the sheet is itself the share, on the live site as much as here —
   // there is no further "confirm" step, so it is recorded the moment the rail
@@ -138,13 +137,13 @@ export function ActionRail({
         <CommentIcon className="h-[21px] w-[21px]" />
       </RailButton>
 
+      {/* The count stays the mock figure plus this viewer's own bookmark:
+          video_counters has no save_count column, because a save is private
+          and nothing public ever shows how many people made one. */}
       <RailButton
-        label={formatCount(video.stats.bookmarks)}
-        onClick={() => {
-          if (!requireSignIn()) return;
-          setBookmarked((v) => !v);
-        }}
-        active={bookmarked}
+        label={formatCount(video.stats.bookmarks + (saved ? 1 : 0))}
+        onClick={onToggleSave}
+        active={saved}
         activeColor="text-[#facc15]"
         ariaLabel="Bookmark"
       >

@@ -45,6 +45,52 @@ export function updateMyProfile(patch: {
 }
 
 /**
+ * `GET /api/v1/users/search?q=` — profiles whose handle or display name contains `q`,
+ * most-followed first.
+ *
+ * A token is required, as everywhere in user-service, so a signed-out viewer gets nothing
+ * rather than a public result set.
+ */
+export function searchUsers(
+  q: string,
+  size = 8,
+  signal?: AbortSignal,
+): Promise<PageResponse<UserProfileResponse>> {
+  return apiFetch<PageResponse<UserProfileResponse>>("/users/search", {
+    auth: "required",
+    query: { q, size },
+    signal,
+  });
+}
+
+/** Image types the avatar endpoint accepts, and what to put in `accept`. */
+export const ACCEPTED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+
+export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+
+/**
+ * `POST /api/v1/users/me/avatar` — multipart, one `file` part.
+ *
+ * The file cannot take the video route: `PATCH /users/me` validates `avatarUrl`
+ * against the CDN allow-list (`@ValidMediaUrl`, https only), so a URL the client
+ * invents is rejected. The server stores the bytes itself and answers with the
+ * profile carrying the URL it chose.
+ *
+ * Called only from a save, never from the file picker: picking a photo must
+ * leave the account untouched until Save is pressed.
+ */
+export function uploadMyAvatar(file: File): Promise<UserProfileResponse> {
+  const form = new FormData();
+  form.append("file", file);
+
+  return apiFetch<UserProfileResponse>("/users/me/avatar", {
+    method: "POST",
+    body: form,
+    auth: "required",
+  });
+}
+
+/**
  * Who the viewer follows, for the life of the tab — see `isFollowing` below
  * for why this exists at all. Keyed by target id only: there is one viewer per
  * tab, and `clearFollowCache` runs on every sign-in and sign-out, exactly as

@@ -43,9 +43,16 @@ type Sort = (typeof SORTS)[number];
 export function ProfileBody({
   profile,
   isOwner,
+  onTabSelect,
 }: {
   profile: UserProfile;
   isOwner: boolean;
+  /**
+   * Fired when a tab is opened, so a page backed by real data can fetch that
+   * tab's videos then rather than on load — Favorites and Liked are two
+   * requests each, and most visits never open either.
+   */
+  onTabSelect?: (tab: ProfileTab) => void;
 }) {
   const [tab, setTab] = useState<ProfileTab>("videos");
   const [sort, setSort] = useState<Sort>("Latest");
@@ -69,7 +76,10 @@ export function ProfileBody({
               type="button"
               role="tab"
               aria-selected={id === tab}
-              onClick={() => setTab(id)}
+              onClick={() => {
+                setTab(id);
+                onTabSelect?.(id);
+              }}
               className={cn(
                 "flex h-11 items-center gap-1 px-8 text-[18px] leading-6 font-semibold transition-colors tt-840:px-4",
                 id === tab

@@ -134,16 +134,16 @@ export function videoToProfileVideo(video: VideoResponse): ProfileVideo {
 /**
  * A profile page from what the backend can actually supply.
  *
- * `likes` has no source (interaction-service), `isVerified` does not exist as a
- * concept in user-service, and only the "videos" tab has data — reposts,
- * favourites and liked are all other services' territory, so they render empty
- * rather than borrowing mock content that would be a lie.
+ * `isVerified` does not exist as a concept in user-service, and the reposts tab has no
+ * service behind it, so it renders empty rather than borrowing mock content that would be a
+ * lie. `likes` is video-service's aggregate, and favourites/liked are filled in by
+ * `BackendProfilePage` when their tab is opened.
  */
 export function profileToUserProfile(
   profile: UserProfileResponse,
   author: Author,
   videos: ProfileVideo[],
-  options: { isFollowing?: boolean } = {},
+  options: { isFollowing?: boolean; totalLikes?: number } = {},
 ): UserProfile {
   return {
     author,
@@ -152,7 +152,9 @@ export function profileToUserProfile(
     stats: {
       following: profile.followingCount,
       followers: profile.followerCount,
-      likes: 0,
+      // Summed by video-service over this creator's videos; 0 until that answers, and
+      // 0 for good if it fails — a header that renders is worth more than an exact count.
+      likes: options.totalLikes ?? 0,
     },
     isFollowing: options.isFollowing ?? false,
     posts: {
