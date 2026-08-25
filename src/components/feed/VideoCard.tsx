@@ -46,6 +46,13 @@ interface VideoCardProps {
    * `/video/[id]` gets a chance to step to the next video.
    */
   onEnded?: () => void;
+  /**
+   * Fired when this card becomes the one owning the viewport — the same signal
+   * that starts playback, so anything keyed to "the video being watched" cannot
+   * disagree with what is actually playing. The feed uses it to keep the open
+   * comment sidebar on the video the viewer scrolled to.
+   */
+  onActive?: () => void;
 }
 
 /** How long to wait for a second click before treating one as a plain tap. */
@@ -79,6 +86,7 @@ export function VideoCard({
   showVolumeControl = true,
   showContextMenu = true,
   onEnded,
+  onActive,
 }: VideoCardProps) {
   const [expanded, setExpanded] = useState(false);
   const hasSource = video.videoUrl !== "";
@@ -110,6 +118,17 @@ export function VideoCard({
     playbackRate: speed,
     onAutoplayBlocked: mute,
   });
+
+  // Held in a ref so a parent that re-creates the callback each render cannot
+  // re-announce the same card as newly active.
+  const onActiveRef = useRef(onActive);
+  useEffect(() => {
+    onActiveRef.current = onActive;
+  }, [onActive]);
+
+  useEffect(() => {
+    if (isActive) onActiveRef.current?.();
+  }, [isActive]);
 
   // Backend videos arrive as HLS playlists, which need hls.js everywhere but
   // Safari; the mock feed's .mp4 files keep using the plain `src` below.
