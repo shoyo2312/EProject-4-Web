@@ -64,7 +64,8 @@ export function ActivityDrawer({
     <div
       aria-hidden={!open}
       className={cn(
-        "fixed top-0 z-[99] h-screen w-80 overscroll-contain bg-[var(--tt-page)]",
+        // Under the sidebar's animation cover — see `SearchDrawer`.
+        "fixed top-0 z-[1] h-screen w-80 overscroll-contain bg-[var(--tt-page)]",
         "left-18 border-x border-[var(--tt-divider)]",
         // `transform`, not Tailwind's `translate-x-*`: in v4 those compile to the
         // `translate` property, which `transition-[transform]` does not cover —
