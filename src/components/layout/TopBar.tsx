@@ -54,9 +54,12 @@ export function TopBar() {
         {user ? (
           <AccountMenu />
         ) : isLoading ? (
-          // Same footprint as the pill below, so the cluster does not slide
-          // sideways when `/me` answers.
-          <div className="h-8 w-[76px]" />
+          // The avatar's own footprint, measured on the signed-in bar: 32 x 32,
+          // fully round, flush with the divider. A guest sees this branch only
+          // until the bootstrap effect commits — with no token there is no
+          // `/me` to wait for — so matching the avatar rather than the Log in
+          // pill is what keeps the slot still in the case that actually waits.
+          <div className="h-8 w-8 animate-pulse rounded-full bg-[var(--tt-field)]" />
         ) : (
           <button
             type="button"

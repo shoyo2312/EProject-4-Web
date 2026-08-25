@@ -38,6 +38,11 @@ const PROVIDER_AVATAR_HOSTS = [
  */
 const MEDIA_ORIGIN = new URL(process.env.MEDIA_ORIGIN ?? "http://localhost:9000");
 
+/** True while media is served from the developer's own machine. */
+const LOCAL_MEDIA_ORIGIN = ["localhost", "127.0.0.1", "0.0.0.0", "[::1]"].includes(
+  MEDIA_ORIGIN.hostname,
+);
+
 const nextConfig: NextConfig = {
   output: "standalone",
 
@@ -54,6 +59,15 @@ const nextConfig: NextConfig = {
         hostname,
       })),
     ],
+
+    /**
+     * Next 16 refuses to optimize an image whose host resolves to a local or
+     * private address, so the dev MinIO on localhost:9000 answers every avatar
+     * with a 400 ("url parameter is not allowed") however the pattern above is
+     * written. Allowed only when the media origin is itself local — a real
+     * deployment serves media from the CDN and must keep the block.
+     */
+    dangerouslyAllowLocalIP: LOCAL_MEDIA_ORIGIN,
   },
 
   /**
