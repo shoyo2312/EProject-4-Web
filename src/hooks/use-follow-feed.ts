@@ -4,11 +4,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import { toFeedCards } from "@/lib/api/feed-cards";
-import { getFollowingIds } from "@/lib/api/users";
+import { getFollowingIds, getFriendIds } from "@/lib/api/users";
 import { getFollowingFeed } from "@/lib/api/videos";
 import type { FeedVideo } from "@/types/tiktok";
 
-export interface FollowingFeedState {
+/**
+ * Which slice of the follow graph the feed is drawn from. `friends` is the
+ * mutuals — accounts the viewer follows that follow back.
+ */
+export type FollowFeedSource = "following" | "friends";
+
+export interface FollowFeedState {
   videos: FeedVideo[];
   isLoading: boolean;
   /** Set when the first page failed — the caller decides what to show. */
@@ -16,29 +22,35 @@ export interface FollowingFeedState {
   hasMore: boolean;
   loadMore: () => void;
   /**
-   * The viewer follows nobody. Distinct from an empty `videos` array, which
-   * also covers "follows people who have not posted" — the page shows the
-   * creator grid for both, but only this one is a state the viewer can fix.
+   * Nobody qualifies: no follows at all, or — on `friends` — nobody who follows
+   * back. Distinct from an empty `videos` array, which also covers "they simply
+   * have not posted"; the page shows the creator grid for both, but only this
+   * one is a state the viewer can fix.
    */
-  followsNobody: boolean;
+  isEmptyGraph: boolean;
 }
 
 const PAGE_SIZE = 20;
 
 /**
- * The Following feed: `GET /videos/feed/following`, cursor-paged and newest
- * first, exactly like "For You" minus the ranking.
+ * The Following and Friends feeds: `GET /videos/feed/following`, cursor-paged
+ * and newest first, exactly like "For You" minus the ranking.
  *
- * Two calls, not one. video-service holds no follow graph, so the ids come from
- * user-service first and are then passed down with every page. They are read
- * **once per mount** and reused: following somebody mid-scroll does not splice
- * their videos into the page you are on, which is what the live site does too.
+ * One hook for both because only the author list differs — Friends is Following
+ * narrowed to the accounts that follow back, and there is no separate endpoint
+ * or different page shape behind it.
  *
- * Signed out there is nothing to ask — the follow listing needs a token — so
- * the hook settles immediately with an empty feed and the route falls to its
+ * Two calls per feed, not one. video-service holds no follow graph, so the ids
+ * come from user-service first and are then passed down with every page. They
+ * are read **once per mount** and reused: following somebody mid-scroll does not
+ * splice their videos into the page you are on, which is what the live site does
+ * too.
+ *
+ * Signed out there is nothing to ask — the follow listings need a token — so the
+ * hook settles immediately with an empty feed and the route falls to its
  * suggestion grid.
  */
-export function useFollowingFeed(): FollowingFeedState {
+export function useFollowFeed(source: FollowFeedSource = "following"): FollowFeedState {
   const { user, isLoading: sessionLoading } = useSession();
   const viewerId = user?.userId;
 
@@ -46,12 +58,14 @@ export function useFollowingFeed(): FollowingFeedState {
   const [isLoading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [hasMore, setHasMore] = useState(true);
-  const [followsNobody, setFollowsNobody] = useState(false);
+  const [isEmptyGraph, setEmptyGraph] = useState(false);
 
   const inFlight = useRef(false);
   const seenIds = useRef<Set<string>>(new Set());
   /** Resolved on the first page and reused for the rest — see above. */
   const followedIds = useRef<string[] | null>(null);
+  /** Which source those ids came from, so a switched `source` re-resolves. */
+  const resolvedFor = useRef<FollowFeedSource | null>(null);
   /** Position in the feed; undefined means "start at the newest". */
   const cursor = useRef<string | undefined>(undefined);
 
@@ -61,9 +75,13 @@ export function useFollowingFeed(): FollowingFeedState {
       inFlight.current = true;
 
       try {
-        if (followedIds.current === null) {
-          followedIds.current = await getFollowingIds(viewerId);
-          setFollowsNobody(followedIds.current.length === 0);
+        if (followedIds.current === null || resolvedFor.current !== source) {
+          followedIds.current =
+            source === "friends"
+              ? await getFriendIds(viewerId)
+              : await getFollowingIds(viewerId);
+          resolvedFor.current = source;
+          setEmptyGraph(followedIds.current.length === 0);
         }
 
         const page = await getFollowingFeed(
@@ -91,7 +109,7 @@ export function useFollowingFeed(): FollowingFeedState {
         }
       }
     },
-    [viewerId],
+    [viewerId, source],
   );
 
   useEffect(() => {
@@ -121,5 +139,5 @@ export function useFollowingFeed(): FollowingFeedState {
     load();
   }, [hasMore, load]);
 
-  return { videos, isLoading, error, hasMore, loadMore, followsNobody };
+  return { videos, isLoading, error, hasMore, loadMore, isEmptyGraph };
 }

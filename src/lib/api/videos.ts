@@ -44,8 +44,10 @@ export function getFeed(
  * drawn only from the accounts named in `followedUserIds`.
  *
  * video-service does not read the follow graph: it lives in user-service, and
- * the caller passes the ids in. `useFollowingFeed` collects them from
- * `GET /users/{id}/following` once per mount and reuses them for every page.
+ * the caller passes the ids in. `useFollowFeed` collects them once per mount and
+ * reuses them for every page — everyone the viewer follows for `/following`, and
+ * the mutuals among them for `/friends`, which is the only difference between
+ * those two feeds.
  *
  * At most 500 ids per request — past that the server answers
  * `TOO_MANY_FOLLOWED_USERS` rather than silently dropping creators from the

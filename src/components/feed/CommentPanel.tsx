@@ -289,6 +289,8 @@ export function CommentPanel({
       >
         {loading && comments.length === 0 && <CommentListSkeleton />}
 
+        {!loading && comments.length === 0 && <NoCommentsYet />}
+
         {comments.map((comment) => (
           <CommentItem
             key={comment.id}
@@ -360,6 +362,28 @@ export function CommentPanel({
  *   like count 14px / 400 / 21px     rgba(255,255,255,.6)
  *
  */
+/**
+ * `.DivEmptyStateContainer` — what the panel shows before anyone has commented.
+ *
+ * Measured on the live site (a video with zero comments, right-hand panel):
+ *   container  flex column, centred on both axes, gap 12, padding 24px 16px,
+ *              filling the list area rather than sitting at its top
+ *   art        109 × 80 line drawing; ours is the rail's own comment glyph at
+ *              64px, dimmed to the same weight — a second illustration to keep
+ *              in step buys nothing here
+ *   label      14px / 20px, rgba(255,255,255,.75)
+ */
+function NoCommentsYet() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-6">
+      <CommentIcon className="h-16 w-16 text-white/25" />
+      <p className="text-[14px] leading-5 text-white/75">
+        Start the conversation
+      </p>
+    </div>
+  );
+}
+
 export function CommentListSkeleton() {
   return (
     <div className="flex flex-col gap-4 py-2">

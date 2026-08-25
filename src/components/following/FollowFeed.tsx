@@ -3,24 +3,34 @@
 import { Feed } from "@/components/feed/Feed";
 import { FeedSkeleton } from "@/components/feed/LiveFeed";
 import { SuggestedCreators } from "@/components/following/SuggestedCreators";
-import { useFollowingFeed } from "@/hooks/use-following-feed";
+import { useFollowFeed, type FollowFeedSource } from "@/hooks/use-follow-feed";
 import type { SuggestedCreator } from "@/types/tiktok";
 
 /**
- * `/following`, backed by `GET /api/v1/videos/feed/following`.
+ * `/following` and `/friends`, both backed by `GET /videos/feed/following`.
  *
- * The live page has two faces and so does this one: a viewer with videos from
- * the accounts they follow gets the same vertical feed as For You, and everyone
- * else — signed out, following nobody, or following people who have not posted
- * — gets the creator grid, which is the state the live site was measured in.
+ * One component for two routes: the pages differ only in which accounts the
+ * feed is drawn from — everybody the viewer follows, or just the mutuals — and
+ * the live site renders them identically otherwise.
+ *
+ * Each has two faces, as the live site does. A viewer with videos gets the same
+ * vertical feed as For You; everyone else — signed out, an empty follow graph,
+ * or people who have not posted — gets the creator grid, which is the state the
+ * live pages were measured in.
  *
  * The grid is also the error state. It is real page content rather than a mock
  * feed passed off as real, so unlike For You there is nothing to hide here when
  * the gateway is unreachable: the banner says what happened and the suggestions
  * below it are still worth showing.
  */
-export function FollowingFeed({ creators }: { creators: SuggestedCreator[] }) {
-  const { videos, isLoading, error, loadMore } = useFollowingFeed();
+export function FollowFeed({
+  creators,
+  source = "following",
+}: {
+  creators: SuggestedCreator[];
+  source?: FollowFeedSource;
+}) {
+  const { videos, isLoading, error, loadMore } = useFollowFeed(source);
 
   if (isLoading) {
     return <FeedSkeleton />;

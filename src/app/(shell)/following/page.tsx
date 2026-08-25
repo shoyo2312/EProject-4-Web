@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { FollowingFeed } from "@/components/following/FollowingFeed";
+import { FollowFeed } from "@/components/following/FollowFeed";
 import { getSuggestedCreators } from "@/lib/data";
 
 export const metadata: Metadata = {
@@ -17,11 +17,11 @@ export const metadata: Metadata = {
  *
  * Stays a server component so the mock module never reaches the client bundle:
  * it loads the creator suggestions and hands them down as the empty and error
- * state, and `FollowingFeed` does the fetching — the session, and therefore the
+ * state, and `FollowFeed` does the fetching — the session, and therefore the
  * token the follow listing needs, only exists in the browser.
  */
 export default async function FollowingPage() {
   const creators = await getSuggestedCreators();
 
-  return <FollowingFeed creators={creators} />;
+  return <FollowFeed creators={creators} />;
 }

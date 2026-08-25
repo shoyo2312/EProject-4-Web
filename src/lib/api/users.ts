@@ -229,12 +229,46 @@ export async function getFollowingIds(
   viewerId: string,
   max = 500,
 ): Promise<string[]> {
+  const ids = await collectIds((page) => getFollowing(viewerId, page, 50), max);
+  for (const userId of ids) followState.set(userId, true);
+  return ids;
+}
+
+/**
+ * Mutuals — the Friends feed's authors. Two accounts are friends when each
+ * follows the other, which is the intersection of the viewer's two listings.
+ *
+ * Computed here rather than asked for: user-service has no friends endpoint,
+ * and the feed it feeds takes any list of author ids, so the only thing a
+ * server-side one would save is the second listing walk.
+ *
+ * Both sides are capped the same way {@link getFollowingIds} is, so a viewer
+ * past `max` on either gets the mutuals among the accounts that fit — the same
+ * trade the Following feed already makes.
+ */
+export async function getFriendIds(
+  viewerId: string,
+  max = 500,
+): Promise<string[]> {
+  const [following, followers] = await Promise.all([
+    getFollowingIds(viewerId, max),
+    collectIds((page) => getFollowers(viewerId, page, 50), max),
+  ]);
+
+  const followsBack = new Set(followers);
+  return following.filter((userId) => followsBack.has(userId));
+}
+
+/** Walks a paged profile listing to its end, or to `max` ids, whichever first. */
+async function collectIds(
+  fetchPage: (page: number) => Promise<PageResponse<UserProfileResponse>>,
+  max: number,
+): Promise<string[]> {
   const ids: string[] = [];
 
   for (let page = 0; ids.length < max; page += 1) {
-    const result = await getFollowing(viewerId, page, 50);
+    const result = await fetchPage(page);
     for (const profile of result.content) {
-      followState.set(profile.userId, true);
       if (ids.length < max) ids.push(profile.userId);
     }
 
