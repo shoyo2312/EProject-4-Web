@@ -2,6 +2,7 @@
 
 import { apiFetch } from "@/lib/api/client";
 import { isApiError } from "@/lib/api/errors";
+import { isLastPage } from "@/lib/api/types";
 import type {
   FollowResponse,
   PageResponse,
@@ -209,6 +210,38 @@ export function getMuted(
     auth: "required",
     query: { page, size },
   });
+}
+
+/**
+ * Every account the viewer follows, as ids — what the Following feed is drawn
+ * from, since video-service has no read into the follow graph.
+ *
+ * Walks the paged listing to its end, capped at `max` because that is the
+ * server's own ceiling on one Following-feed request. A viewer past it gets a
+ * feed built from the first `max` accounts rather than an error; ordering there
+ * is the listing's, which is stable, so the same creators are the ones dropped
+ * on every page rather than a different set each time.
+ *
+ * Seeds `followState` on the way through, so the Follow buttons on the videos
+ * this feed renders answer without a walk of their own.
+ */
+export async function getFollowingIds(
+  viewerId: string,
+  max = 500,
+): Promise<string[]> {
+  const ids: string[] = [];
+
+  for (let page = 0; ids.length < max; page += 1) {
+    const result = await getFollowing(viewerId, page, 50);
+    for (const profile of result.content) {
+      followState.set(profile.userId, true);
+      if (ids.length < max) ids.push(profile.userId);
+    }
+
+    if (isLastPage(result.page)) break;
+  }
+
+  return ids;
 }
 
 /**

@@ -40,6 +40,35 @@ export function getFeed(
 }
 
 /**
+ * `GET /api/v1/videos/feed/following` — the same cursor-paged feed as above,
+ * drawn only from the accounts named in `followedUserIds`.
+ *
+ * video-service does not read the follow graph: it lives in user-service, and
+ * the caller passes the ids in. `useFollowingFeed` collects them from
+ * `GET /users/{id}/following` once per mount and reuses them for every page.
+ *
+ * At most 500 ids per request — past that the server answers
+ * `TOO_MANY_FOLLOWED_USERS` rather than silently dropping creators from the
+ * feed. No ids is an empty feed, never the public one, so the request is not
+ * worth making.
+ */
+export function getFollowingFeed(
+  followedUserIds: string[],
+  cursor?: string,
+  size = 20,
+  signal?: AbortSignal,
+): Promise<CursorPage<VideoResponse>> {
+  if (followedUserIds.length === 0) {
+    return Promise.resolve({ items: [], nextCursor: null });
+  }
+  return apiFetch<CursorPage<VideoResponse>>("/videos/feed/following", {
+    auth: "optional",
+    query: { followedUserIds: followedUserIds.join(","), cursor, size },
+    signal,
+  });
+}
+
+/**
  * `GET /api/v1/videos/batch?ids=…` — hydrates a ranking in one round trip, in
  * the order asked.
  *
