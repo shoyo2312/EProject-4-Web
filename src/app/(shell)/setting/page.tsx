@@ -4,7 +4,7 @@ import { SettingsPage } from "@/components/settings/SettingsPage";
 import { getSettingsSections } from "@/lib/data";
 
 export const metadata: Metadata = {
-  title: "Privacy and Settings | TikTok",
+  title: "Privacy and Settings | Nowa",
 };
 
 /**

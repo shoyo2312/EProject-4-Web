@@ -142,6 +142,8 @@ export interface ProfileVideo {
   /** Played muted on hover, the way the live grid previews a tile. */
   videoUrl: string;
   views: number;
+  /** `visibility: "PRIVATE"` — the grid marks it with a lock. Owner-only. */
+  isPrivate?: boolean;
 }
 
 /** The header of `/@handle` plus the content behind each of its tabs. */

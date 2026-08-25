@@ -64,7 +64,8 @@ export function ActivityDrawer({
     <div
       aria-hidden={!open}
       className={cn(
-        "fixed top-0 z-[99] h-screen w-80 overscroll-contain bg-[var(--tt-page)]",
+        // Under the sidebar's animation cover — see `SearchDrawer`.
+        "fixed top-0 z-[1] h-screen w-80 overscroll-contain bg-[var(--tt-page)]",
         "left-18 border-x border-[var(--tt-divider)]",
         // `transform`, not Tailwind's `translate-x-*`: in v4 those compile to the
         // `translate` property, which `transition-[transform]` does not cover —
@@ -92,7 +93,7 @@ export function ActivityDrawer({
       <div className="flex h-full flex-col gap-4 px-2 pb-0 pt-5">
         {/* `.DivInboxHeaderContainer` — flex column, gap 16, flex 0 0 auto */}
         <div className="flex flex-none flex-col gap-4 px-2">
-          {/* `.H2InboxTitle` — TikTokDisplayFont 20px/25px/600 */}
+          {/* `.H2InboxTitle` — NowaDisplayFont 20px/25px/600 */}
           <h2 className="flex text-[20px] font-semibold leading-[25px] text-[var(--tt-text)]">
             Notifications
           </h2>

@@ -41,7 +41,6 @@ export function isBackendHandle(handle: string): boolean {
  * failed); a second literal elsewhere is how one of them ends up stale.
  */
 export const DEFAULT_AVATAR = "/images/avatars/avatar-default.png";
-const FALLBACK_POSTER = "/images/posters/poster-1.jpg";
 
 export function authorFromProfile(profile: UserProfileResponse): Author {
   return {
@@ -106,35 +105,45 @@ export function videoToFeedVideo(
     videoUrl: video.hlsUrl ?? "",
     width: 1080,
     height: 1920,
-    posterUrl: video.thumbnailUrl ?? FALLBACK_POSTER,
+    // Same reason as `videoToProfileVideo`: video-service has no thumbnails
+    // yet, and one shared fallback made every card in the feed the same
+    // picture. Empty means "no poster" — `VideoCard` handles it.
+    posterUrl: video.thumbnailUrl ?? "",
     durationSeconds: video.durationSeconds ?? 0,
     isFollowing: options.isFollowing ?? false,
     hasTranslation: false,
   };
 }
 
+/**
+ * No stand-in poster on purpose. video-service returns `thumbnailUrl: null`
+ * for everything it has transcoded so far, and one shared fallback image made
+ * every tile in the grid the same picture. Empty instead, which `ProfileTile`
+ * reads as "let the browser draw the first frame".
+ */
 export function videoToProfileVideo(video: VideoResponse): ProfileVideo {
   return {
     id: video.id,
-    posterUrl: video.thumbnailUrl ?? FALLBACK_POSTER,
+    posterUrl: video.thumbnailUrl ?? "",
     videoUrl: video.hlsUrl ?? "",
     views: video.viewCount,
+    isPrivate: video.visibility === "PRIVATE",
   };
 }
 
 /**
  * A profile page from what the backend can actually supply.
  *
- * `likes` has no source (interaction-service), `isVerified` does not exist as a
- * concept in user-service, and only the "videos" tab has data — reposts,
- * favourites and liked are all other services' territory, so they render empty
- * rather than borrowing mock content that would be a lie.
+ * `isVerified` does not exist as a concept in user-service, and the reposts tab has no
+ * service behind it, so it renders empty rather than borrowing mock content that would be a
+ * lie. `likes` is video-service's aggregate, and favourites/liked are filled in by
+ * `BackendProfilePage` when their tab is opened.
  */
 export function profileToUserProfile(
   profile: UserProfileResponse,
   author: Author,
   videos: ProfileVideo[],
-  options: { isFollowing?: boolean } = {},
+  options: { isFollowing?: boolean; totalLikes?: number } = {},
 ): UserProfile {
   return {
     author,
@@ -143,7 +152,9 @@ export function profileToUserProfile(
     stats: {
       following: profile.followingCount,
       followers: profile.followerCount,
-      likes: 0,
+      // Summed by video-service over this creator's videos; 0 until that answers, and
+      // 0 for good if it fails — a header that renders is worth more than an exact count.
+      likes: options.totalLikes ?? 0,
     },
     isFollowing: options.isFollowing ?? false,
     posts: {

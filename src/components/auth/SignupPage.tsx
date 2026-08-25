@@ -90,7 +90,7 @@ function OptionsStep({ options }: { options: LoginOption[] }) {
 
   return (
     <AuthOptions
-      title="Sign up for TikTok"
+      title="Sign up for Nowa"
       description="Create a profile, follow other accounts, make your own videos, and more."
       options={options}
       onSelect={social.select}

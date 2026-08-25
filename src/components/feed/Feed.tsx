@@ -8,6 +8,7 @@ import { VideoCard } from "@/components/feed/VideoCard";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { isBackendHandle } from "@/lib/api/adapters";
+import { useSavedVideos } from "@/hooks/use-saved-videos";
 import { getLikeStatus, likeVideo, unlikeVideo } from "@/lib/api/interactions";
 import { cn } from "@/lib/utils";
 import type { Comment, FeedVideo } from "@/types/tiktok";
@@ -58,6 +59,12 @@ export function Feed({
    * un-likes).
    */
   const [likedIds, setLikedIds] = useState<ReadonlySet<string>>(new Set());
+
+  /**
+   * Bookmarks. Unlike the hearts above this is one request for the whole set
+   * rather than one per card — see `useSavedVideos`.
+   */
+  const { isSaved, toggleSave } = useSavedVideos();
 
   /**
    * Server-known like counts, by video id, overriding the count the feed was
@@ -334,6 +341,8 @@ export function Feed({
                   liked={likedIds.has(video.id)}
                   likes={likeCounts[video.id] ?? video.stats.likes}
                   onToggleLike={() => toggleLike(video.id)}
+                  saved={isSaved(video.id)}
+                  onToggleSave={() => toggleSave(video.id)}
                 />
               </div>
             </article>

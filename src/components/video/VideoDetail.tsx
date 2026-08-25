@@ -33,7 +33,15 @@ import {
   VolumeIcon,
 } from "@/components/icons";
 import { isBackendHandle } from "@/lib/api/adapters";
-import { getLikeStatus, likeVideo, shareVideo, unlikeVideo } from "@/lib/api/interactions";
+import {
+  getLikeStatus,
+  getSaveStatus,
+  likeVideo,
+  saveVideo,
+  shareVideo,
+  unlikeVideo,
+  unsaveVideo,
+} from "@/lib/api/interactions";
 import { formatCount } from "@/lib/format";
 import { getOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
@@ -619,8 +627,36 @@ function VideoSummary({
     following,
     toggle: toggleFollow,
   } = useFollow(video.author.userId, video.isFollowing);
-  const [bookmarked, setBookmarked] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Seed the bookmark for a returning viewer. One video, so this asks about
+  // that video rather than reading the whole favourites list as the feed does.
+  useEffect(() => {
+    if (!isBackendHandle(video.id)) return;
+    let cancelled = false;
+    getSaveStatus(video.id)
+      .then((status) => {
+        if (!cancelled) setSaved(status.saved);
+      })
+      .catch(() => {
+        // Signed out, or the call failed — the bookmark starts unfilled.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [video.id]);
+
+  const toggleSave = () => {
+    const next = !saved;
+    setSaved(next);
+    if (!isBackendHandle(video.id)) return;
+
+    (next ? saveVideo(video.id) : unsaveVideo(video.id)).catch(() => {
+      // Silent rollback, matching the heart above it.
+      setSaved(!next);
+    });
+  };
 
   /**
    * Shown as a path, not `window.location.href`: the origin is unknown during
@@ -710,11 +746,13 @@ function VideoSummary({
           <CommentIcon className="h-5 w-5" />
         </CountButton>
 
+        {/* The count is the mock figure plus the viewer's own: a save is
+            private, so there is no shared save_count to read. */}
         <CountButton
-          label={bookmarked ? "Remove bookmark" : "Bookmark"}
-          onClick={() => setBookmarked((b) => !b)}
-          count={video.stats.bookmarks + (bookmarked ? 1 : 0)}
-          active={bookmarked}
+          label={saved ? "Remove bookmark" : "Bookmark"}
+          onClick={toggleSave}
+          count={video.stats.bookmarks + (saved ? 1 : 0)}
+          active={saved}
         >
           <BookmarkIcon className="h-5 w-5" />
         </CountButton>

@@ -3,7 +3,7 @@ import { Suspense } from "react";
 
 import { VerifyEmailPage } from "@/components/auth/VerifyEmailPage";
 
-export const metadata: Metadata = { title: "Verify your email | TikTok" };
+export const metadata: Metadata = { title: "Verify your email | Nowa" };
 
 /**
  * The OTP step. Wrapped in Suspense because the page reads the address out of

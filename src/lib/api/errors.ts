@@ -72,6 +72,7 @@ const MESSAGES: Record<string, string> = {
   NOT_BLOCKED: "This account is not blocked.",
   ALREADY_MUTED: "You already muted this account.",
   NOT_MUTED: "This account is not muted.",
+  INVALID_AVATAR: "That photo must be a JPEG, PNG, or WebP under 5 MB.",
 
   // video-service
   NOT_VIDEO_OWNER: "You can only delete your own videos.",

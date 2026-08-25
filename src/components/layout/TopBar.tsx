@@ -21,7 +21,7 @@ import { useSession } from "@/components/session/SessionProvider";
  * is identical in both states.
  */
 export function TopBar() {
-  const { user, openLogin } = useSession();
+  const { user, isLoading, openLogin } = useSession();
   const pathname = usePathname();
 
   // `/login` and `/signup` are the only routes with chrome of their own: the
@@ -34,25 +34,32 @@ export function TopBar() {
 
   return (
     <div className="fixed top-3 z-[98] flex items-center gap-2 right-[calc(1.5rem+var(--comment-sidebar-width))] transition-[right] duration-300 ease-linear tt-1024:right-[calc(0.75rem+var(--comment-sidebar-width))]">
-      <button
-        type="button"
-        className="flex h-9 items-center gap-2 rounded-[8px] px-3 text-[15px] font-medium text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)]"
-      >
-        <CoinGlyph />
-        <span className="tt-1024:hidden">Get Coins</span>
-      </button>
+      {/*<button*/}
+      {/*  type="button"*/}
+      {/*  className="flex h-9 items-center gap-2 rounded-[8px] px-3 text-[15px] font-medium text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)]"*/}
+      {/*>*/}
+      {/*  <CoinGlyph />*/}
+      {/*  <span className="tt-1024:hidden">Get Coins</span>*/}
+      {/*</button>*/}
 
-      <button
-        type="button"
-        className="flex h-9 items-center gap-2 rounded-[8px] px-3 text-[15px] font-medium text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)]"
-      >
-        <PhoneGlyph />
-        <span className="tt-1024:hidden">Get App</span>
-      </button>
+      {/*<button*/}
+      {/*  type="button"*/}
+      {/*  className="flex h-9 items-center gap-2 rounded-[8px] px-3 text-[15px] font-medium text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)]"*/}
+      {/*>*/}
+      {/*  <PhoneGlyph />*/}
+      {/*  <span className="tt-1024:hidden">Get App</span>*/}
+      {/*</button>*/}
 
       <div className="ml-1 border-l border-[var(--tt-divider)] pl-3">
         {user ? (
           <AccountMenu />
+        ) : isLoading ? (
+          // The avatar's own footprint, measured on the signed-in bar: 32 x 32,
+          // fully round, flush with the divider. A guest sees this branch only
+          // until the bootstrap effect commits — with no token there is no
+          // `/me` to wait for — so matching the avatar rather than the Log in
+          // pill is what keeps the slot still in the case that actually waits.
+          <div className="h-8 w-8 animate-pulse rounded-full bg-[var(--tt-field)]" />
         ) : (
           <button
             type="button"

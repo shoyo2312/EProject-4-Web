@@ -92,15 +92,27 @@ async function send(
   token: string | null,
   signal?: AbortSignal,
 ): Promise<Response> {
+  // FormData carries its own multipart boundary in the Content-Type the browser
+  // writes, so setting the header here would produce a boundary-less type the
+  // server cannot parse.
+  const isMultipart = body instanceof FormData;
+
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (body !== undefined && !isMultipart) {
+    headers["Content-Type"] = "application/json";
+  }
   if (token) headers.Authorization = `Bearer ${token}`;
 
   try {
     return await fetch(url, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body:
+        body === undefined
+          ? undefined
+          : isMultipart
+            ? (body as FormData)
+            : JSON.stringify(body),
       signal,
     });
   } catch (cause) {

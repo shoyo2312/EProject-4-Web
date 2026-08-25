@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { getLoginPageOptions } from "@/lib/data";
 
-export const metadata: Metadata = { title: "Log in | TikTok" };
+export const metadata: Metadata = { title: "Log in | Nowa" };
 
 /**
  * Wrapped in Suspense because this step reads `?verified=1` out of the query

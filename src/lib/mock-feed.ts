@@ -97,7 +97,7 @@ export const NAV_ITEMS: NavItem[] = [
   // It is deliberately replaced with an arbitrary number — it is personal data,
   // not a design token.
   { label: "Activity", kind: "button", badgeCount: 3, authOnly: true },
-  { label: "Upload", kind: "link", href: "/tiktokstudio/upload" },
+  { label: "Upload", kind: "link", href: "/nowastudio/upload" },
   { label: "Profile", kind: "link", href: "/@user" },
   { label: "More", kind: "button" },
 ];
@@ -118,16 +118,16 @@ export const FOOTER_SECTIONS: FooterSection[] = [
   {
     heading: "Program",
     links: [
-      "TikTok for Good",
+      "Nowa for Good",
       "Advertise",
-      "Sell on TikTok Shop",
-      "TikTok LIVE Creator Networks",
+      "Sell on Nowa Shop",
+      "Nowa LIVE Creator Networks",
       "Developers",
       "Transparency",
-      "TikTok Embeds",
+      "Nowa Embeds",
       "SoundOn Music Distribution",
-      "TikTok Live",
-      "TikTok Shop",
+      "Nowa Live",
+      "Nowa Shop",
     ],
   },
   {
@@ -1104,7 +1104,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
           {
             kind: "link",
             title: "Download your data",
-            description: "Get a copy of your TikTok data",
+            description: "Get a copy of your Nowa data",
           },
         ],
       },
@@ -1130,7 +1130,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         heading: "Your preferences",
         description:
-          "Your preferences will be synced automatically to the TikTok app.",
+          "Your preferences will be synced automatically to the Nowa app.",
         rows: [
           {
             kind: "expand",
@@ -1178,7 +1178,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             kind: "link",
             title: "Mute advertisers",
             description:
-              "Mute ads from specific advertisers who showed you ads recently on TikTok.",
+              "Mute ads from specific advertisers who showed you ads recently on Nowa.",
           },
           {
             kind: "link",
@@ -1189,34 +1189,34 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         ],
       },
       {
-        heading: "Manage your off-TikTok data",
+        heading: "Manage your off-Nowa data",
         muted: true,
         rows: [
           {
             kind: "switch",
-            title: "Targeted ads outside of TikTok",
+            title: "Targeted ads outside of Nowa",
             description:
-              "With this setting, TikTok may show you ads on other websites and apps using information collected about you, both on and off TikTok. This setting controls the ads our advertising partners ask us to show you off TikTok. All your ad privacy choices on TikTok will continue to inform the ads we show you.",
+              "With this setting, Nowa may show you ads on other websites and apps using information collected about you, both on and off Nowa. This setting controls the ads our advertising partners ask us to show you off Nowa. All your ad privacy choices on Nowa will continue to inform the ads we show you.",
             on: true,
           },
           {
             kind: "switch",
-            title: "Using Off-TikTok activity for ad targeting",
+            title: "Using Off-Nowa activity for ad targeting",
             description:
-              "With this setting, the ads you see on TikTok can be more tailored to your interests based on data that advertising partners share with us about your activity on their apps and websites. You will always see ads on TikTok based on what you do on TikTok or other data described in our privacy policy.",
+              "With this setting, the ads you see on Nowa can be more tailored to your interests based on data that advertising partners share with us about your activity on their apps and websites. You will always see ads on Nowa based on what you do on Nowa or other data described in our privacy policy.",
             on: true,
           },
           {
             kind: "link",
             title: "Disconnect advertisers",
             description:
-              "Stop tailoring ads with your off-TikTok data from an advertiser.",
+              "Stop tailoring ads with your off-Nowa data from an advertiser.",
           },
           {
             kind: "link",
-            title: "Clear off-TikTok data",
+            title: "Clear off-Nowa data",
             description:
-              "Clear the off-TikTok data that advertisers have shared about you.",
+              "Clear the off-Nowa data that advertisers have shared about you.",
           },
         ],
       },
@@ -1232,7 +1232,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
           {
             kind: "value",
             title: "Daily screen time",
-            description: "Get notified if you reach your time on TikTok.",
+            description: "Get notified if you reach your time on Nowa.",
             value: "Off",
           },
           {
@@ -1251,7 +1251,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             kind: "expand",
             title: "Summary",
             description:
-              "Your weekly metrics include your time on the app and on tiktok.com.",
+              "Your weekly metrics include your time on the app and on nowa.com.",
           },
         ],
       },
@@ -1289,7 +1289,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             kind: "switch",
             title: "Increase color contrast",
             description:
-              "This will only increase color contrast when visiting tiktok.com on your computer.",
+              "This will only increase color contrast when visiting nowa.com on your computer.",
             on: false,
           },
         ],

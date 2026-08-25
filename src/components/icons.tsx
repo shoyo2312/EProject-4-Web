@@ -752,3 +752,38 @@ export function EyeOffIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/* --- Search drawer ------------------------------------------------------- */
+
+/**
+ * The three glyphs in the search panel's lists. Like the video-settings icons
+ * above, these are reconstructions on the same 48×48 grid rather than extracted
+ * paths — the live panel draws them from a cross-origin sprite.
+ */
+
+/** Marks a row that came from the viewer's own search history. */
+export function ClockIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M24 4a20 20 0 1 0 0 40 20 20 0 0 0 0-40Zm0 3a17 17 0 1 1 0 34 17 17 0 0 1 0-34Zm-1.5 5a1.5 1.5 0 0 0-1.5 1.5V25c0 .5.3 1 .7 1.3l7.5 4.5a1.5 1.5 0 0 0 1.6-2.6L24 24.2V13.5a1.5 1.5 0 0 0-1.5-1.5Z" />
+    </Icon>
+  );
+}
+
+/** Marks a trending suggestion — the rising line the live panel uses. */
+export function TrendingIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M29 12a1.5 1.5 0 0 0 0 3h6.9L26 24.9l-6.9-7a1.5 1.5 0 0 0-2.2 0L5.4 29.5a1.5 1.5 0 0 0 2.2 2.1L18 21.1l6.9 7a1.5 1.5 0 0 0 2.2 0L38 17.1V24a1.5 1.5 0 0 0 3 0V13.5c0-.8-.7-1.5-1.5-1.5H29Z" />
+    </Icon>
+  );
+}
+
+/** The plain bullet on a non-trending suggestion. */
+export function DotIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="24" cy="24" r="5" />
+    </Icon>
+  );
+}

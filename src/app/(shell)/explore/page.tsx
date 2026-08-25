@@ -4,9 +4,9 @@ import { ExploreGrid } from "@/components/explore/ExploreGrid";
 import { getExploreCategories, getExploreItems } from "@/lib/data";
 
 export const metadata: Metadata = {
-  title: "Explore - Find your favourite videos on TikTok",
+  title: "Explore - Find your favourite videos on Nowa",
   description:
-    "Discover trending videos on TikTok by category — comedy, sports, food, animals, education and more.",
+    "Discover trending videos on Nowa by category — comedy, sports, food, animals, education and more.",
 };
 
 /**

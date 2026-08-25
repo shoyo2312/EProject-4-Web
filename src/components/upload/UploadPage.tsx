@@ -1,12 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { VideoResponse, VideoVisibility } from "@/lib/api/types";
+import type { VideoVisibility } from "@/lib/api/types";
 import {
   ACCEPTED_UPLOAD_TYPES,
   createUploadUrl,
@@ -43,10 +42,11 @@ export function UploadPage() {
   const [fileError, setFileError] = useState<string | null>(null);
   /** 0–1 while the PUT runs, null otherwise — it is also what drives the bar. */
   const [progress, setProgress] = useState<number | null>(null);
-  const [video, setVideo] = useState<VideoResponse | null>(null);
+  /** True from the moment the post exists until transcoding finishes. */
+  const [processing, setProcessing] = useState(false);
 
   /**
-   * Both the upload and the poll outlive their handler, so unmounting is what
+   * The upload and the poll outlive their handler, so unmounting is what
    * stops them. The controller is made **per submit**, never up front: React
    * StrictMode mounts, unmounts and remounts in dev, so a controller created in
    * the ref initialiser is already aborted by the time anything uses it — and
@@ -90,45 +90,39 @@ export function UploadPage() {
           rawFileUrl: target.fileUrl,
           visibility: values.visibility,
         });
-        setVideo(created);
 
         /**
-         * The post exists from here on, so the form must stop being a form that
-         * can post it again: clearing the file and the fields is what stops a
-         * second Post — and an impatient double-post — from making a duplicate
-         * video out of the same clip.
+         * Stay put and keep the bar on screen. The poll is awaited on purpose:
+         * `submitting` stays true, so the file, the fields and Post are all
+         * frozen — there is no empty upload screen to re-post from, and no
+         * navigation until the video is actually watchable.
          */
-        setFile(null);
-        setPreviewUrl(null);
-        form.reset({ title: "", description: "", visibility: "PUBLIC" });
+        setProcessing(true);
+        const latest = await pollUntilReady(created.id, undefined, signal);
+        if (signal.aborted) return;
 
-        /**
-         * 201 does not mean the video is watchable: it comes back PROCESSING,
-         * with no HLS URL, and stays off the feed until transcoding finishes.
-         *
-         * Deliberately not awaited. The post is already made; awaiting held the
-         * form `submitting` — button disabled, "Posting…" — for up to five
-         * minutes over work nobody has to sit through. The status arrives via
-         * `setVideo`, and leaving the page aborts the poll.
-         */
-        void pollUntilReady(
-          created.id,
-          (latest) => {
-            setVideo(latest);
-            // Published means it is on the feed, which is where the person who
-            // just posted it wants to be — and leaving this screen is what
-            // stops them uploading the same clip again while they wait.
-            if (latest.status === "PUBLISHED") router.push("/");
-          },
-          signal,
+        if (latest.status === "PUBLISHED") {
+          // `?posted=1` is what turns into the "Upload complete" banner there.
+          router.replace(`/video/${created.id}?posted=1`);
+          return;
+        }
+
+        // FAILED, or still PROCESSING when the five-minute budget ran out.
+        setProcessing(false);
+        setProgress(null);
+        setFormError(
+          latest.status === "FAILED"
+            ? "Transcoding failed. Try uploading the file again."
+            : "Still processing. It will appear on your profile when it is done.",
         );
+        return;
       } catch (cause) {
         // An abort is the page going away, not a failure to report; anything
         // else `useForm` turns into the form-level message.
+        setProgress(null);
+        setProcessing(false);
         if (signal.aborted) return;
         throw cause;
-      } finally {
-        setProgress(null);
       }
     },
   });
@@ -145,7 +139,6 @@ export function UploadPage() {
     }
 
     setFileError(null);
-    setVideo(null);
     setFile(next);
     setPreviewUrl(URL.createObjectURL(next));
     // Same courtesy the real Studio does: the filename is a usable first title.
@@ -154,16 +147,7 @@ export function UploadPage() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <Shell>
-        <div className="flex w-full max-w-[610px] flex-col gap-4">
-          <Skeleton className="h-8 w-40" />
-          <Skeleton className="h-[420px] w-full rounded-[8px]" />
-        </div>
-      </Shell>
-    );
-  }
+  if (isLoading) return <UploadSkeleton />;
 
   if (!user) {
     return (
@@ -197,6 +181,7 @@ export function UploadPage() {
               file={file}
               url={previewUrl}
               progress={progress}
+              processing={processing}
               onReplace={chooseFile}
               disabled={form.submitting}
             />
@@ -249,7 +234,11 @@ export function UploadPage() {
                   disabled={form.submitting}
                   className="h-11 w-40 rounded-[4px] bg-[var(--tt-red-active)] text-[15px] font-semibold text-white disabled:bg-white/[0.08] disabled:text-white/[0.34]"
                 >
-                  {form.submitting ? "Posting…" : "Post"}
+                  {processing
+                    ? "Processing…"
+                    : form.submitting
+                      ? "Posting…"
+                      : "Post"}
                 </button>
                 <button
                   type="button"
@@ -257,7 +246,6 @@ export function UploadPage() {
                   onClick={() => {
                     setFile(null);
                     setPreviewUrl(null);
-                    setVideo(null);
                   }}
                   className="h-11 w-28 rounded-[4px] bg-white/[0.12] text-[15px] font-semibold text-[var(--tt-text)] disabled:text-white/[0.34]"
                 >
@@ -268,7 +256,6 @@ export function UploadPage() {
           </div>
         )}
 
-        {video && <UploadStatus video={video} />}
       </div>
     </main>
   );
@@ -381,17 +368,34 @@ function Preview({
   file,
   url,
   progress,
+  processing,
   onReplace,
   disabled,
 }: {
   file: File;
   url: string | null;
   progress: number | null;
+  processing: boolean;
   onReplace: (file: File | null) => void;
   disabled: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
-  const percent = progress === null ? 0 : Math.round(progress * 100);
+  /**
+   * One bar for both halves of the wait. The PUT is the only part with real
+   * bytes to count, so it owns 0–90%; transcoding has no progress to report
+   * and holds a pulsing 90% until it finishes, at which point the page is
+   * already navigating away.
+   */
+  const percent = processing
+    ? 90
+    : progress === null
+      ? 0
+      : Math.round(progress * 90);
+  const label = processing
+    ? "Processing your video…"
+    : percent < 90
+      ? `Uploading… ${Math.round(percent / 0.9)}%`
+      : "Uploaded — posting…";
 
   return (
     <div className="w-full shrink-0 lg:w-[280px]">
@@ -414,7 +418,7 @@ function Preview({
         {formatBytes(file.size)}
       </p>
 
-      {progress !== null && (
+      {(progress !== null || processing) && (
         <div className="mt-3">
           <div
             role="progressbar"
@@ -425,13 +429,20 @@ function Preview({
             className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.12]"
           >
             <div
-              className="h-full bg-[var(--tt-red-active)] transition-[width] duration-200"
+              className={`h-full bg-[var(--tt-red-active)] transition-[width] duration-200 ${
+                processing ? "animate-pulse" : ""
+              }`}
               style={{ width: `${percent}%` }}
             />
           </div>
           <p className="mt-1.5 text-[13px] text-[var(--tt-text-secondary)]">
-            {percent < 100 ? `Uploading… ${percent}%` : "Uploaded — posting…"}
+            {label}
           </p>
+          {processing && (
+            <p className="mt-1 text-[12px] leading-[18px] text-[var(--tt-text-secondary)]">
+              Stay on this page — it opens as soon as the video is ready.
+            </p>
+          )}
         </div>
       )}
 
@@ -476,34 +487,6 @@ function CloudIcon() {
     </svg>
   );
 }
-
-function UploadStatus({ video }: { video: VideoResponse }) {
-  return (
-    <div className="mt-8 rounded-[8px] bg-white/[0.06] p-5">
-      <p className="text-[15px] font-semibold text-[var(--tt-text)]">
-        {STATUS_TEXT[video.status]}
-      </p>
-      <p className="mt-1 text-[13px] text-[var(--tt-text-secondary)]">
-        Video id {video.id}
-      </p>
-      {video.status === "PUBLISHED" && (
-        <Link
-          href={`/video/${video.id}`}
-          className="mt-3 inline-block text-[14px] font-semibold text-[var(--tt-red-active)]"
-        >
-          Watch it →
-        </Link>
-      )}
-    </div>
-  );
-}
-
-const STATUS_TEXT: Record<VideoResponse["status"], string> = {
-  PROCESSING: "Processing — transcoding usually takes a few seconds to a few minutes.",
-  PUBLISHED: "Published. It’s on the feed now.",
-  FAILED: "Transcoding failed. Delete it and try uploading again.",
-  TAKEN_DOWN: "This video was taken down by a moderator.",
-};
 
 const FIELD =
   "h-11 w-full rounded-[4px] border border-transparent bg-white/[0.12] px-3 text-[15px] text-[var(--tt-text)] caret-[var(--tt-red)] outline-none placeholder:text-[rgb(255_255_255/0.34)]";
@@ -579,6 +562,42 @@ function Labelled({
         </p>
       )}
     </label>
+  );
+}
+
+/**
+ * Placeholder for the signed-in upload page while `/me` settles.
+ *
+ * It reuses the page's own wrapper — `max-w-[1000px]`, `px-8 py-10`, the 24/32
+ * title with `mb-6`, and the dashed drop zone with its `px-6 py-20` — so the
+ * heading and the zone do not move when the real form takes over. The shell for
+ * a signed-out viewer is a different (centred) layout, and it replaces this.
+ */
+function UploadSkeleton() {
+  return (
+    <main className="h-screen flex-1 overflow-y-auto">
+      <div className="mx-auto max-w-[1000px] px-8 py-10">
+        <Skeleton className="mb-6 h-8 w-[168px]" />
+
+        <div className="flex flex-col items-center justify-center rounded-[8px] border-2 border-dashed border-white/20 bg-white/[0.03] px-6 py-20 text-center">
+          <Skeleton className="h-12 w-12 rounded-full" />
+          <Skeleton className="mt-4 h-6 w-[196px]" />
+          <Skeleton className="mt-1 h-5 w-[152px]" />
+          <Skeleton className="mt-6 h-11 w-[148px] rounded-[4px]" />
+
+          <div className="mt-10 grid w-full gap-6 text-left sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i}>
+                <Skeleton className="h-5 w-32" />
+                {/* The `dd` under it runs to three short lines in the widest
+                    column, which is what sets the row's 54px height. */}
+                <Skeleton className="mt-1 h-[54px] w-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }
 

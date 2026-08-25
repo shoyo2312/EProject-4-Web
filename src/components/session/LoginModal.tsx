@@ -102,7 +102,7 @@ export function LoginModal({
            not rendered during a challenge, and a label pointing at an absent —
            or `hidden`, which is the same thing to the a11y tree — element
            leaves the dialog with no name at all. */
-        aria-label={challenge ? "Confirm it's you" : "Log in to TikTok"}
+        aria-label={challenge ? "Confirm it's you" : "Log in to Nowa"}
         className="relative max-h-full w-[428px] max-w-full overflow-hidden rounded-[24px] bg-[#1e1e1e] pb-20"
       >
         <button
@@ -151,7 +151,7 @@ export function LoginModal({
 
         {!challenge && (
           <h2 className="mx-auto mt-14 mb-4 w-[380px] max-w-full text-center text-[33px] leading-[49.5px] font-bold text-[var(--tt-text)]">
-            Log in to TikTok
+            Log in to Nowa
           </h2>
         )}
 
@@ -206,11 +206,11 @@ export function LoginModal({
             from the card's 80px bottom padding against the 64px footer, which
             together make the card 562 tall at the measured content. */}
         <p className="mx-auto mt-10 w-[300px] max-w-full text-center text-[10px] leading-[13px] text-[var(--tt-text-muted)]">
-          By continuing, you agree to TikTok&rsquo;s{" "}
+          By continuing, you agree to Nowa&rsquo;s{" "}
           <strong className="font-bold text-[var(--tt-text-muted)]">
             Terms of Service
           </strong>{" "}
-          and confirm that you have read TikTok&rsquo;s{" "}
+          and confirm that you have read Nowa&rsquo;s{" "}
           <strong className="font-bold text-[var(--tt-text-muted)]">
             Privacy Policy
           </strong>
