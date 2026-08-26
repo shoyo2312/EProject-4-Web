@@ -33,6 +33,8 @@ export function ProfilePage({
   onToggleFollow,
   usernameLocked,
   onTabSelect,
+  pendingTab,
+  pendingCount,
 }: {
   profile: UserProfile;
   /** Persists an edit. Throwing leaves the modal open with the error shown. */
@@ -43,6 +45,9 @@ export function ProfilePage({
   usernameLocked?: boolean;
   /** Lets a backend-backed page load a tab's videos when it is opened. */
   onTabSelect?: (tab: ProfileTab) => void;
+  /** Tab still fetching its videos, and how many are coming — see `ProfileBody`. */
+  pendingTab?: ProfileTab | null;
+  pendingCount?: number;
 }) {
   const { user, requireSignIn, updateUser } = useSession();
 
@@ -124,6 +129,8 @@ export function ProfilePage({
           profile={current}
           isOwner={isOwner}
           onTabSelect={onTabSelect}
+          pendingTab={pendingTab}
+          pendingCount={pendingCount}
         />
       </div>
 
@@ -131,6 +138,8 @@ export function ProfilePage({
         <FollowListModal
           targetUserId={current.author.userId}
           initialTab={followTab}
+          followerCount={current.stats.followers}
+          followingCount={current.stats.following}
           onClose={() => setFollowTab(null)}
         />
       )}

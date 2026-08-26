@@ -29,13 +29,22 @@ const TABS: { id: FollowTab; label: string }[] = [
  * target's mutual follows) and Suggested — grouped in one dialog rather than
  * one modal per stat.
  */
+/** One page of `getFollowers`/`getFollowing` — the ceiling on a skeleton run. */
+const USER_PAGE_SIZE = 20;
+
 export function FollowListModal({
   targetUserId,
   initialTab,
+  followerCount,
+  followingCount,
   onClose,
 }: {
   targetUserId: string;
   initialTab: FollowTab;
+  /** Both counts are already on the profile header, so each list knows its own
+   *  size before it fetches and its skeleton can draw the rows actually due. */
+  followerCount: number;
+  followingCount: number;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<FollowTab>(initialTab);
@@ -95,6 +104,7 @@ export function FollowListModal({
             <FollowingList
               key="followers"
               fetchPage={(page) => usersApi.getFollowers(targetUserId, page)}
+              expectedCount={followerCount}
               emptyLabel="No followers yet."
             />
           )}
@@ -102,10 +112,18 @@ export function FollowListModal({
             <FollowingList
               key="following"
               fetchPage={(page) => usersApi.getFollowing(targetUserId, page)}
+              expectedCount={followingCount}
               emptyLabel="Not following anyone yet."
             />
           )}
-          {tab === "friends" && <FriendsList targetUserId={targetUserId} />}
+          {tab === "friends" && (
+            <FriendsList
+              targetUserId={targetUserId}
+              // Mutuals are a subset of both sides, so the smaller stat is the
+              // only honest ceiling available before the intersection is known.
+              expectedCount={Math.min(followerCount, followingCount)}
+            />
+          )}
           {tab === "suggested" && <SuggestedList />}
         </div>
       </div>
@@ -115,9 +133,11 @@ export function FollowListModal({
 
 function FollowingList({
   fetchPage,
+  expectedCount,
   emptyLabel,
 }: {
   fetchPage: (page: number) => Promise<PageResponse<UserProfileResponse>>;
+  expectedCount: number;
   emptyLabel: string;
 }) {
   const [rows, setRows] = useState<UserProfileResponse[]>([]);
@@ -159,8 +179,10 @@ function FollowingList({
   if (error) {
     return <p className="p-6 text-[14px] text-[var(--tt-red-active)]">{error}</p>;
   }
-  if (loading && rows.length === 0) {
-    return <UserRowSkeletonList />;
+  // A zero stat has nothing to wait for: the empty label goes up immediately
+  // instead of a row of placeholders that resolve to nothing.
+  if (loading && rows.length === 0 && expectedCount > 0) {
+    return <UserRowSkeletonList count={expectedCount} />;
   }
   if (rows.length === 0) {
     return (
@@ -197,7 +219,13 @@ function FollowingList({
  * target with more connections than that gets a partial intersection. Add a
  * real backend endpoint if that ceiling ever matters.
  */
-function FriendsList({ targetUserId }: { targetUserId: string }) {
+function FriendsList({
+  targetUserId,
+  expectedCount,
+}: {
+  targetUserId: string;
+  expectedCount: number;
+}) {
   const [rows, setRows] = useState<UserProfileResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -227,7 +255,14 @@ function FriendsList({ targetUserId }: { targetUserId: string }) {
     return <p className="p-6 text-[14px] text-[var(--tt-red-active)]">{error}</p>;
   }
   if (rows === null) {
-    return <UserRowSkeletonList />;
+    if (expectedCount === 0) {
+      return (
+        <p className="p-6 text-[14px] text-[var(--tt-text-secondary)]">
+          No mutual friends yet.
+        </p>
+      );
+    }
+    return <UserRowSkeletonList count={expectedCount} />;
   }
   if (rows.length === 0) {
     return (
@@ -278,10 +313,11 @@ function SuggestedList() {
   );
 }
 
-function UserRowSkeletonList() {
+/** `count` is the caller's known list size, clamped to what one page returns. */
+function UserRowSkeletonList({ count }: { count: number }) {
   return (
     <div className="py-2">
-      {Array.from({ length: 6 }, (_, index) => (
+      {Array.from({ length: Math.min(count, USER_PAGE_SIZE) }, (_, index) => (
         <div key={index} className="flex items-center gap-3 px-4 py-2">
           <div className="h-11 w-11 flex-none animate-pulse rounded-full bg-[var(--tt-field)]" />
           <div className="min-w-0 flex-1 space-y-2">

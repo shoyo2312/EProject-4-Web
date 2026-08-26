@@ -15,7 +15,13 @@ import { isApiError, messageFor } from "@/lib/api/errors";
 import { listLikedVideos, listSavedVideos } from "@/lib/api/interactions";
 import * as usersApi from "@/lib/api/users";
 import { getUserVideos, getUserVideoStats, getVideosByIds } from "@/lib/api/videos";
-import type { ProfileTab, UserProfile } from "@/types/tiktok";
+import type { ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
+
+/** How many videos the grid asks for in one page. */
+const VIDEO_PAGE = 30;
+
+/** Tiles drawn while the video total is unknown — a failed stats call only. */
+const DEFAULT_GRID_SKELETON = 12;
 
 /**
  * A profile page built from user-service and video-service.
@@ -34,6 +40,11 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
   const session = useSession();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Tab whose videos are in flight, and how many of them to expect. */
+  const [pending, setPending] = useState<{
+    tab: ProfileTab;
+    count: number;
+  } | null>(null);
 
   const viewerId = session.user?.userId;
   const sessionSettled = !session.isLoading;
@@ -59,29 +70,49 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
         isOwnPage && session.user ? { ...session.user } : authorFromProfile(raw);
 
       /**
-       * Called for yourself this returns PROCESSING and PRIVATE videos too, so
-       * the owner's grid is genuinely "my videos" rather than only what the
-       * public sees.
+       * Started here, awaited below. The grid is the slow request, so making
+       * it queue behind the two small ones would trade a page-wide skeleton
+       * for a page-wide delay. Called for yourself it returns PROCESSING and
+       * PRIVATE videos too, so the owner's grid is genuinely "my videos"
+       * rather than only what the public sees.
        */
-      const videos = await getUserVideos(raw.userId, 0, 30);
+      const videosLoading = getUserVideos(raw.userId, 0, VIDEO_PAGE);
 
-      const isFollowing =
+      const [isFollowing, stats] = await Promise.all([
         viewerId !== undefined && !isOwnPage
-          ? await usersApi.isFollowing(viewerId, raw.userId).catch(() => false)
-          : false;
+          ? usersApi.isFollowing(viewerId, raw.userId).catch(() => false)
+          : Promise.resolve(false),
+        // The header's "Likes" and video totals. Not fatal if it fails — the
+        // profile still renders, with a zero, rather than the whole page
+        // becoming an error over one number.
+        getUserVideoStats(raw.userId).catch(() => null),
+      ]);
 
-      // The header's "Likes" total. Not fatal if it fails — the profile still renders, with a
-      // zero, rather than the whole page becoming an error over one number.
-      const stats = await getUserVideoStats(raw.userId).catch(() => null);
+      const withVideos = (videos: ProfileVideo[]) =>
+        profileToUserProfile(raw, author, videos, {
+          isFollowing,
+          totalLikes: stats?.totalLikes,
+        });
 
-      setProfile(
-        profileToUserProfile(
-          raw,
-          author,
-          videos.content.map(videoToProfileVideo),
-          { isFollowing, totalLikes: stats?.totalLikes },
-        ),
-      );
+      /**
+       * The header goes up before the grid does. Everything on it is known and
+       * honest by now — the follow state included — while the grid is thirty
+       * videos and their thumbnails, which is what actually keeps a profile
+       * waiting. One page-wide skeleton made the fast half wait for the slow.
+       */
+      setProfile(withVideos([]));
+      // Stats that failed to load leave the count unknown, so the grid falls
+      // back to a guess; a real zero means there is nothing to wait for and
+      // `ProfileBody` shows the empty state instead of placeholder tiles.
+      setPending({
+        tab: "videos",
+        count: Math.min(stats?.videoCount ?? DEFAULT_GRID_SKELETON, VIDEO_PAGE),
+      });
+
+      const videos = await videosLoading;
+
+      setProfile(withVideos(videos.content.map(videoToProfileVideo)));
+      setPending(null);
     } catch (cause) {
       // A 404 is deliberately ambiguous — no such account, or a block in either
       // direction. It is never presented as one or the other.
@@ -116,6 +147,9 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
 
       try {
         const page = tab === "liked" ? await listLikedVideos() : await listSavedVideos();
+        // The ids arrive one request ahead of the videos, so the tab knows its
+        // exact size while the heavy half is still loading — no guess needed.
+        setPending({ tab, count: page.videoIds.length });
         // Ids the viewer may no longer see — a deleted video — are simply
         // absent from the reply, so the grid can be shorter than the list.
         const videos = await getVideosByIds(page.videoIds);
@@ -130,9 +164,11 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
               }
             : current,
         );
+        setPending(null);
       } catch {
         // Leave the tab empty and let it be retried: the guard above is what
         // stops a retry, so it has to be given back.
+        setPending(null);
         loadedTabs.current.delete(tab);
       }
     },
@@ -252,6 +288,8 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       onToggleFollow={toggleFollow}
       usernameLocked
       onTabSelect={loadTab}
+      pendingTab={pending?.tab ?? null}
+      pendingCount={pending?.count ?? 0}
     />
   );
 }
