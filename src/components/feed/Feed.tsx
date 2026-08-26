@@ -394,6 +394,7 @@ export function Feed({
           <CommentPanel
             key={commentVideo.id}
             videoId={commentVideo.id}
+            videoOwnerId={commentVideo.author.userId}
             comments={comments[commentVideo.id] ?? []}
             commentCount={
               commentVideo.stats.comments + (extraComments[commentVideo.id] ?? 0)

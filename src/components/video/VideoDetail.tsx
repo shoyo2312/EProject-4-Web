@@ -350,6 +350,7 @@ export function VideoDetail({
           <CommentPanel
             variant="detail"
             videoId={video.id}
+            videoOwnerId={video.author.userId}
             comments={comments}
             commentCount={video.stats.comments + extraComments}
             onClose={close}
