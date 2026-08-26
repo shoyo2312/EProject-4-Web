@@ -34,7 +34,7 @@ export async function generateMetadata({
 
   return {
     title: `${video.author.nickname} on Nowa`,
-    description: video.caption,
+    description: video.description || video.title,
   };
 }
 

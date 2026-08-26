@@ -14,6 +14,7 @@ import {
   Switch,
 } from "@/components/player/PlayerMenu";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
+import { useClampOverflow } from "@/hooks/use-clamp-overflow";
 import { useFollow } from "@/hooks/use-follow";
 import {
   ArrowPostIcon,
@@ -630,6 +631,12 @@ function VideoSummary({
   } = useFollow(video.author.userId, video.isFollowing);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const descriptionRef = useRef<HTMLParagraphElement>(null);
+  const isDescriptionOverflowing = useClampOverflow(
+    descriptionRef,
+    video.description,
+  );
 
   // Seed the bookmark for a returning viewer. One video, so this asks about
   // that video rather than reading the whole favourites list as the feed does.
@@ -714,9 +721,32 @@ function VideoSummary({
         )}
       </div>
 
-      <p className="mt-3 text-[16px] leading-[22px] text-[var(--tt-text)]">
-        {video.caption}
-      </p>
+      {video.title && (
+        <p className="mt-3 text-[16px] font-bold leading-[22px] text-[var(--tt-text)]">
+          {video.title}
+        </p>
+      )}
+
+      {video.description && (
+        <p
+          ref={descriptionRef}
+          className={cn(
+            "mt-1 text-[16px] leading-[22px] text-[var(--tt-text)]",
+            !descriptionExpanded && "line-clamp-2",
+          )}
+        >
+          {video.description}{" "}
+          {(descriptionExpanded || isDescriptionOverflowing) && (
+            <button
+              type="button"
+              onClick={() => setDescriptionExpanded((v) => !v)}
+              className="font-bold text-[var(--tt-text)] hover:underline"
+            >
+              {descriptionExpanded ? "less" : "more"}
+            </button>
+          )}
+        </p>
+      )}
 
       <div className="mt-2 flex items-center gap-2 text-[14px] text-[var(--tt-text)]">
         <Image

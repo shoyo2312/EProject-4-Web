@@ -45,8 +45,10 @@ export interface VideoStats {
 export interface FeedVideo {
   id: string;
   author: Author;
-  /** Verbatim caption text, may contain hashtags. */
-  caption: string;
+  /** Bold headline shown above the description. */
+  title: string;
+  /** Body text below the title, may contain hashtags. */
+  description: string;
   music: MusicTrack;
   stats: VideoStats;
   /** Local path under /videos. */

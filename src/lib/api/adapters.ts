@@ -79,14 +79,11 @@ export function videoToFeedVideo(
   author: Author,
   options: { isFollowing?: boolean } = {},
 ): FeedVideo {
-  const caption = video.description
-    ? `${video.title} ${video.description}`
-    : video.title;
-
   return {
     id: video.id,
     author,
-    caption,
+    title: video.title,
+    description: video.description ?? "",
     music: {
       title: `original sound - ${author.nickname}`,
       author: author.nickname,

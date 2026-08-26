@@ -10,6 +10,7 @@ import {
 import { MutedIcon, VolumeIcon } from "@/components/icons";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
+import { useClampOverflow } from "@/hooks/use-clamp-overflow";
 import { useHlsSource, isHlsManifest } from "@/hooks/use-hls-source";
 import { useVideoPlayback } from "@/hooks/use-video-playback";
 import { useWatchSession } from "@/hooks/use-watch-session";
@@ -89,6 +90,11 @@ export function VideoCard({
   onActive,
 }: VideoCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const descriptionRef = useRef<HTMLParagraphElement>(null);
+  const isDescriptionOverflowing = useClampOverflow(
+    descriptionRef,
+    video.description,
+  );
   const hasSource = video.videoUrl !== "";
 
   /*
@@ -365,21 +371,32 @@ export function VideoCard({
             {video.author.nickname}
           </p>
 
-          <p
-            className={cn(
-              "relative mt-1 text-[14px] leading-[21px] text-[var(--tt-text)]",
-              !expanded && "line-clamp-1",
-            )}
-          >
-            {video.caption}{" "}
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="pointer-events-auto font-bold text-[var(--tt-text)] hover:underline"
+          {video.title && (
+            <p className="relative mt-1 text-[15px] font-bold leading-[20px] text-[var(--tt-text)]">
+              {video.title}
+            </p>
+          )}
+
+          {video.description && (
+            <p
+              ref={descriptionRef}
+              className={cn(
+                "relative mt-1 text-[14px] leading-[21px] text-[var(--tt-text)]",
+                !expanded && "line-clamp-2",
+              )}
             >
-              {expanded ? "less" : "more"}
-            </button>
-          </p>
+              {video.description}{" "}
+              {(expanded || isDescriptionOverflowing) && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((v) => !v)}
+                  className="pointer-events-auto font-bold text-[var(--tt-text)] hover:underline"
+                >
+                  {expanded ? "less" : "more"}
+                </button>
+              )}
+            </p>
+          )}
 
           {video.hasTranslation && (
             <button
