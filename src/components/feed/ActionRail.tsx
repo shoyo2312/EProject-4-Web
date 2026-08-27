@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 
 import {
@@ -77,13 +78,15 @@ export function ActionRail({
     <section className="flex w-12 flex-none flex-col items-center gap-2">
       {/* Avatar + follow badge — 48×48 with a 24×24 badge overlapping the base */}
       <div className="relative mb-3 h-12 w-12">
-        <Image
-          src={video.author.avatarUrl}
-          alt={video.author.nickname}
-          width={48}
-          height={48}
-          className="h-12 w-12 rounded-full object-cover"
-        />
+        <Link href={`/@${video.author.username}`} aria-label={video.author.nickname}>
+          <Image
+            src={video.author.avatarUrl}
+            alt={video.author.nickname}
+            width={48}
+            height={48}
+            className="h-12 w-12 rounded-full object-cover"
+          />
+        </Link>
         {/* Hidden on your own video: following yourself is not a thing the
             backend allows, and the badge would only ever error. */}
         {!isSelf && (
