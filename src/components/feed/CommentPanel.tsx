@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -588,24 +589,36 @@ function CommentItem({
       )}
     >
       <div className="flex flex-row items-center gap-2">
-        <Image
-          src={comment.author.avatarUrl}
-          alt={comment.author.nickname}
-          width={avatarSize}
-          height={avatarSize}
+        <Link
+          href={`/@${comment.author.username}`}
+          aria-label={comment.author.nickname}
           className={cn(
-            "flex-none self-start rounded-full object-cover",
+            "flex-none self-start",
             isReply ? "h-6 w-6" : "h-8 w-8",
           )}
-        />
+        >
+          <Image
+            src={comment.author.avatarUrl}
+            alt={comment.author.nickname}
+            width={avatarSize}
+            height={avatarSize}
+            className={cn(
+              "rounded-full object-cover",
+              isReply ? "h-6 w-6" : "h-8 w-8",
+            )}
+          />
+        </Link>
 
         <div className="flex flex-1 flex-col items-start gap-1.5 [overflow-wrap:break-word] [word-break:break-word]">
           {/* `.DivCommentHeaderWrapper` — username left, "⋯" right */}
           <div className="flex w-full items-center justify-between">
             <div className={cn("flex items-center", isReply ? "gap-[3px]" : "gap-1.5")}>
-              <p className="text-[13px] font-medium leading-[16.9px] text-[var(--tt-icon)]">
+              <Link
+                href={`/@${comment.author.username}`}
+                className="text-[13px] font-medium leading-[16.9px] text-[var(--tt-icon)] hover:underline"
+              >
                 {comment.author.nickname}
-              </p>
+              </Link>
               {comment.isCreator && (
                 <span className="rounded-[4px] bg-[var(--tt-field)] px-1 text-[11px] font-medium leading-4 text-[var(--tt-text-secondary)]">
                   Creator
