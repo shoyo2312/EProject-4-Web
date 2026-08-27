@@ -787,3 +787,42 @@ export function DotIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/**
+ * Facebook's "f" mark. Fixed brand blue — not `currentColor` — on a 24×24
+ * viewBox, so it renders correctly on the auth option row without a tint disc.
+ */
+export function FacebookBrandIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path
+        fill="#1877F2"
+        d="M24 12c0-6.627-5.373-12-12-12S0 5.373 0 12c0 5.99 4.388 10.954 10.125 11.854V15.47H7.078V12h3.047V9.356c0-3.007 1.792-4.669 4.533-4.669 1.313 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874V12h3.328l-.532 3.469h-2.796v8.385C19.612 22.954 24 17.99 24 12Z"
+      />
+    </svg>
+  );
+}
+
+/** Google's four-colour "G" mark. Fixed brand colours on a 24×24 viewBox. */
+export function GoogleBrandIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path
+        fill="#4285F4"
+        d="M23.52 12.273c0-.851-.076-1.67-.218-2.455H12v4.642h6.458a5.52 5.52 0 0 1-2.394 3.622v3.011h3.878c2.269-2.089 3.578-5.166 3.578-8.82Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.956-1.075 7.942-2.907l-3.878-3.011c-1.075.72-2.45 1.145-4.064 1.145-3.125 0-5.77-2.111-6.713-4.948H1.28v3.109A11.996 11.996 0 0 0 12 24Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.287 14.279a7.212 7.212 0 0 1 0-4.558V6.612H1.28a12.01 12.01 0 0 0 0 10.776l4.007-3.109Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.773c1.762 0 3.344.606 4.589 1.796l3.442-3.442C17.951 1.19 15.235 0 12 0A11.996 11.996 0 0 0 1.28 6.612l4.007 3.109C6.23 6.884 8.875 4.773 12 4.773Z"
+      />
+    </svg>
+  );
+}

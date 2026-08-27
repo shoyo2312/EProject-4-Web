@@ -1,6 +1,11 @@
 "use client";
 
-import { PersonIcon, QrCodeIcon } from "@/components/icons";
+import {
+  FacebookBrandIcon,
+  GoogleBrandIcon,
+  PersonIcon,
+  QrCodeIcon,
+} from "@/components/icons";
 import type { SocialProvider } from "@/lib/auth/social";
 import type { LoginOption } from "@/types/tiktok";
 
@@ -110,10 +115,10 @@ export function AuthAgreement({ verb }: { verb: string }) {
 }
 
 /**
- * The QR and phone/email rows use TikTok's own glyphs. The four third-party
- * rows keep their label and layout but render a plain 20px disc in the
- * provider's brand colour instead of the provider's logo — those are other
- * companies' trademarks and do not belong in this repo.
+ * The QR and phone/email rows use TikTok's own glyphs. The Facebook and Google
+ * rows — the two this deployment can actually sign in with — show the
+ * provider's real logo. Any remaining third-party row (LINE, KakaoTalk, Apple)
+ * with no `provider` falls back to a plain 20px disc in its brand colour.
  */
 function OptionIcon({ option }: { option: LoginOption }) {
   if (option.icon === "qr") {
@@ -121,6 +126,12 @@ function OptionIcon({ option }: { option: LoginOption }) {
   }
   if (option.icon === "person") {
     return <PersonIcon className="h-5 w-5 flex-none text-[var(--tt-text)]" />;
+  }
+  if (option.provider === "facebook") {
+    return <FacebookBrandIcon className="h-5 w-5 flex-none" />;
+  }
+  if (option.provider === "google") {
+    return <GoogleBrandIcon className="h-5 w-5 flex-none" />;
   }
   return (
     <span
