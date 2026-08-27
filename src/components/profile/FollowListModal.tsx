@@ -5,7 +5,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CloseIcon } from "@/components/icons";
 import { useFollow } from "@/hooks/use-follow";
-import { authorFromProfile, DEFAULT_AVATAR } from "@/lib/api/adapters";
+import {
+  authorFromProfile,
+  DEFAULT_AVATAR,
+  displayHandle,
+} from "@/lib/api/adapters";
 import { messageFor } from "@/lib/api/errors";
 import { isLastPage } from "@/lib/api/types";
 import type { PageResponse, UserProfileResponse } from "@/lib/api/types";
@@ -353,11 +357,13 @@ function UserRow({
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[15px] font-semibold text-[var(--tt-text)]">
-          {author.username}
-        </p>
-        <p className="truncate text-[14px] text-[var(--tt-text-secondary)]">
           {author.nickname}
         </p>
+        {displayHandle(author) && (
+          <p className="truncate text-[14px] text-[var(--tt-text-secondary)]">
+            @{displayHandle(author)}
+          </p>
+        )}
       </div>
       {!isSelf && (
         <button
