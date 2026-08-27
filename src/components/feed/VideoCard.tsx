@@ -378,24 +378,27 @@ export function VideoCard({
           )}
 
           {video.description && (
-            <p
-              ref={descriptionRef}
-              className={cn(
-                "relative mt-1 text-[14px] leading-[21px] text-[var(--tt-text)]",
-                !expanded && "line-clamp-2",
-              )}
-            >
-              {video.description}{" "}
+            // 85% wide — the video duration sits in the bottom-right corner.
+            <div className="relative mt-1 max-w-[85%]">
+              <p
+                ref={descriptionRef}
+                className={cn(
+                  "text-[14px] leading-[21px] text-[var(--tt-text)]",
+                  !expanded && "line-clamp-2",
+                )}
+              >
+                {video.description}
+              </p>
               {(expanded || isDescriptionOverflowing) && (
                 <button
                   type="button"
                   onClick={() => setExpanded((v) => !v)}
-                  className="pointer-events-auto font-bold text-[var(--tt-text)] hover:underline"
+                  className="pointer-events-auto mt-0.5 text-[14px] font-bold leading-[21px] text-[var(--tt-text)] hover:underline"
                 >
                   {expanded ? "less" : "more"}
                 </button>
               )}
-            </p>
+            </div>
           )}
 
           {video.hasTranslation && (
