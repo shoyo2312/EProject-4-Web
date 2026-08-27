@@ -9,8 +9,19 @@ export interface Author {
    * `lib/api/json.ts`.
    */
   userId?: string;
-  /** Handle without the leading "@", e.g. "sashtalk". */
+  /**
+   * The `/@…` route segment. For backend accounts this is the numeric id, since
+   * user-service offers no lookup-by-username — see `handleFor`. Mock authors
+   * use a real handle like "sashtalk".
+   */
   username: string;
+  /**
+   * The real "@handle" from auth-service, for display only — null on backend
+   * accounts predating user-service copying it, and absent on mock authors
+   * (whose `username` already is the handle). Never route with this; use
+   * `username`.
+   */
+  handle?: string;
   /** Display name shown next to the caption, e.g. "SASH TALK". */
   nickname: string;
   avatarUrl: string;
