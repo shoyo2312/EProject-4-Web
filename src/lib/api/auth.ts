@@ -10,11 +10,17 @@ import type {
 } from "@/lib/api/types";
 import type { SocialProvider } from "@/lib/auth/social";
 
-/** `POST /api/v1/auth/register` — 201, and the account is NOT usable yet. */
+/**
+ * `POST /api/v1/auth/register` — 201, and the account is NOT usable yet.
+ *
+ * `turnstileToken` is required — auth-service verifies it before doing
+ * anything else, on every call, not just suspicious ones.
+ */
 export function register(input: {
   username: string;
   email: string;
   password: string;
+  turnstileToken: string;
 }): Promise<UserAccount> {
   return apiFetch<UserAccount>("/auth/register", {
     method: "POST",
@@ -105,11 +111,13 @@ export async function confirmSocialLink(
  * email flow: the account being given an address is the one holding the token,
  * and it has no address to name itself by. An OTP follows, spent at
  * `verify-email` like any other.
+ *
+ * `turnstileToken` is required, same as every other OTP-issuing call.
  */
-export function addEmail(email: string): Promise<void> {
+export function addEmail(email: string, turnstileToken: string): Promise<void> {
   return apiFetch<void>("/auth/email", {
     method: "POST",
-    body: { email },
+    body: { email, turnstileToken },
     auth: "required",
   });
 }
@@ -126,20 +134,34 @@ export function verifyEmail(input: {
   });
 }
 
-/** `POST /api/v1/auth/resend-verification` — 204 even for unknown emails. */
-export function resendVerification(email: string): Promise<void> {
+/**
+ * `POST /api/v1/auth/resend-verification` — 204 even for unknown emails.
+ *
+ * `turnstileToken` is required, same as every other OTP-issuing call.
+ */
+export function resendVerification(
+  email: string,
+  turnstileToken: string,
+): Promise<void> {
   return apiFetch<void>("/auth/resend-verification", {
     method: "POST",
-    body: { email },
+    body: { email, turnstileToken },
     auth: "none",
   });
 }
 
-/** `POST /api/v1/auth/forgot-password` — 204 whether or not the email exists. */
-export function forgotPassword(email: string): Promise<void> {
+/**
+ * `POST /api/v1/auth/forgot-password` — 204 whether or not the email exists.
+ *
+ * `turnstileToken` is required, same as every other OTP-issuing call.
+ */
+export function forgotPassword(
+  email: string,
+  turnstileToken: string,
+): Promise<void> {
   return apiFetch<void>("/auth/forgot-password", {
     method: "POST",
-    body: { email },
+    body: { email, turnstileToken },
     auth: "none",
   });
 }

@@ -14,8 +14,10 @@ import {
   OtpInput,
   PasswordInput,
 } from "@/components/auth/AuthFields";
+import { TurnstileWidget } from "@/components/auth/TurnstileWidget";
 import { forgotPassword, resetPassword } from "@/lib/api/auth";
 import { isApiError, messageFor } from "@/lib/api/errors";
+import { useTurnstileToken } from "@/lib/auth/use-turnstile-token";
 import { forgotPasswordSchema, resetPasswordSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
 
@@ -36,6 +38,7 @@ export function ForgotPasswordPage() {
   const [stage, setStage] = useState<"request" | "reset">("request");
   const [email, setEmail] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const turnstile = useTurnstileToken();
 
   /**
    * Two forms, not one with a branch: the stages share no field, and one
@@ -47,7 +50,11 @@ export function ForgotPasswordPage() {
     initialValues: { email: "" },
     onSubmit: async (values) => {
       const address = values.email.trim();
-      await forgotPassword(address);
+      try {
+        await forgotPassword(address, turnstile.token ?? "");
+      } finally {
+        turnstile.consume();
+      }
       // 204 regardless of whether the address exists — the response is
       // deliberately uninformative, so the copy is too.
       setEmail(address);
@@ -86,7 +93,7 @@ export function ForgotPasswordPage() {
     reset.setFormError(null);
     setNotice(null);
     try {
-      await forgotPassword(email);
+      await forgotPassword(email, turnstile.token ?? "");
       // Neutral for the same reason the first request is: the server answers 204
       // whether or not the address has an account, so the copy must not imply one.
       setNotice(
@@ -95,6 +102,8 @@ export function ForgotPasswordPage() {
       reset.setValue("otp", "");
     } catch (cause) {
       reset.setFormError(messageFor(cause));
+    } finally {
+      turnstile.consume();
     }
   };
 
@@ -127,7 +136,11 @@ export function ForgotPasswordPage() {
                 <FormNotice error>{request.formError}</FormNotice>
               )}
 
-              <AuthSubmit disabled={request.submitting}>
+              <div className="flex justify-center">
+                <TurnstileWidget key={turnstile.widgetKey} onVerify={turnstile.setToken} />
+              </div>
+
+              <AuthSubmit disabled={request.submitting || !turnstile.token}>
                 {request.submitting ? "Sending…" : "Send code"}
               </AuthSubmit>
             </form>
@@ -139,7 +152,15 @@ export function ForgotPasswordPage() {
               </p>
 
               <FieldLabel>Verification code</FieldLabel>
-              <OtpInput {...reset.field("otp")} onResend={resendCode} />
+              <OtpInput
+                {...reset.field("otp")}
+                onResend={resendCode}
+                resendDisabled={!turnstile.token}
+              />
+
+              {/* Gates the resend above, not this submit — reset spends a
+                  code, it doesn't issue one. */}
+              <TurnstileWidget key={turnstile.widgetKey} onVerify={turnstile.setToken} />
 
               <FieldLabel>New password</FieldLabel>
               <PasswordInput
