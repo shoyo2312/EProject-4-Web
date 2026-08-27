@@ -51,6 +51,12 @@ const MESSAGES: Record<string, string> = {
   TOO_MANY_OTP_REQUESTS:
     "Too many code attempts. Try again in about 15 minutes.",
   INVALID_SOCIAL_TOKEN: "That sign-in expired. Please try again.",
+  /**
+   * A stale or already-spent token — a Turnstile widget is always on screen
+   * next to the submit that hit this, and `useTurnstileToken.consume()` has
+   * already cleared it for a fresh solve by the time this shows.
+   */
+  TURNSTILE_VERIFICATION_FAILED: "Please complete the verification below and try again.",
   EMAIL_ALREADY_LINKED: "This account already has a verified email address.",
   /**
    * Not really an error: the login stopped to mail a code, and the UI puts up

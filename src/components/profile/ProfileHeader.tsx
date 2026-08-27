@@ -11,6 +11,7 @@ import {
   ShareIcon,
   VerifiedBadgeIcon,
 } from "@/components/icons";
+import { displayHandle } from "@/lib/api/adapters";
 import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { UserProfile } from "@/types/tiktok";
@@ -116,15 +117,19 @@ export function ProfileHeader({
           <h1 className="truncate text-[24px] leading-[30px] font-bold text-[var(--tt-text)]">
             {profile.author.nickname}
           </h1>
-          <span className="mx-3 text-[16px] leading-[21px] text-[rgb(255_255_255/0.6)]">
-            |
-          </span>
-          <h2 className="flex max-w-[450px] items-center gap-1 truncate text-[16px] leading-[21px] text-[rgb(255_255_255/0.6)]">
-            {profile.author.username}
-            {profile.isVerified && (
-              <VerifiedBadgeIcon className="h-4 w-4 flex-none" />
-            )}
-          </h2>
+          {displayHandle(profile.author) && (
+            <>
+              <span className="mx-3 text-[16px] leading-[21px] text-[rgb(255_255_255/0.6)]">
+                |
+              </span>
+              <h2 className="flex max-w-[450px] items-center gap-1 truncate text-[16px] leading-[21px] text-[rgb(255_255_255/0.6)]">
+                {displayHandle(profile.author)}
+                {profile.isVerified && (
+                  <VerifiedBadgeIcon className="h-4 w-4 flex-none" />
+                )}
+              </h2>
+            </>
+          )}
         </div>
 
         {/* `h3.H3Count` — the three stat groups. */}

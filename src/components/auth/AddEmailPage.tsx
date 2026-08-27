@@ -11,9 +11,11 @@ import {
   FormNotice,
   SubtleLink,
 } from "@/components/auth/AuthFields";
+import { TurnstileWidget } from "@/components/auth/TurnstileWidget";
 import { useSession } from "@/components/session/SessionProvider";
 import { addEmail } from "@/lib/api/auth";
 import { isApiError, messageFor } from "@/lib/api/errors";
+import { useTurnstileToken } from "@/lib/auth/use-turnstile-token";
 import { addEmailSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
 
@@ -34,6 +36,7 @@ import { useForm } from "@/lib/forms/use-form";
 export function AddEmailPage() {
   const router = useRouter();
   const { user, isLoading } = useSession();
+  const turnstile = useTurnstileToken();
 
   const form = useForm({
     schema: addEmailSchema,
@@ -41,7 +44,7 @@ export function AddEmailPage() {
     onSubmit: async (values, { setFieldError }) => {
       const email = values.email.trim();
       try {
-        await addEmail(email);
+        await addEmail(email, turnstile.token ?? "");
       } catch (cause) {
         // Someone already holds it. Under the field, because the field is what
         // has to change — and it is the same answer signup gives.
@@ -50,6 +53,8 @@ export function AddEmailPage() {
           return;
         }
         throw cause;
+      } finally {
+        turnstile.consume();
       }
       router.push(
         `/signup/verify?email=${encodeURIComponent(email)}&next=${encodeURIComponent("/")}`,
@@ -110,7 +115,11 @@ export function AddEmailPage() {
 
           {form.formError && <FormNotice error>{form.formError}</FormNotice>}
 
-          <AuthSubmit disabled={form.submitting}>
+          <div className="flex justify-center">
+            <TurnstileWidget key={turnstile.widgetKey} onVerify={turnstile.setToken} />
+          </div>
+
+          <AuthSubmit disabled={form.submitting || !turnstile.token}>
             {form.submitting ? "Sending code…" : "Send code"}
           </AuthSubmit>
         </form>

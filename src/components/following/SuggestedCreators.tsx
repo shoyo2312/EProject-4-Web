@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 
 import { VerifiedBadgeIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
+import { displayHandle } from "@/lib/api/adapters";
 import { cn } from "@/lib/utils";
 import type { SuggestedCreator } from "@/types/tiktok";
 
@@ -108,12 +109,14 @@ function CreatorCard({ creator }: { creator: SuggestedCreator }) {
           {creator.author.nickname}
         </h3>
 
-        <h4 className="flex max-w-full items-center justify-center gap-1 overflow-hidden text-[14px] leading-[18px] font-semibold text-white">
-          <span className="truncate">{creator.author.username}</span>
-          {creator.isVerified && (
-            <VerifiedBadgeIcon className="h-3 w-3 flex-none" />
-          )}
-        </h4>
+        {displayHandle(creator.author) && (
+          <h4 className="flex max-w-full items-center justify-center gap-1 overflow-hidden text-[14px] leading-[18px] font-semibold text-white">
+            <span className="truncate">@{displayHandle(creator.author)}</span>
+            {creator.isVerified && (
+              <VerifiedBadgeIcon className="h-3 w-3 flex-none" />
+            )}
+          </h4>
+        )}
 
         {/* The button lives inside the card's link, so it has to swallow the
             navigation the way the live card's does. */}

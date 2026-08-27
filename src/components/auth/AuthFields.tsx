@@ -207,6 +207,8 @@ export function OtpInput({
   ref,
   /** False on a screen that has not mailed a code yet — then it is a first send. */
   alreadySent = true,
+  /** True while a resend needs a solved Turnstile token it doesn't have yet. */
+  resendDisabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -215,12 +217,13 @@ export function OtpInput({
   error?: string;
   ref?: React.Ref<HTMLInputElement>;
   alreadySent?: boolean;
+  resendDisabled?: boolean;
 }) {
   const [countdown, setCountdown] = useState(0);
   const errorId = useId();
 
   const send = () => {
-    if (countdown > 0) return;
+    if (countdown > 0 || resendDisabled) return;
     onResend();
     setCountdown(60);
     const timer = window.setInterval(() => {
@@ -254,10 +257,10 @@ export function OtpInput({
       <button
         type="button"
         onClick={send}
-        disabled={countdown > 0}
+        disabled={countdown > 0 || resendDisabled}
         className={cn(
           "h-[47px] flex-none rounded-r-[4px] px-4 text-[16px] leading-6 font-semibold transition-colors",
-          countdown > 0
+          countdown > 0 || resendDisabled
             ? "cursor-not-allowed bg-white/[0.08] text-[rgb(255_255_255/0.34)]"
             : "cursor-pointer bg-white/[0.12] text-[var(--tt-text)] hover:bg-white/[0.18]",
         )}

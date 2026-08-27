@@ -2,6 +2,7 @@
 
 import { apiFetch } from "@/lib/api/client";
 import { isApiError } from "@/lib/api/errors";
+import { isLastPage } from "@/lib/api/types";
 import type {
   FollowResponse,
   PageResponse,
@@ -209,6 +210,72 @@ export function getMuted(
     auth: "required",
     query: { page, size },
   });
+}
+
+/**
+ * Every account the viewer follows, as ids — what the Following feed is drawn
+ * from, since video-service has no read into the follow graph.
+ *
+ * Walks the paged listing to its end, capped at `max` because that is the
+ * server's own ceiling on one Following-feed request. A viewer past it gets a
+ * feed built from the first `max` accounts rather than an error; ordering there
+ * is the listing's, which is stable, so the same creators are the ones dropped
+ * on every page rather than a different set each time.
+ *
+ * Seeds `followState` on the way through, so the Follow buttons on the videos
+ * this feed renders answer without a walk of their own.
+ */
+export async function getFollowingIds(
+  viewerId: string,
+  max = 500,
+): Promise<string[]> {
+  const ids = await collectIds((page) => getFollowing(viewerId, page, 50), max);
+  for (const userId of ids) followState.set(userId, true);
+  return ids;
+}
+
+/**
+ * Mutuals — the Friends feed's authors. Two accounts are friends when each
+ * follows the other, which is the intersection of the viewer's two listings.
+ *
+ * Computed here rather than asked for: user-service has no friends endpoint,
+ * and the feed it feeds takes any list of author ids, so the only thing a
+ * server-side one would save is the second listing walk.
+ *
+ * Both sides are capped the same way {@link getFollowingIds} is, so a viewer
+ * past `max` on either gets the mutuals among the accounts that fit — the same
+ * trade the Following feed already makes.
+ */
+export async function getFriendIds(
+  viewerId: string,
+  max = 500,
+): Promise<string[]> {
+  const [following, followers] = await Promise.all([
+    getFollowingIds(viewerId, max),
+    collectIds((page) => getFollowers(viewerId, page, 50), max),
+  ]);
+
+  const followsBack = new Set(followers);
+  return following.filter((userId) => followsBack.has(userId));
+}
+
+/** Walks a paged profile listing to its end, or to `max` ids, whichever first. */
+async function collectIds(
+  fetchPage: (page: number) => Promise<PageResponse<UserProfileResponse>>,
+  max: number,
+): Promise<string[]> {
+  const ids: string[] = [];
+
+  for (let page = 0; ids.length < max; page += 1) {
+    const result = await fetchPage(page);
+    for (const profile of result.content) {
+      if (ids.length < max) ids.push(profile.userId);
+    }
+
+    if (isLastPage(result.page)) break;
+  }
+
+  return ids;
 }
 
 /**

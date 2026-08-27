@@ -94,13 +94,19 @@ export function shareVideo(videoId: string): Promise<ShareResponse> {
 }
 
 /**
+ * How many comments one page holds — named so a skeleton can cap itself at
+ * what a single fetch can actually return.
+ */
+export const COMMENT_PAGE_SIZE = 20;
+
+/**
  * `GET /interactions/videos/{videoId}/comments` — cursor paged, newest first.
  * Public: a guest can read comments, just not post one.
  */
 export function listComments(
   videoId: string,
   cursor?: string,
-  size = 20,
+  size = COMMENT_PAGE_SIZE,
   signal?: AbortSignal,
 ): Promise<CommentPageResponse> {
   return apiFetch<CommentPageResponse>(`/interactions/videos/${videoId}/comments`, {

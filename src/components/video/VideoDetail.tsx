@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -14,6 +15,7 @@ import {
   Switch,
 } from "@/components/player/PlayerMenu";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
+import { useClampOverflow } from "@/hooks/use-clamp-overflow";
 import { useFollow } from "@/hooks/use-follow";
 import {
   ArrowPostIcon,
@@ -350,6 +352,7 @@ export function VideoDetail({
           <CommentPanel
             variant="detail"
             videoId={video.id}
+            videoOwnerId={video.author.userId}
             comments={comments}
             commentCount={video.stats.comments + extraComments}
             onClose={close}
@@ -629,6 +632,12 @@ function VideoSummary({
   } = useFollow(video.author.userId, video.isFollowing);
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+  const descriptionRef = useRef<HTMLParagraphElement>(null);
+  const isDescriptionOverflowing = useClampOverflow(
+    descriptionRef,
+    video.description,
+  );
 
   // Seed the bookmark for a returning viewer. One video, so this asks about
   // that video rather than reading the whole favourites list as the feed does.
@@ -681,20 +690,27 @@ function VideoSummary({
   return (
     <div className="flex-none border-b border-[var(--tt-divider)] px-4 pt-4 pb-3">
       <div className="flex items-start gap-3">
-        <Image
-          src={video.author.avatarUrl}
-          alt={video.author.nickname}
-          width={40}
-          height={40}
-          className="h-10 w-10 flex-none rounded-full"
-        />
+        <Link href={`/@${video.author.username}`} className="flex-none">
+          <Image
+            src={video.author.avatarUrl}
+            alt={video.author.nickname}
+            width={40}
+            height={40}
+            className="h-10 w-10 rounded-full"
+          />
+        </Link>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[16px] font-bold leading-[22px] text-[var(--tt-text)]">
-            {video.author.username}
-          </p>
-          <p className="truncate text-[14px] leading-[18px] text-[var(--tt-text-secondary)]">
+          <Link
+            href={`/@${video.author.username}`}
+            className="block truncate text-[16px] font-bold leading-[22px] text-[var(--tt-text)] hover:underline"
+          >
             {video.author.nickname}
-          </p>
+          </Link>
+          {video.author.handle && (
+            <p className="truncate text-[14px] leading-[18px] text-[var(--tt-text-secondary)]">
+              @{video.author.handle}
+            </p>
+          )}
         </div>
         {/* Absent on your own video — see the rail's badge. */}
         {!isSelf && (
@@ -713,9 +729,34 @@ function VideoSummary({
         )}
       </div>
 
-      <p className="mt-3 text-[16px] leading-[22px] text-[var(--tt-text)]">
-        {video.caption}
-      </p>
+      {video.title && (
+        <p className="mt-3 text-[16px] font-bold leading-[22px] text-[var(--tt-text)]">
+          {video.title}
+        </p>
+      )}
+
+      {video.description && (
+        <div className="mt-1">
+          <p
+            ref={descriptionRef}
+            className={cn(
+              "text-[16px] leading-[22px] text-[var(--tt-text)]",
+              !descriptionExpanded && "line-clamp-2",
+            )}
+          >
+            {video.description}
+          </p>
+          {(descriptionExpanded || isDescriptionOverflowing) && (
+            <button
+              type="button"
+              onClick={() => setDescriptionExpanded((v) => !v)}
+              className="mt-0.5 text-[16px] font-bold leading-[22px] text-[var(--tt-text)] hover:underline"
+            >
+              {descriptionExpanded ? "less" : "more"}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="mt-2 flex items-center gap-2 text-[14px] text-[var(--tt-text)]">
         <Image

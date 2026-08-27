@@ -33,7 +33,7 @@ export function TopBar() {
   }
 
   return (
-    <div className="fixed top-3 z-[98] flex items-center gap-2 right-[calc(1.5rem+var(--comment-sidebar-width))] transition-[right] duration-300 ease-linear tt-1024:right-[calc(0.75rem+var(--comment-sidebar-width))]">
+    <div className="fixed top-3 z-[99] flex items-center gap-2 right-[calc(1.5rem+var(--comment-sidebar-width))] transition-[right] duration-300 ease-linear tt-1024:right-[calc(0.75rem+var(--comment-sidebar-width))]">
       {/*<button*/}
       {/*  type="button"*/}
       {/*  className="flex h-9 items-center gap-2 rounded-[8px] px-3 text-[15px] font-medium text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)]"*/}
@@ -110,12 +110,12 @@ function AccountMenu() {
           <button
             type="button"
             aria-label="Close menu"
-            className="fixed inset-0 z-[98] cursor-default"
+            className="fixed inset-0 z-[100] cursor-default"
             onClick={() => setOpen(false)}
           />
           <div
             role="menu"
-            className="absolute right-0 z-[99] mt-2 w-44 overflow-hidden rounded-[8px] bg-[var(--tt-field)] py-1 shadow-[0_2px_12px_rgba(0,0,0,0.4)]"
+            className="absolute right-0 z-[101] mt-2 w-44 overflow-hidden rounded-[8px] bg-[#2f2e2e] py-1 shadow-[0_2px_12px_rgba(0,0,0,0.4)]"
           >
             <Link
               href={`/@${user.username}`}

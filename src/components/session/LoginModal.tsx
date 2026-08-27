@@ -6,7 +6,13 @@ import { useCallback, useEffect, useState } from "react";
 
 import { SocialLinkForm } from "@/components/auth/SocialLinkForm";
 import { useSocialSignIn } from "@/components/auth/use-social-sign-in";
-import { CloseIcon, PersonIcon, QrCodeIcon } from "@/components/icons";
+import {
+  CloseIcon,
+  FacebookBrandIcon,
+  GoogleBrandIcon,
+  PersonIcon,
+  QrCodeIcon,
+} from "@/components/icons";
 import type { LoginOption } from "@/types/tiktok";
 
 /**
@@ -235,10 +241,10 @@ export function LoginModal({
 }
 
 /**
- * The QR and phone/email rows use TikTok's own glyphs. The four third-party
- * rows are kept verbatim in label and layout, but deliberately render a plain
- * 20px disc in the provider's brand colour instead of the provider's logo —
- * those are other companies' trademarks and do not belong in this repo.
+ * The QR and phone/email rows use TikTok's own glyphs. The Facebook and Google
+ * rows — the two this deployment can actually sign in with — show the
+ * provider's real logo. Any other third-party row (LINE, KakaoTalk, Apple)
+ * with no `provider` falls back to a plain 20px disc in its brand colour.
  */
 function OptionIcon({ option }: { option: LoginOption }) {
   if (option.icon === "qr") {
@@ -246,6 +252,12 @@ function OptionIcon({ option }: { option: LoginOption }) {
   }
   if (option.icon === "person") {
     return <PersonIcon className="h-5 w-5 flex-none text-[var(--tt-text)]" />;
+  }
+  if (option.provider === "facebook") {
+    return <FacebookBrandIcon className="h-5 w-5 flex-none" />;
+  }
+  if (option.provider === "google") {
+    return <GoogleBrandIcon className="h-5 w-5 flex-none" />;
   }
   return (
     <span

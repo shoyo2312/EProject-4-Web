@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { SuggestedCreators } from "@/components/following/SuggestedCreators";
+import { FollowFeed } from "@/components/following/FollowFeed";
 import { getSuggestedCreators } from "@/lib/data";
 
 export const metadata: Metadata = {
@@ -11,11 +11,17 @@ export const metadata: Metadata = {
 };
 
 /**
- * "Following" — the creator suggestion grid. The sidebar, top bar and page
- * chrome come from `app/layout.tsx`; this route only owns the content column.
+ * "Following" — videos from the accounts the viewer follows. The sidebar, top
+ * bar and page chrome come from `app/layout.tsx`; this route only owns the
+ * content column.
+ *
+ * Stays a server component so the mock module never reaches the client bundle:
+ * it loads the creator suggestions and hands them down as the empty and error
+ * state, and `FollowFeed` does the fetching — the session, and therefore the
+ * token the follow listing needs, only exists in the browser.
  */
 export default async function FollowingPage() {
   const creators = await getSuggestedCreators();
 
-  return <SuggestedCreators creators={creators} />;
+  return <FollowFeed creators={creators} />;
 }

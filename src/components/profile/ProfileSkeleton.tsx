@@ -50,11 +50,11 @@ export function ProfileSkeleton() {
         {/* The tab underline is a real 2px element on the live page. */}
         <Skeleton className="-mt-0.5 h-0.5 w-[150px] rounded-none" />
 
-        <div className="mt-4 grid grid-cols-6 gap-x-4 gap-y-6 tt-1200:grid-cols-4 tt-840:grid-cols-3 tt-600:grid-cols-2 tt-600:gap-3">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-[1/1.3265] w-full rounded-[8px]" />
-          ))}
-        </div>
+        {/* No tiles here on purpose. Nothing is known at this stage — not even
+            the profile — and a guessed row of them is a lie on any account
+            with fewer videos than the guess, an empty one most of all. The
+            video total arrives with the profile, so `ProfileBody` puts the
+            grid up a moment later knowing exactly how many tiles are coming. */}
       </div>
     </main>
   );

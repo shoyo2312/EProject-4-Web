@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
-import { DEFAULT_AVATAR, videoToFeedVideo } from "@/lib/api/adapters";
-import { resolveAuthors } from "@/lib/api/authors";
+import { toFeedCards } from "@/lib/api/feed-cards";
 import { getPersonalizedFeed } from "@/lib/api/recommendations";
 import { getFeed, getVideosByIds } from "@/lib/api/videos";
 import type { VideoResponse } from "@/lib/api/types";
@@ -66,23 +65,10 @@ export function useVideoFeed(): VideoFeedState {
   const rankingExhausted = useRef(false);
 
   /** Backend videos → cards, resolving each author's profile alongside. */
-  const toCards = useCallback(async (rows: VideoResponse[]) => {
-    const unseen = rows.filter((video) => !seenIds.current.has(video.id));
-    if (unseen.length === 0) return [];
-
-    const authors = await resolveAuthors(unseen.map((video) => video.userId));
-    return unseen.map((video) => {
-      seenIds.current.add(video.id);
-      return videoToFeedVideo(
-        video,
-        authors.get(video.userId) ?? {
-          username: video.userId,
-          nickname: `user${video.userId}`,
-          avatarUrl: DEFAULT_AVATAR,
-        },
-      );
-    });
-  }, []);
+  const toCards = useCallback(
+    (rows: VideoResponse[]) => toFeedCards(rows, seenIds.current),
+    [],
+  );
 
   /**
    * Returns the cards, and whether the ranking is spent. Those are two different

@@ -93,7 +93,7 @@ function Centered({ children }: { children: React.ReactNode }) {
  *              48 music disc (its live rect reads larger only because it spins)
  *   nav       two 48px buttons, right 16, centred vertically
  */
-function FeedSkeleton() {
+export function FeedSkeleton() {
   return (
     <main className="flex flex-1 flex-row">
       <div className="relative flex-1 overflow-hidden">

@@ -166,7 +166,9 @@ export const FEED_VIDEOS: FeedVideo[] = [
       nickname: "City Lapse",
       avatarUrl: "/images/avatars/avatar-1.jpeg",
     },
-    caption: "golden hour from the 40th floor 🌇 #timelapse #cityscape",
+    title: "Golden hour from the 40th floor",
+    description:
+      "Shot this on the observation deck right as the light turned amber. Worth the wait every single time. 🌇 #timelapse #cityscape",
     music: {
       title: "Skyline Drift",
       author: "Nova Kane",
@@ -189,7 +191,9 @@ export const FEED_VIDEOS: FeedVideo[] = [
       nickname: "Dough Lab",
       avatarUrl: "/images/avatars/avatar-2.jpeg",
     },
-    caption: "72-hour cold ferment. worth every minute 🍕 #baking #pizza",
+    title: "72-hour cold ferment pizza dough",
+    description:
+      "Worth every minute of the wait — the crust bubbles up like nothing else. Full recipe in the next video. 🍕 #baking #pizza",
     music: {
       title: "Kitchen Sessions",
       author: "Marlo",
@@ -211,7 +215,9 @@ export const FEED_VIDEOS: FeedVideo[] = [
       nickname: "Trail Runner",
       avatarUrl: "/images/avatars/avatar-3.jpeg",
     },
-    caption: "28km, 1400m elevation, zero regrets ⛰️ #running #trail",
+    title: "28km, 1400m elevation, zero regrets",
+    description:
+      "Legs are toast but that summit view made the whole climb disappear. Same route next weekend if anyone's in. ⛰️ #running #trail",
     music: {
       title: "Uphill",
       author: "Field Notes",
@@ -605,7 +611,8 @@ export function exploreItemAsVideo(item: ExploreItem): FeedVideo {
   return {
     id: item.id,
     author: item.author,
-    caption: item.caption,
+    title: item.caption,
+    description: "",
     music: source.music,
     // Engagement is derived from the one number a tile does carry, at ratios in
     // the range the feed entries sit at, so the rail is not full of zeroes.
@@ -1007,7 +1014,8 @@ export function profileVideoAsVideo(
   return {
     id: post.id,
     author: profile.author,
-    caption: `Posted by ${profile.author.nickname}`,
+    title: `Posted by ${profile.author.nickname}`,
+    description: "",
     music: {
       title: "original sound",
       author: profile.author.nickname,

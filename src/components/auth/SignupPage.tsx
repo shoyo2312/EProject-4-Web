@@ -16,9 +16,11 @@ import {
 } from "@/components/auth/AuthFields";
 import { AuthAgreement, AuthOptions } from "@/components/auth/AuthOptions";
 import { SocialLinkForm } from "@/components/auth/SocialLinkForm";
+import { TurnstileWidget } from "@/components/auth/TurnstileWidget";
 import { useSocialSignIn } from "@/components/auth/use-social-sign-in";
 import { register } from "@/lib/api/auth";
 import { isApiError, messageFor } from "@/lib/api/errors";
+import { useTurnstileToken } from "@/lib/auth/use-turnstile-token";
 import { MONTHS, signupSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
 import type { LoginOption } from "@/types/tiktok";
@@ -102,6 +104,7 @@ function OptionsStep({ options }: { options: LoginOption[] }) {
 
 function SignupForm() {
   const router = useRouter();
+  const turnstile = useTurnstileToken();
 
   const form = useForm({
     schema: signupSchema,
@@ -122,6 +125,8 @@ function SignupForm() {
           username: values.username.trim(),
           email: values.email.trim(),
           password: values.password,
+          // Guarded by the disabled submit below — never actually null here.
+          turnstileToken: turnstile.token ?? "",
         });
       } catch (cause) {
         /**
@@ -138,6 +143,10 @@ function SignupForm() {
           return;
         }
         throw cause;
+      } finally {
+        // The token is single-use regardless of outcome — a retry needs a
+        // freshly solved one.
+        turnstile.consume();
       }
 
       // The OTP is already on its way — the server sends it as part of
@@ -149,6 +158,7 @@ function SignupForm() {
   });
 
   const birthday = form.errors.birthday;
+  const username = form.field("username");
 
   return (
     <form onSubmit={form.handleSubmit} noValidate>
@@ -202,11 +212,20 @@ function SignupForm() {
         placeholder="Email address"
         autoComplete="email"
       />
-      <AuthInput
-        {...form.field("username")}
-        placeholder="Username"
-        autoComplete="username"
-      />
+      <div className="relative">
+        <AuthInput
+          {...username}
+          placeholder="Username"
+          autoComplete="username"
+        />
+        <button
+          type="button"
+          onClick={() => username.onChange(randomUsername())}
+          className="absolute top-[10px] right-3 text-[12px] leading-6 font-semibold text-[var(--tt-red-active)] hover:text-[var(--tt-red-hover)]"
+        >
+          Random
+        </button>
+      </div>
       <PasswordInput
         {...form.field("password")}
         autoComplete="new-password"
@@ -217,7 +236,14 @@ function SignupForm() {
 
       {form.formError && <FormNotice error>{form.formError}</FormNotice>}
 
-      <AuthSubmit disabled={form.submitting}>
+      <div className="flex justify-center">
+        <TurnstileWidget
+            key={turnstile.widgetKey}
+            onVerify={turnstile.setToken}
+        />
+      </div>
+
+      <AuthSubmit disabled={form.submitting || !turnstile.token}>
         {form.submitting ? "Creating account…" : "Next"}
       </AuthSubmit>
     </form>
@@ -244,6 +270,11 @@ function MarketingOptIn() {
       </span>
     </label>
   );
+}
+
+/** `user` + 6 lowercase-alphanumeric chars — inside `usernameField`'s rules. */
+function randomUsername() {
+  return "user" + Math.random().toString(36).slice(2, 8).padEnd(6, "0");
 }
 
 /** 1–31 and a hundred years back from 2026, the way the live selects list them. */

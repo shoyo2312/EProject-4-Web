@@ -10,6 +10,7 @@ import {
 import { MutedIcon, VolumeIcon } from "@/components/icons";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
+import { useClampOverflow } from "@/hooks/use-clamp-overflow";
 import { useHlsSource, isHlsManifest } from "@/hooks/use-hls-source";
 import { useVideoPlayback } from "@/hooks/use-video-playback";
 import { useWatchSession } from "@/hooks/use-watch-session";
@@ -46,6 +47,13 @@ interface VideoCardProps {
    * `/video/[id]` gets a chance to step to the next video.
    */
   onEnded?: () => void;
+  /**
+   * Fired when this card becomes the one owning the viewport — the same signal
+   * that starts playback, so anything keyed to "the video being watched" cannot
+   * disagree with what is actually playing. The feed uses it to keep the open
+   * comment sidebar on the video the viewer scrolled to.
+   */
+  onActive?: () => void;
 }
 
 /** How long to wait for a second click before treating one as a plain tap. */
@@ -79,8 +87,14 @@ export function VideoCard({
   showVolumeControl = true,
   showContextMenu = true,
   onEnded,
+  onActive,
 }: VideoCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const descriptionRef = useRef<HTMLParagraphElement>(null);
+  const isDescriptionOverflowing = useClampOverflow(
+    descriptionRef,
+    video.description,
+  );
   const hasSource = video.videoUrl !== "";
 
   /*
@@ -110,6 +124,17 @@ export function VideoCard({
     playbackRate: speed,
     onAutoplayBlocked: mute,
   });
+
+  // Held in a ref so a parent that re-creates the callback each render cannot
+  // re-announce the same card as newly active.
+  const onActiveRef = useRef(onActive);
+  useEffect(() => {
+    onActiveRef.current = onActive;
+  }, [onActive]);
+
+  useEffect(() => {
+    if (isActive) onActiveRef.current?.();
+  }, [isActive]);
 
   // Backend videos arrive as HLS playlists, which need hls.js everywhere but
   // Safari; the mock feed's .mp4 files keep using the plain `src` below.
@@ -346,21 +371,35 @@ export function VideoCard({
             {video.author.nickname}
           </p>
 
-          <p
-            className={cn(
-              "relative mt-1 text-[14px] leading-[21px] text-[var(--tt-text)]",
-              !expanded && "line-clamp-1",
-            )}
-          >
-            {video.caption}{" "}
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="pointer-events-auto font-bold text-[var(--tt-text)] hover:underline"
-            >
-              {expanded ? "less" : "more"}
-            </button>
-          </p>
+          {video.title && (
+            <p className="relative mt-1 text-[15px] font-bold leading-[20px] text-[var(--tt-text)]">
+              {video.title}
+            </p>
+          )}
+
+          {video.description && (
+            // 85% wide — the video duration sits in the bottom-right corner.
+            <div className="relative mt-1 max-w-[85%]">
+              <p
+                ref={descriptionRef}
+                className={cn(
+                  "text-[14px] leading-[21px] text-[var(--tt-text)]",
+                  !expanded && "line-clamp-2",
+                )}
+              >
+                {video.description}
+              </p>
+              {(expanded || isDescriptionOverflowing) && (
+                <button
+                  type="button"
+                  onClick={() => setExpanded((v) => !v)}
+                  className="pointer-events-auto mt-0.5 text-[14px] font-bold leading-[21px] text-[var(--tt-text)] hover:underline"
+                >
+                  {expanded ? "less" : "more"}
+                </button>
+              )}
+            </div>
+          )}
 
           {video.hasTranslation && (
             <button

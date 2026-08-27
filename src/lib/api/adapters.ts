@@ -35,6 +35,18 @@ export function isBackendHandle(handle: string): boolean {
 }
 
 /**
+ * The "@handle" to show in a header or list row, or null when there isn't a
+ * real one to show. `author.handle` is the auth-service handle; `username` is
+ * only a usable fallback for mock authors — on a backend account it is the
+ * numeric id, which is never what a reader wants to see.
+ */
+export function displayHandle(
+  author: Pick<Author, "username" | "handle">,
+): string | null {
+  return author.handle ?? (isBackendHandle(author.username) ? null : author.username);
+}
+
+/**
  * Shown wherever an account has no avatar of its own — user-service leaves
  * `avatarUrl` null until someone uploads one. Exported because the same picture
  * has to stand in outside this module (the nav's own row, an author lookup that
@@ -46,6 +58,7 @@ export function authorFromProfile(profile: UserProfileResponse): Author {
   return {
     userId: profile.userId,
     username: handleFor(profile.userId),
+    handle: profile.username ?? undefined,
     nickname: profile.displayName ?? `user${profile.userId}`,
     avatarUrl: profile.avatarUrl ?? DEFAULT_AVATAR,
   };
@@ -59,6 +72,7 @@ export function authorFromMe(me: MeResponse): Author {
   return {
     userId: me.id,
     username: me.username,
+    handle: me.username,
     nickname: me.displayName ?? me.username,
     avatarUrl: me.avatarUrl ?? DEFAULT_AVATAR,
   };
@@ -79,14 +93,11 @@ export function videoToFeedVideo(
   author: Author,
   options: { isFollowing?: boolean } = {},
 ): FeedVideo {
-  const caption = video.description
-    ? `${video.title} ${video.description}`
-    : video.title;
-
   return {
     id: video.id,
     author,
-    caption,
+    title: video.title,
+    description: video.description ?? "",
     music: {
       title: `original sound - ${author.nickname}`,
       author: author.nickname,

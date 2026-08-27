@@ -156,6 +156,7 @@
   --tt-red: #fe2c55; /* --ui-shape-primary — follow button, badges */
   --tt-red-active: #ff3b5c; /* active sidebar nav item */
   --tt-red-hover: #ea284e; /* --tux-colorPrimary-tint-8 — follow button :hover */
+  --tt-mention: #20d5ec; /* @handle inside a comment */
 
   /* Surfaces & text (TUX tokens) */
   --tt-page: #000; /* --ui-page-flat-1 */

@@ -12,6 +12,7 @@ import {
   ProfileVideosIcon,
   RepostIcon,
 } from "@/components/icons";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatCount } from "@/lib/format";
 import { markOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
@@ -40,13 +41,41 @@ type Sort = (typeof SORTS)[number];
  *   tile       height/width 1.3265, radius 8, bottom gradient, view count
  *              bottom-left — and no caption, unlike the Explore tile
  */
+/** The video grid, shared by the real tiles and their skeleton. */
+const GRID_CLASS =
+  "mt-4 grid grid-cols-6 gap-x-4 gap-y-6 tt-1200:grid-cols-4 tt-840:grid-cols-3 tt-600:grid-cols-2 tt-600:gap-3";
+
+/**
+ * Placeholder tiles in the profile grid. `count` is the caller's — it is the
+ * caller that knows how large a page its own tab fetches.
+ */
+export function ProfileGridSkeleton({ count }: { count: number }) {
+  return (
+    <div className={GRID_CLASS}>
+      {Array.from({ length: count }).map((_, i) => (
+        <Skeleton key={i} className="aspect-[1/1.3265] w-full rounded-[8px]" />
+      ))}
+    </div>
+  );
+}
+
 export function ProfileBody({
   profile,
   isOwner,
   onTabSelect,
+  pendingTab,
+  pendingCount = 0,
 }: {
   profile: UserProfile;
   isOwner: boolean;
+  /**
+   * The tab whose videos are still in flight, and how many are coming. The
+   * count is known before the videos themselves are — from the profile's video
+   * total, or from the id list Favorites and Liked fetch first — so the grid
+   * draws the tiles that will actually land instead of a fixed guess.
+   */
+  pendingTab?: ProfileTab | null;
+  pendingCount?: number;
   /**
    * Fired when a tab is opened, so a page backed by real data can fetch that
    * tab's videos then rather than on load — Favorites and Liked are two
@@ -98,10 +127,12 @@ export function ProfileBody({
         <Underline active={tab} rowRef={tabRowRef} />
       </div>
 
-      {posts.length === 0 ? (
+      {tab === pendingTab && pendingCount > 0 ? (
+        <ProfileGridSkeleton count={pendingCount} />
+      ) : posts.length === 0 ? (
         <EmptyState tab={tab} isOwner={isOwner} />
       ) : (
-        <div className="mt-4 grid grid-cols-6 gap-x-4 gap-y-6 tt-1200:grid-cols-4 tt-840:grid-cols-3 tt-600:grid-cols-2 tt-600:gap-3">
+        <div className={GRID_CLASS}>
           {posts.map((post) => (
             <ProfileTile key={post.id} post={post} />
           ))}

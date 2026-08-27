@@ -13,8 +13,10 @@ import {
   GoBack,
   OtpInput,
 } from "@/components/auth/AuthFields";
+import { TurnstileWidget } from "@/components/auth/TurnstileWidget";
 import { resendVerification, verifyEmail } from "@/lib/api/auth";
 import { isApiError, messageFor } from "@/lib/api/errors";
+import { useTurnstileToken } from "@/lib/auth/use-turnstile-token";
 import { verifyEmailSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
 
@@ -50,6 +52,7 @@ export function VerifyEmailPage() {
 
   const [notice, setNotice] = useState<string | null>(null);
   const [wrongAttempts, setWrongAttempts] = useState(0);
+  const turnstile = useTurnstileToken();
 
   const form = useForm({
     schema: verifyEmailSchema,
@@ -80,7 +83,7 @@ export function VerifyEmailPage() {
     form.setFormError(null);
     setNotice(null);
     try {
-      await resendVerification(form.values.email.trim());
+      await resendVerification(form.values.email.trim(), turnstile.token ?? "");
       // Always 204, even for an address that has no account — the server
       // refuses to confirm whether one exists, so the wording stays neutral.
       // Issuing a code deletes the account's previous one of the same type, so
@@ -91,6 +94,8 @@ export function VerifyEmailPage() {
       form.setValue("otp", "");
     } catch (cause) {
       form.setFormError(messageFor(cause));
+    } finally {
+      turnstile.consume();
     }
   };
 
@@ -118,7 +123,17 @@ export function VerifyEmailPage() {
             />
 
             <FieldLabel>Verification code</FieldLabel>
-            <OtpInput {...form.field("otp")} onResend={resend} />
+            <OtpInput
+              {...form.field("otp")}
+              onResend={resend}
+              resendDisabled={!turnstile.token}
+            />
+
+            {/* Solving this is what a resend spends — the Verify submit below
+                consumes a code, not a Turnstile token, so it stays ungated. */}
+            <div className="flex justify-center">
+              <TurnstileWidget key={turnstile.widgetKey} onVerify={turnstile.setToken} />
+            </div>
 
             {wrongAttempts >= 3 && !form.hasErrors && (
               <FormNotice>

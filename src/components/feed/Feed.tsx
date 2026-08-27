@@ -228,6 +228,29 @@ export function Feed({
     );
   }, []);
 
+  /**
+   * The sidebar follows the feed. Scrolling to the next video while comments are
+   * open has to swap the panel to that video's thread — before this, the panel
+   * kept showing the thread of whichever video the button was pressed on, which
+   * reads as "this video has those comments".
+   *
+   * Driven by the card that owns the viewport, the same signal that starts
+   * playback, so the panel cannot end up on a video that is not the one playing.
+   * `commentsOpen` is read through a ref: this runs on every snap, and a
+   * dependency on it would re-create the callback and re-render every card in
+   * the list each time the sidebar toggles.
+   */
+  const commentsOpenRef = useRef(commentsOpen);
+  useEffect(() => {
+    commentsOpenRef.current = commentsOpen;
+  }, [commentsOpen]);
+
+  const followActiveVideo = useCallback((video: FeedVideo) => {
+    if (!commentsOpenRef.current) return;
+    if (unmountTimer.current) clearTimeout(unmountTimer.current);
+    setCommentVideo((current) => (current?.id === video.id ? current : video));
+  }, []);
+
   const toggleComments = useCallback(
     (video: FeedVideo) => {
       if (commentsOpen && commentVideo?.id === video.id) {
@@ -325,6 +348,7 @@ export function Feed({
                 <VideoCard
                   video={video}
                   onLike={() => likeOnly(video.id)}
+                  onActive={() => followActiveVideo(video)}
                   // The feed's counterpart to auto scroll on `/video/[id]`:
                   // there, finishing a clip navigates to the next video; here
                   // it scrolls the snap container on by one card. Passing this
@@ -370,6 +394,7 @@ export function Feed({
           <CommentPanel
             key={commentVideo.id}
             videoId={commentVideo.id}
+            videoOwnerId={commentVideo.author.userId}
             comments={comments[commentVideo.id] ?? []}
             commentCount={
               commentVideo.stats.comments + (extraComments[commentVideo.id] ?? 0)
