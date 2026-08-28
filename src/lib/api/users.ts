@@ -104,6 +104,15 @@ export function clearFollowCache(): void {
   followState.clear();
 }
 
+/**
+ * Synchronous peek at what `isFollowing` would answer from cache — `undefined`
+ * when it would have to walk the following list. Lets a button seed its initial
+ * state without a render on the wrong value first (the Follow/Following flash).
+ */
+export function peekFollowState(userId: string): boolean | undefined {
+  return followState.get(userId);
+}
+
 export async function follow(userId: string): Promise<FollowResponse> {
   try {
     const result = await apiFetch<FollowResponse>(`/users/${userId}/follow`, {

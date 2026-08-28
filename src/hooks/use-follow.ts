@@ -3,12 +3,23 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
-import { follow, isFollowing, unfollow } from "@/lib/api/users";
+import {
+  follow,
+  isFollowing,
+  peekFollowState,
+  unfollow,
+} from "@/lib/api/users";
 
 interface FollowControl {
   /** The author is the viewer. Hide the control: nobody follows themselves. */
   isSelf: boolean;
   following: boolean;
+  /**
+   * False only while a signed-in viewer's real relationship is still being
+   * looked up and the cache had no answer. The button should not paint
+   * Follow/Following until this is true, or it flashes the wrong one first.
+   */
+  ready: boolean;
   toggle: () => void;
 }
 
@@ -30,26 +41,36 @@ export function useFollow(
   const viewerId = user?.userId;
   const isSelf = authorId !== undefined && authorId === viewerId;
 
-  const [following, setFollowing] = useState(initial);
+  // Seed from the tab's follow cache when it already knows: a warm cache (the
+  // feed walked the following list, or a prior toggle wrote it) means no async
+  // correction happens at all, so there is nothing to flash.
+  const cached = authorId ? peekFollowState(authorId) : undefined;
+  const [following, setFollowing] = useState(cached ?? initial);
+  const [answered, setAnswered] = useState(!authorId || cached !== undefined);
 
   // Signed out there is nothing to ask — every user-service endpoint needs a
   // token — so the button starts on "Follow" and the tap opens the login modal.
+  // A warm cache already answered through the state initialisers above; this
+  // only runs the following-list walk when it did not.
   useEffect(() => {
-    if (!authorId || !viewerId || isSelf) return;
-    let cancelled = false;
+    if (answered || !authorId || !viewerId || isSelf) return;
 
+    let cancelled = false;
     isFollowing(viewerId, authorId)
       .then((answer) => {
-        if (!cancelled) setFollowing(answer);
+        if (cancelled) return;
+        setFollowing(answer);
+        setAnswered(true);
       })
       .catch(() => {
-        // Unreadable relationship — the button just starts on "Follow".
+        // Unreadable relationship — settle on "Follow" rather than stay hidden.
+        if (!cancelled) setAnswered(true);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [authorId, viewerId, isSelf]);
+  }, [answered, authorId, viewerId, isSelf]);
 
   const toggle = useCallback(() => {
     if (!requireSignIn()) return;
@@ -64,5 +85,8 @@ export function useFollow(
     });
   }, [authorId, following, requireSignIn]);
 
-  return { isSelf, following, toggle };
+  // Nothing to look up when signed out or on your own / a mock author.
+  const ready = isSelf || !authorId || !viewerId || answered;
+
+  return { isSelf, following, ready, toggle };
 }
