@@ -85,6 +85,19 @@ export function getLikeStatus(videoId: string): Promise<LikeStatusResponse> {
   );
 }
 
+/**
+ * `GET /interactions/videos/like-status/batch` — one request rather than one
+ * per id, same reasoning as `getVideosByIds`: the gateway rate-limits 20
+ * req/s per IP and every viewer behind the Next proxy shares it.
+ */
+export function getLikeStatuses(videoIds: string[]): Promise<LikeStatusResponse[]> {
+  if (videoIds.length === 0) return Promise.resolve([]);
+  return apiFetch<LikeStatusResponse[]>("/interactions/videos/like-status/batch", {
+    auth: "required",
+    query: { ids: videoIds.join(",") },
+  });
+}
+
 /** `POST /interactions/videos/{videoId}/share`. */
 export function shareVideo(videoId: string): Promise<ShareResponse> {
   return apiFetch<ShareResponse>(`/interactions/videos/${videoId}/share`, {

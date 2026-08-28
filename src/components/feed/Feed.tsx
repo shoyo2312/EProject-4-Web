@@ -9,7 +9,7 @@ import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { isBackendHandle } from "@/lib/api/adapters";
 import { useSavedVideos } from "@/hooks/use-saved-videos";
-import { getLikeStatus, likeVideo, unlikeVideo } from "@/lib/api/interactions";
+import { getLikeStatuses, likeVideo, unlikeVideo } from "@/lib/api/interactions";
 import { cn } from "@/lib/utils";
 import type { Comment, FeedVideo } from "@/types/tiktok";
 
@@ -80,34 +80,30 @@ export function Feed({
 
   // Seed hearts for videos the viewer already liked in a previous session.
   // Backend videos only — mock ids have no like-status endpoint to ask.
-  // interaction-service has no batch endpoint, so this is one request per
-  // backend video on the page; bounded by the feed's own page size (20).
   useEffect(() => {
     if (!user) return;
     const backendIds = videos.filter((v) => isBackendHandle(v.id)).map((v) => v.id);
     if (backendIds.length === 0) return;
     let cancelled = false;
 
-    Promise.allSettled(backendIds.map((id) => getLikeStatus(id))).then((results) => {
+    getLikeStatuses(backendIds).then((statuses) => {
       if (cancelled) return;
       setLikedIds((current) => {
         const next = new Set(current);
-        results.forEach((result, index) => {
-          if (result.status === "fulfilled" && result.value.liked) {
-            next.add(backendIds[index]);
-          }
+        statuses.forEach((status) => {
+          if (status.liked) next.add(status.videoId);
         });
         return next;
       });
       setLikeCounts((current) => {
         const next = { ...current };
-        results.forEach((result, index) => {
-          if (result.status === "fulfilled") {
-            next[backendIds[index]] = result.value.likeCount;
-          }
+        statuses.forEach((status) => {
+          next[status.videoId] = status.likeCount;
         });
         return next;
       });
+    }).catch(() => {
+      // No session, or the call failed — hearts just start unfilled.
     });
 
     return () => {
