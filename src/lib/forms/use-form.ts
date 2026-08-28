@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { messageFor } from "@/lib/api/errors";
+import { toast } from "@/components/ui/toast";
 
 /**
  * The one form hook. Every form in the app validates through this.
@@ -160,8 +161,12 @@ export function useForm<Values extends Record<string, unknown>>({
         await onSubmit(valuesRef.current, { setFieldError, setFormError });
       } catch (cause) {
         // A rejected submit that the caller did not want to handle itself. The
-        // copy is the app's, never the backend's `message` field.
-        setFormError(messageFor(cause));
+        // copy is the app's, never the backend's `message` field. Shown both
+        // inline (under the form) and as a toast, so it registers even when the
+        // form-level line is scrolled out of view.
+        const message = messageFor(cause);
+        setFormError(message);
+        toast.error(message);
       } finally {
         submittingRef.current = false;
         setSubmitting(false);

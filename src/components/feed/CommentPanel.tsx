@@ -27,6 +27,7 @@ import type { UserProfileResponse } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import { formatCount, formatRelativeTime } from "@/lib/format";
 import { CURRENT_USER } from "@/lib/mock-feed";
+import { toast } from "@/components/ui/toast";
 import type { Comment } from "@/types/tiktok";
 
 /** Removes a comment wherever it lives — top-level, or nested one reply deep. */
@@ -288,9 +289,11 @@ export function CommentPanel({
         ),
       );
     } catch {
-      // Silent rollback: undo both the optimistic row and the count bump.
+      // Roll back both the optimistic row and the count bump, and say so —
+      // unlike a like, a lost comment leaves no visible trace to explain it.
       setComments((current) => removeCommentById(current, optimistic.id));
       onCommentDeleted();
+      toast.error("Couldn’t post your comment. Please try again.");
     }
   };
 
@@ -332,13 +335,17 @@ export function CommentPanel({
     const previous = comments;
     setComments((current) => removeCommentById(current, id));
     onCommentDeleted();
-    if (!isBackend) return;
+    if (!isBackend) {
+      toast.success("Comment deleted.");
+      return;
+    }
     try {
       await deleteCommentApi(videoId, id);
+      toast.success("Comment deleted.");
     } catch {
-      // Silent rollback, same as everywhere else here.
       setComments(previous);
       onCommentAdded();
+      toast.error("Couldn’t delete the comment. Please try again.");
     }
   };
 

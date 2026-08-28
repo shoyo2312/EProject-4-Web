@@ -12,6 +12,7 @@ import {
 import { useRouter } from "next/navigation";
 
 import { LoginModal } from "@/components/session/LoginModal";
+import { toast } from "@/components/ui/toast";
 import { authorFromMe } from "@/lib/api/adapters";
 import { clearAuthorCache } from "@/lib/api/authors";
 import * as authApi from "@/lib/api/auth";
@@ -236,6 +237,7 @@ export function SessionProvider({
     async (usernameOrEmail: string, password: string) => {
       await authApi.login({ usernameOrEmail, password });
       await settleSignIn();
+      toast.success("You’re logged in.");
     },
     [settleSignIn],
   );
@@ -244,6 +246,7 @@ export function SessionProvider({
     async (provider: SocialProvider, providerToken: string) => {
       const result = await authApi.socialLogin(provider, providerToken);
       await settleSignIn();
+      if (!result.requiresEmail) toast.success("You’re logged in.");
       return { requiresEmail: result.requiresEmail };
     },
     [settleSignIn],
@@ -273,6 +276,7 @@ export function SessionProvider({
       usersApi.clearFollowCache();
       setUser(null);
       router.push("/");
+      toast.success("You’re logged out.");
     }
   }, [router]);
 

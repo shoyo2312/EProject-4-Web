@@ -23,6 +23,7 @@ import { isApiError, messageFor } from "@/lib/api/errors";
 import { useTurnstileToken } from "@/lib/auth/use-turnstile-token";
 import { MONTHS, signupSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
+import { toast } from "@/components/ui/toast";
 import type { LoginOption } from "@/types/tiktok";
 
 const OPTIONS_HREF = "/signup";
@@ -149,6 +150,7 @@ function SignupForm() {
         turnstile.consume();
       }
 
+      toast.success("Account created. We emailed you a verification code.");
       // The OTP is already on its way — the server sends it as part of
       // registration, so the next screen only has to collect it.
       router.push(

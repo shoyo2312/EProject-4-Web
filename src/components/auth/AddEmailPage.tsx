@@ -18,6 +18,7 @@ import { isApiError, messageFor } from "@/lib/api/errors";
 import { useTurnstileToken } from "@/lib/auth/use-turnstile-token";
 import { addEmailSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
+import { toast } from "@/components/ui/toast";
 
 /**
  * `/signup/add-email` — where a social login lands when the provider handed
@@ -56,6 +57,7 @@ export function AddEmailPage() {
       } finally {
         turnstile.consume();
       }
+      toast.success("Email added. Enter the code we sent to confirm it.");
       router.push(
         `/signup/verify?email=${encodeURIComponent(email)}&next=${encodeURIComponent("/")}`,
       );

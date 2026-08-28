@@ -20,6 +20,7 @@ import { isApiError, messageFor } from "@/lib/api/errors";
 import { useTurnstileToken } from "@/lib/auth/use-turnstile-token";
 import { forgotPasswordSchema, resetPasswordSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
+import { toast } from "@/components/ui/toast";
 
 /**
  * `/login/forgot-password` — request a code, then set a new password with it.
@@ -59,6 +60,7 @@ export function ForgotPasswordPage() {
       // deliberately uninformative, so the copy is too.
       setEmail(address);
       setNotice("If that address has an account, a reset code is on its way.");
+      toast.success("If that address has an account, a reset code is on its way.");
       setStage("reset");
     },
   });
@@ -80,6 +82,7 @@ export function ForgotPasswordPage() {
         }
         throw cause;
       }
+      toast.success("Password changed. Log in with your new password.");
       router.push("/login/phone-or-email/email?reset=1");
     },
   });
@@ -99,9 +102,12 @@ export function ForgotPasswordPage() {
       setNotice(
         "If that address has an account, a new code is on its way — the previous code stops working.",
       );
+      toast.success("A new code is on its way.");
       reset.setValue("otp", "");
     } catch (cause) {
-      reset.setFormError(messageFor(cause));
+      const message = messageFor(cause);
+      reset.setFormError(message);
+      toast.error(message);
     } finally {
       turnstile.consume();
     }

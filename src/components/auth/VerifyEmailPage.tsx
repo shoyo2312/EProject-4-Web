@@ -19,6 +19,7 @@ import { isApiError, messageFor } from "@/lib/api/errors";
 import { useTurnstileToken } from "@/lib/auth/use-turnstile-token";
 import { verifyEmailSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
+import { toast } from "@/components/ui/toast";
 
 const VERIFIED_LOGIN_HREF = "/login/phone-or-email/email?verified=1";
 
@@ -71,6 +72,7 @@ export function VerifyEmailPage() {
         }
         throw cause;
       }
+      toast.success("Email verified.");
       // Verification does not create a session — the account still has to log
       // in, so the flow lands on the password form with nothing carried over.
       // Unless `next` says otherwise: an account that got here from add-email
@@ -91,9 +93,12 @@ export function VerifyEmailPage() {
       setNotice(
         "If that address has an account, a new code is on its way — the previous code stops working.",
       );
+      toast.success("A new code is on its way.");
       form.setValue("otp", "");
     } catch (cause) {
-      form.setFormError(messageFor(cause));
+      const message = messageFor(cause);
+      form.setFormError(message);
+      toast.error(message);
     } finally {
       turnstile.consume();
     }

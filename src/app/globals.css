@@ -361,3 +361,48 @@
     translate: 0 -40px;
   }
 }
+/* -----------------------------------------------------------------------------
+ * Toasts (sonner). `richColors` supplies the success/warning/error skins; these
+ * rules only retint them to the TikTok-dark palette and match the app's font +
+ * radius. Positioned top-center via the <Toaster position> prop.
+ * -------------------------------------------------------------------------- */
+.tt-toaster {
+  font-family: var(--font-sans);
+}
+
+.tt-toast {
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* Dark, product-matched tints. With `richColors` on, sonner reads the
+ * `--<type>-bg/-text/-border` trio per toast; the `--normal-*` fallbacks cover
+ * the non-rich path too. Icons inherit `currentColor`, so the text colour skins
+ * them as well. */
+[data-sonner-toast][data-type="success"] {
+  --success-bg: #10241b;
+  --success-border: rgb(45 212 145 / 0.4);
+  --success-text: #6ee7b0;
+  --normal-bg: #10241b;
+  --normal-border: rgb(45 212 145 / 0.4);
+  --normal-text: #6ee7b0;
+}
+
+[data-sonner-toast][data-type="warning"] {
+  --warning-bg: #2a2310;
+  --warning-border: rgb(250 204 21 / 0.4);
+  --warning-text: #fbe38a;
+  --normal-bg: #2a2310;
+  --normal-border: rgb(250 204 21 / 0.4);
+  --normal-text: #fbe38a;
+}
+
+[data-sonner-toast][data-type="error"] {
+  --error-bg: #2a1116;
+  --error-border: rgb(254 44 85 / 0.45);
+  --error-text: #ff8fa5;
+  --normal-bg: #2a1116;
+  --normal-border: rgb(254 44 85 / 0.45);
+  --normal-text: #ff8fa5;
+}

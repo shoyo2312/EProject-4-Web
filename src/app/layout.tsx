@@ -5,6 +5,7 @@ import "./globals.css";
 import { TopBar } from "@/components/layout/TopBar";
 import { PlayerSettingsProvider } from "@/components/player/PlayerSettingsProvider";
 import { SessionProvider } from "@/components/session/SessionProvider";
+import { Toaster } from "@/components/ui/toast";
 import { getLoginOptions } from "@/lib/data";
 
 // TikTok ships a proprietary self-hosted webfont ("TikTokFont") that cannot be
@@ -60,6 +61,7 @@ export default async function RootLayout({
               <TopBar />
             </div>
           </PlayerSettingsProvider>
+          <Toaster />
         </SessionProvider>
       </body>
     </html>

@@ -13,6 +13,7 @@ import {
 import { ProfileBody } from "@/components/profile/ProfileBody";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { useSession } from "@/components/session/SessionProvider";
+import { toast } from "@/components/ui/toast";
 import type { ProfileTab, UserProfile } from "@/types/tiktok";
 
 /**
@@ -77,10 +78,12 @@ export function ProfilePage({
       try {
         await onSaveProfile(draft);
         setEditing(false);
+        toast.success("Profile updated.");
       } catch (cause) {
-        setSaveError(
-          cause instanceof Error ? cause.message : "Could not save your profile.",
-        );
+        const message =
+          cause instanceof Error ? cause.message : "Could not save your profile.";
+        setSaveError(message);
+        toast.error(message);
       } finally {
         setSaving(false);
       }
@@ -104,6 +107,7 @@ export function ProfilePage({
       avatarUrl: draft.avatarUrl,
     });
     setEditing(false);
+    toast.success("Profile updated.");
   };
 
   return (

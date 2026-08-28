@@ -22,6 +22,7 @@ import {
   Switch,
 } from "@/components/player/PlayerMenu";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
+import { toast } from "@/components/ui/toast";
 import type { FeedVideo } from "@/types/tiktok";
 
 /** Point the menu was summoned at, in the host card's coordinate space. */
@@ -128,9 +129,11 @@ export function VideoContextMenu({
       await navigator.clipboard.writeText(
         new URL(`/video/${video.id}`, window.location.origin).href,
       );
+      toast.success("Link copied.");
     } catch {
       // Denied (insecure origin, no permission) — nothing else to fall back to
       // here, unlike the detail page, which also shows the link in a field.
+      toast.warning("Couldn’t copy the link.");
     }
     onClose();
   };
