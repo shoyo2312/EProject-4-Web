@@ -32,6 +32,14 @@ export function TopBar() {
     return null;
   }
 
+  // The single-video view carries the owner's own controls (Follow, or Delete /
+  // Private for your own upload) in its right column, so the floating avatar bar
+  // is redundant there and is hidden — matching the request to drop this chrome
+  // on `/video/{id}`.
+  if (pathname.startsWith("/video/")) {
+    return null;
+  }
+
   return (
     <div className="fixed top-3 z-[99] flex items-center gap-2 right-[calc(1.5rem+var(--comment-sidebar-width))] transition-[right] duration-300 ease-linear tt-1024:right-[calc(0.75rem+var(--comment-sidebar-width))]">
       {/*<button*/}

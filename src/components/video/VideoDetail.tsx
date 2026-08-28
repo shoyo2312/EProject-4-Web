@@ -44,8 +44,10 @@ import {
   unlikeVideo,
   unsaveVideo,
 } from "@/lib/api/interactions";
+import { deleteVideo, updateVideoVisibility } from "@/lib/api/videos";
 import { formatCount } from "@/lib/format";
 import { getOverlayOrigin } from "@/lib/overlay-origin";
+import { toast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import type { Comment, FeedVideo } from "@/types/tiktok";
 
@@ -337,7 +339,7 @@ export function VideoDetail({
           plain flex sibling rather than the feed's transitioning wrapper. */}
       {/* `pt-14` clears the fixed TopBar, which floats over this column's top
           edge — the live page reserves the same strip. */}
-      <aside className="flex h-screen w-[34rem] flex-none flex-col border-l border-[var(--tt-divider)] pt-14 tt-1280:w-[26rem] tt-1024:w-[22rem]">
+      <aside className="flex h-screen w-[34rem] flex-none flex-col border-l border-[var(--tt-divider)] tt-1280:w-[26rem] tt-1024:w-[22rem]">
         <VideoSummary
           video={video}
           liked={liked}
@@ -346,6 +348,7 @@ export function VideoDetail({
           commentCount={video.stats.comments + extraComments}
           shareCount={video.stats.shares + extraShares}
           onShare={recordShare}
+          onDeleted={close}
         />
 
         <div className="min-h-0 flex-1">
@@ -615,6 +618,7 @@ function VideoSummary({
   commentCount,
   shareCount,
   onShare,
+  onDeleted,
 }: {
   video: FeedVideo;
   liked: boolean;
@@ -624,10 +628,13 @@ function VideoSummary({
   commentCount: number;
   shareCount: number;
   onShare: () => void;
+  /** Called once the owner's own video is deleted — closes the overlay. */
+  onDeleted: () => void;
 }) {
   const {
     isSelf,
     following,
+    ready: followReady,
     toggle: toggleFollow,
   } = useFollow(video.author.userId, video.isFollowing);
   const [saved, setSaved] = useState(false);
@@ -680,10 +687,12 @@ function VideoSummary({
       await navigator.clipboard.writeText(new URL(sharePath, window.location.origin).href);
       setCopied(true);
       onShare();
+      toast.success("Link copied.");
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard access can be denied (insecure origin, permission) — the
       // field still shows the link, so the user can copy it by hand.
+      toast.warning("Couldn’t copy the link. Copy it from the field instead.");
     }
   };
 
@@ -712,13 +721,26 @@ function VideoSummary({
             </p>
           )}
         </div>
-        {/* Absent on your own video — see the rail's badge. */}
-        {!isSelf && (
+        {/* Your own backend video carries owner controls here; anyone else's
+            carries Follow. A mock "self" video has no backend to call, so it
+            falls through to neither. */}
+        {isSelf ? (
+          isBackendHandle(video.id) && (
+            <OwnerControls
+              videoId={video.id}
+              initialVisibility={video.visibility}
+              onDeleted={onDeleted}
+            />
+          )
+        ) : (
+          // Hold the row's width but paint nothing until the real relationship
+          // is known — otherwise a red "Follow" flashes before "Following".
           <button
             type="button"
             onClick={toggleFollow}
             className={cn(
               "h-8 flex-none rounded-[8px] px-4 text-[15px] font-medium transition-colors",
+              !followReady && "invisible",
               following
                 ? "border border-[var(--tt-divider)] text-[var(--tt-text)] hover:bg-[var(--tt-field)]"
                 : "bg-[var(--tt-red)] text-white hover:bg-[var(--tt-red-hover)]",
@@ -744,7 +766,7 @@ function VideoSummary({
               !descriptionExpanded && "line-clamp-2",
             )}
           >
-            {video.description}
+            {renderCaption(video.description)}
           </p>
           {(descriptionExpanded || isDescriptionOverflowing) && (
             <button
@@ -850,6 +872,240 @@ function CountButton({
       <span className="text-[13px] font-medium text-[var(--tt-text-secondary)]">
         {formatCount(count)}
       </span>
+    </div>
+  );
+}
+
+/**
+ * Splits a caption so each `#hashtag` renders in the interactive blue TikTok
+ * uses for mentions and tags, leaving the surrounding text untouched. Unicode
+ * letter/number classes so Vietnamese tags ("#chảnh") match too.
+ */
+function renderCaption(text: string): React.ReactNode {
+  return text.split(/(#[\p{L}\p{N}_]+)/gu).map((part, i) =>
+    part.startsWith("#") ? (
+      <span key={i} className="text-[var(--tt-mention)]">
+        {part}
+      </span>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
+  );
+}
+
+/**
+ * The owner's own control on the author row, in place of Follow — modelled on
+ * the live TikTok video page: a "…" button opening a two-item menu.
+ *
+ *   Privacy settings  →  a modal with one "Who can watch this video" select.
+ *                        TikTok offers Everyone / Friends / Only you; the
+ *                        backend only knows PUBLIC / PRIVATE, so this maps
+ *                        Everyone→PUBLIC and Only you→PRIVATE and drops Friends.
+ *                        The change is sent on select (optimistic, like the
+ *                        like button); "Done" only closes.
+ *   Delete            →  a confirm modal, then `DELETE /videos/{id}` and the
+ *                        overlay closes.
+ */
+function OwnerControls({
+  videoId,
+  initialVisibility,
+  onDeleted,
+}: {
+  videoId: string;
+  initialVisibility?: "PUBLIC" | "PRIVATE";
+  onDeleted: () => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [dialog, setDialog] = useState<null | "privacy" | "delete">(null);
+  const [visibility, setVisibility] = useState<"PUBLIC" | "PRIVATE">(
+    initialVisibility ?? "PUBLIC",
+  );
+  const [deleting, setDeleting] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Click-outside / Escape dismiss, as every other popover on this page does.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
+
+  const changeVisibility = (next: "PUBLIC" | "PRIVATE") => {
+    if (next === visibility) return;
+    const previous = visibility;
+    setVisibility(next);
+    updateVideoVisibility(videoId, next)
+      .then(() =>
+        toast.success(
+          next === "PRIVATE"
+            ? "Video is now private."
+            : "Video is now public.",
+        ),
+      )
+      .catch(() => {
+        setVisibility(previous);
+        toast.error("Couldn’t update who can watch this video.");
+      });
+  };
+
+  const confirmDelete = () => {
+    setDeleting(true);
+    deleteVideo(videoId)
+      .then(() => {
+        toast.success("Video deleted.");
+        onDeleted();
+      })
+      .catch(() => {
+        setDeleting(false);
+        toast.error("Couldn’t delete the video. Please try again.");
+      });
+  };
+
+  return (
+    <div ref={rootRef} className="relative flex-none">
+      <button
+        type="button"
+        onClick={() => setMenuOpen((open) => !open)}
+        aria-label="More"
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-field)]"
+      >
+        <MoreIcon className="h-5 w-5" />
+      </button>
+
+      {menuOpen && (
+        <div
+          role="menu"
+          className="absolute right-0 top-10 z-[101] w-44 overflow-hidden rounded-[8px] bg-[#252525] py-1 shadow-[0_2px_12px_rgba(0,0,0,0.4)]"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setMenuOpen(false);
+              setDialog("privacy");
+            }}
+            className="block w-full px-4 py-2.5 text-left text-[15px] text-[var(--tt-text)] hover:bg-white/10"
+          >
+            Privacy settings
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setMenuOpen(false);
+              setDialog("delete");
+            }}
+            className="block w-full px-4 py-2.5 text-left text-[15px] text-[var(--tt-text)] hover:bg-white/10"
+          >
+            Delete
+          </button>
+        </div>
+      )}
+
+      {dialog === "privacy" && (
+        <Modal onClose={() => setDialog(null)}>
+          <h2 className="text-center text-[20px] font-bold text-[var(--tt-text)]">
+            Privacy settings
+          </h2>
+          <p className="mt-5 text-[15px] font-semibold text-[var(--tt-text)]">
+            Who can watch this video
+          </p>
+          <select
+            value={visibility}
+            onChange={(event) =>
+              changeVisibility(event.target.value as "PUBLIC" | "PRIVATE")
+            }
+            className="mt-2 w-full rounded-[8px] border border-[var(--tt-divider)] bg-[var(--tt-field)] px-3 py-2 text-[15px] text-[var(--tt-text)]"
+          >
+            <option value="PUBLIC">Everyone</option>
+            <option value="PRIVATE">Only you</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setDialog(null)}
+            className="mt-6 w-full text-center text-[16px] font-semibold text-[var(--tt-text)] hover:opacity-80"
+          >
+            Done
+          </button>
+        </Modal>
+      )}
+
+      {dialog === "delete" && (
+        <Modal
+          onClose={() => {
+            if (!deleting) setDialog(null);
+          }}
+        >
+          <h2 className="text-center text-[18px] font-bold text-[var(--tt-text)]">
+            Are you sure you want to delete this video?
+          </h2>
+          <div className="mt-6 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="h-11 rounded-[8px] bg-[var(--tt-red)] text-[15px] font-semibold text-white transition-colors hover:bg-[var(--tt-red-hover)] disabled:opacity-60"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDialog(null)}
+              disabled={deleting}
+              className="h-11 rounded-[8px] border border-[var(--tt-divider)] text-[15px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)] disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/** Centered modal shell, matching the house style (see `EditProfileModal`). */
+function Modal({
+  onClose,
+  children,
+}: {
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[3001] flex items-center justify-center">
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute inset-0 cursor-default bg-black/[0.68]"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative w-[340px] max-w-[calc(100vw-2rem)] rounded-[12px] bg-[#121212] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.4)]"
+      >
+        {children}
+      </div>
     </div>
   );
 }

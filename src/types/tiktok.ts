@@ -81,6 +81,11 @@ export interface FeedVideo {
   isFollowing: boolean;
   /** Whether a "See translation" affordance appears under the caption. */
   hasTranslation: boolean;
+  /**
+   * PUBLIC/PRIVATE, carried only for backend videos — it seeds the owner's
+   * Private toggle on the detail page. Undefined for mock feed videos.
+   */
+  visibility?: "PUBLIC" | "PRIVATE";
 }
 
 export interface Comment {

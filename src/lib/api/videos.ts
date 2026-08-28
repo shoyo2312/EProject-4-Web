@@ -10,6 +10,7 @@ import type {
   PageResponse,
   UserVideoStatsResponse,
   VideoResponse,
+  VideoVisibility,
 } from "@/lib/api/types";
 
 /**
@@ -215,6 +216,22 @@ export function createVideo(input: CreateVideoRequest): Promise<VideoResponse> {
 export function deleteVideo(videoId: string): Promise<void> {
   return apiFetch<void>(`/videos/${videoId}`, {
     method: "DELETE",
+    auth: "required",
+  });
+}
+
+/**
+ * `PATCH /api/v1/videos/{videoId}/visibility` — owner flips their own video
+ * between PUBLIC and PRIVATE from the detail page. Owner-only; a non-owner gets
+ * `NOT_VIDEO_OWNER`.
+ */
+export function updateVideoVisibility(
+  videoId: string,
+  visibility: VideoVisibility,
+): Promise<VideoResponse> {
+  return apiFetch<VideoResponse>(`/videos/${videoId}/visibility`, {
+    method: "PATCH",
+    body: { visibility },
     auth: "required",
   });
 }

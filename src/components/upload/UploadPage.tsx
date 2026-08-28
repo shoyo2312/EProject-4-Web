@@ -15,6 +15,7 @@ import {
 } from "@/lib/api/videos";
 import { uploadSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
+import { toast } from "@/components/ui/toast";
 
 /**
  * `/upload` — pick a video file and post it, the way TikTok Studio does.
@@ -102,6 +103,7 @@ export function UploadPage() {
         if (signal.aborted) return;
 
         if (latest.status === "PUBLISHED") {
+          toast.success("Video posted.");
           // `?posted=1` is what turns into the "Upload complete" banner there.
           router.replace(`/video/${created.id}?posted=1`);
           return;
@@ -110,11 +112,16 @@ export function UploadPage() {
         // FAILED, or still PROCESSING when the five-minute budget ran out.
         setProcessing(false);
         setProgress(null);
-        setFormError(
-          latest.status === "FAILED"
-            ? "Transcoding failed. Try uploading the file again."
-            : "Still processing. It will appear on your profile when it is done.",
-        );
+        if (latest.status === "FAILED") {
+          const message = "Transcoding failed. Try uploading the file again.";
+          setFormError(message);
+          toast.error(message);
+        } else {
+          const message =
+            "Still processing. It will appear on your profile when it is done.";
+          setFormError(message);
+          toast.warning(message);
+        }
         return;
       } catch (cause) {
         // An abort is the page going away, not a failure to report; anything
@@ -122,6 +129,7 @@ export function UploadPage() {
         setProgress(null);
         setProcessing(false);
         if (signal.aborted) return;
+        // `useForm` turns this into both the form-level line and an error toast.
         throw cause;
       }
     },
@@ -217,9 +225,6 @@ export function UploadPage() {
                   <option value="PUBLIC">Everyone</option>
                   <option value="PRIVATE">Only you</option>
                 </select>
-                <p className="mt-2 text-[12px] leading-[18px] text-[var(--tt-text-secondary)]">
-                  Fixed once posted: there is no endpoint to change it later.
-                </p>
               </Labelled>
 
               {form.formError && (
@@ -438,11 +443,6 @@ function Preview({
           <p className="mt-1.5 text-[13px] text-[var(--tt-text-secondary)]">
             {label}
           </p>
-          {processing && (
-            <p className="mt-1 text-[12px] leading-[18px] text-[var(--tt-text-secondary)]">
-              Stay on this page — it opens as soon as the video is ready.
-            </p>
-          )}
         </div>
       )}
 

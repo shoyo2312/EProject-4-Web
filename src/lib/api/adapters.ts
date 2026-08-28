@@ -123,6 +123,7 @@ export function videoToFeedVideo(
     durationSeconds: video.durationSeconds ?? 0,
     isFollowing: options.isFollowing ?? false,
     hasTranslation: false,
+    visibility: video.visibility,
   };
 }
 
