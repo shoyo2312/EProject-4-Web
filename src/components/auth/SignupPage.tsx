@@ -109,6 +109,7 @@ function SignupForm() {
 
   const form = useForm({
     schema: signupSchema,
+    errorToast: false,
     initialValues: {
       // The birthday block is the live page's. auth-service stores no date of
       // birth, so nothing is sent with it — but it is still validated, because

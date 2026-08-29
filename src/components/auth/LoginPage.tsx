@@ -112,6 +112,7 @@ function EmailForm() {
 
   const form = useForm({
     schema: loginSchema,
+    errorToast: false,
     initialValues: { identifier: "", password: "" },
     onSubmit: async (values) => {
       const identifier = values.identifier.trim();
