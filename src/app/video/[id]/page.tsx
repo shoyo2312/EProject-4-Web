@@ -11,7 +11,6 @@ import {
 
 type Params = {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ posted?: string }>;
 };
 
 /**
@@ -46,12 +45,11 @@ export async function generateMetadata({
  * whether their own PROCESSING or PRIVATE video is visible at all, and the
  * server rendering this page has no token.
  */
-export default async function VideoPage({ params, searchParams }: Params) {
+export default async function VideoPage({ params }: Params) {
   const { id } = await params;
 
   if (isBackendVideoId(id)) {
-    const { posted } = await searchParams;
-    return <BackendVideoDetail videoId={id} justPosted={posted === "1"} />;
+    return <BackendVideoDetail videoId={id} />;
   }
 
   const video = await getVideoById(id);

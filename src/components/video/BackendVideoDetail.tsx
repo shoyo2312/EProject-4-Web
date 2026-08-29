@@ -22,25 +22,10 @@ import type { FeedVideo } from "@/types/tiktok";
  * deliberately ambiguous anyway — missing, deleted, private, or not published —
  * so the message never guesses which.
  */
-export function BackendVideoDetail({
-  videoId,
-  justPosted = false,
-}: {
-  videoId: string;
-  /** `?posted=1`, set by `/upload` once the video finished transcoding. */
-  justPosted?: boolean;
-}) {
+export function BackendVideoDetail({ videoId }: { videoId: string }) {
   const [video, setVideo] = useState<FeedVideo | null>(null);
   const [status, setStatus] = useState<VideoStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /** The "upload complete" banner, once it has had its five seconds. */
-  const [bannerDone, setBannerDone] = useState(false);
-
-  useEffect(() => {
-    if (!justPosted) return;
-    const timer = setTimeout(() => setBannerDone(true), 5_000);
-    return () => clearTimeout(timer);
-  }, [justPosted]);
   /**
    * The ids either side of this one, for the up/down controls. Both were pinned
    * to null, which left the buttons permanently disabled — a backend video had
@@ -112,14 +97,6 @@ export function BackendVideoDetail({
 
   return (
     <>
-      {justPosted && !bannerDone && (
-        <div
-          role="status"
-          className="fixed inset-x-0 top-0 z-[201] bg-[var(--tt-red-active)] px-4 py-2 text-center text-[13px] leading-5 font-semibold text-white"
-        >
-          Upload complete — your video is live.
-        </div>
-      )}
       {status !== "PUBLISHED" && (
         <div className="fixed inset-x-0 top-0 z-[200] bg-black/80 px-4 py-2 text-center text-[13px] leading-5 text-white">
           {STATUS_NOTE[status ?? "PROCESSING"]}

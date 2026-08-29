@@ -104,8 +104,7 @@ export function UploadPage() {
 
         if (latest.status === "PUBLISHED") {
           toast.success("Video posted.");
-          // `?posted=1` is what turns into the "Upload complete" banner there.
-          router.replace(`/video/${created.id}?posted=1`);
+          router.replace(`/video/${created.id}`);
           return;
         }
 
