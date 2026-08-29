@@ -392,6 +392,7 @@ export function Feed({
             videoId={commentVideo.id}
             videoOwnerId={commentVideo.author.userId}
             comments={comments[commentVideo.id] ?? []}
+            commentsDisabled={commentVideo.commentsDisabled}
             commentCount={
               commentVideo.stats.comments + (extraComments[commentVideo.id] ?? 0)
             }

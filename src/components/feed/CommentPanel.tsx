@@ -162,6 +162,7 @@ export function CommentPanel({
   videoOwnerId,
   comments: initialComments,
   commentCount,
+  commentsDisabled = false,
   onClose,
   onCommentAdded,
   onCommentDeleted,
@@ -179,6 +180,12 @@ export function CommentPanel({
   comments: Comment[];
   /** Total shown in the header — the loaded count plus anything posted here. */
   commentCount: number;
+  /**
+   * The owner turned comments off. The panel then reads no comments, shows no
+   * count, and replaces the composer with a notice — matching the backend,
+   * which returns an empty list and refuses new comments.
+   */
+  commentsDisabled?: boolean;
   onClose: () => void;
   onCommentAdded: () => void;
   /** Fired after a comment is removed, so the caller's count stays in sync. */
@@ -222,7 +229,11 @@ export function CommentPanel({
   // Real comments load once per video; the mock path keeps the prop as its
   // whole state, unchanged from before this was wired up.
   useEffect(() => {
-    if (!isBackend) return;
+    // Comments off: the backend returns an empty list, so there is nothing to fetch.
+    if (!isBackend || commentsDisabled) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
 
@@ -244,7 +255,7 @@ export function CommentPanel({
     return () => {
       cancelled = true;
     };
-  }, [videoId, isBackend, toUiComment]);
+  }, [videoId, isBackend, commentsDisabled, toUiComment]);
 
   const loadMore = async () => {
     if (!cursor || loadingMore) return;
@@ -366,9 +377,11 @@ export function CommentPanel({
           <span className="text-[17px] font-bold leading-[25.5px] text-[var(--tt-text)]">
             Comments
           </span>
-          <span className="text-[17px] font-bold leading-[25.5px] text-[var(--tt-text)]">
-            ({formatCount(commentCount)})
-          </span>
+          {!commentsDisabled && (
+            <span className="text-[17px] font-bold leading-[25.5px] text-[var(--tt-text)]">
+              ({formatCount(commentCount)})
+            </span>
+          )}
         </div>
         {/* The detail column has no panel of its own to dismiss — the page's
             own close control sits over the player. */}
@@ -393,7 +406,9 @@ export function CommentPanel({
             and show the empty state at once, rather than flashing placeholder
             rows that resolve to nothing. */}
         {comments.length === 0 &&
-          (loading && commentCount > 0 ? (
+          (commentsDisabled ? (
+            <CommentsOff />
+          ) : loading && commentCount > 0 ? (
             <CommentListSkeleton
               count={Math.min(commentCount, COMMENT_PAGE_SIZE)}
             />
@@ -425,12 +440,14 @@ export function CommentPanel({
         )}
       </div>
 
-      <CommentComposer
-        ref={composerRef}
-        replyTo={replyTo}
-        onCancelReply={() => setReplyTo(null)}
-        onPost={post}
-      />
+      {!commentsDisabled && (
+        <CommentComposer
+          ref={composerRef}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          onPost={post}
+        />
+      )}
     </section>
   );
 }
@@ -490,6 +507,18 @@ function NoCommentsYet() {
       <CommentIcon className="h-16 w-16 text-white/25" />
       <p className="text-[14px] leading-5 text-white/75">
         Start the conversation
+      </p>
+    </div>
+  );
+}
+
+/** Same shape as {@link NoCommentsYet}, shown when the creator turned comments off. */
+function CommentsOff() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-6">
+      <CommentIcon className="h-16 w-16 text-white/25" />
+      <p className="text-[14px] leading-5 text-white/75">
+        This creator has turned off commenting
       </p>
     </div>
   );

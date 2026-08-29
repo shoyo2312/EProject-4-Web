@@ -131,7 +131,7 @@ export function ActionRail({
       </RailButton>
 
       <RailButton
-        label={formatCount(commentCount)}
+        label={video.commentsDisabled ? "" : formatCount(commentCount)}
         onClick={onCommentClick}
         active={commentsOpen}
         activeColor="text-[var(--tt-icon)]"

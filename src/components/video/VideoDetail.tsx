@@ -44,7 +44,12 @@ import {
   unlikeVideo,
   unsaveVideo,
 } from "@/lib/api/interactions";
-import { deleteVideo, updateVideoVisibility } from "@/lib/api/videos";
+import {
+  deleteVideo,
+  updateVideoCommentsSetting,
+  updateVideoVisibility,
+} from "@/lib/api/videos";
+import type { VideoVisibility } from "@/lib/api/types";
 import { formatCount } from "@/lib/format";
 import { getOverlayOrigin } from "@/lib/overlay-origin";
 import { toast } from "@/components/ui/toast";
@@ -357,6 +362,7 @@ export function VideoDetail({
             videoId={video.id}
             videoOwnerId={video.author.userId}
             comments={comments}
+            commentsDisabled={video.commentsDisabled}
             commentCount={video.stats.comments + extraComments}
             onClose={close}
             onCommentAdded={() => setExtraComments((n) => n + 1)}
@@ -729,6 +735,7 @@ function VideoSummary({
             <OwnerControls
               videoId={video.id}
               initialVisibility={video.visibility}
+              initialCommentsDisabled={video.commentsDisabled}
               onDeleted={onDeleted}
             />
           )
@@ -805,7 +812,11 @@ function VideoSummary({
           <HeartIcon className="h-5 w-5" />
         </CountButton>
 
-        <CountButton label="Comments" count={commentCount}>
+        {/* Comments off: the icon stays, the number goes. */}
+        <CountButton
+          label="Comments"
+          count={video.commentsDisabled ? null : commentCount}
+        >
           <CommentIcon className="h-5 w-5" />
         </CountButton>
 
@@ -850,7 +861,8 @@ function CountButton({
   children,
 }: {
   label: string;
-  count: number;
+  /** `null` hides the number entirely — used for a video with comments off. */
+  count: number | null;
   onClick?: () => void;
   active?: boolean;
   children: React.ReactNode;
@@ -869,9 +881,11 @@ function CountButton({
       >
         {children}
       </button>
-      <span className="text-[13px] font-medium text-[var(--tt-text-secondary)]">
-        {formatCount(count)}
-      </span>
+      {count !== null && (
+        <span className="text-[13px] font-medium text-[var(--tt-text-secondary)]">
+          {formatCount(count)}
+        </span>
+      )}
     </div>
   );
 }
@@ -897,29 +911,35 @@ function renderCaption(text: string): React.ReactNode {
  * The owner's own control on the author row, in place of Follow — modelled on
  * the live TikTok video page: a "…" button opening a two-item menu.
  *
- *   Privacy settings  →  a modal with one "Who can watch this video" select.
- *                        TikTok offers Everyone / Friends / Only you; the
- *                        backend only knows PUBLIC / PRIVATE, so this maps
- *                        Everyone→PUBLIC and Only you→PRIVATE and drops Friends.
- *                        The change is sent on select (optimistic, like the
- *                        like button); "Done" only closes.
+ *   Privacy settings  →  a modal with a "Who can watch this video" select
+ *                        (Everyone→PUBLIC, Friends→FRIENDS, Only you→PRIVATE)
+ *                        and an "Allow comments" toggle. Both edit drafts only;
+ *                        each changed one is sent when "Done" is clicked.
  *   Delete            →  a confirm modal, then `DELETE /videos/{id}` and the
  *                        overlay closes.
  */
 function OwnerControls({
   videoId,
   initialVisibility,
+  initialCommentsDisabled,
   onDeleted,
 }: {
   videoId: string;
-  initialVisibility?: "PUBLIC" | "PRIVATE";
+  initialVisibility?: VideoVisibility;
+  initialCommentsDisabled?: boolean;
   onDeleted: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [dialog, setDialog] = useState<null | "privacy" | "delete">(null);
-  const [visibility, setVisibility] = useState<"PUBLIC" | "PRIVATE">(
+  // Committed values vs. the drafts the modal edits; each changed draft is sent
+  // on "Done".
+  const [visibility, setVisibility] = useState<VideoVisibility>(
     initialVisibility ?? "PUBLIC",
   );
+  const [draftVisibility, setDraftVisibility] = useState(visibility);
+  const [commentsOff, setCommentsOff] = useState(Boolean(initialCommentsDisabled));
+  const [draftCommentsOff, setDraftCommentsOff] = useState(commentsOff);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -940,22 +960,35 @@ function OwnerControls({
     };
   }, [menuOpen]);
 
-  const changeVisibility = (next: "PUBLIC" | "PRIVATE") => {
-    if (next === visibility) return;
-    const previous = visibility;
-    setVisibility(next);
-    updateVideoVisibility(videoId, next)
-      .then(() =>
-        toast.success(
-          next === "PRIVATE"
-            ? "Video is now private."
-            : "Video is now public.",
+  // Sent only when "Done" is clicked — one request per changed setting.
+  const saveSettings = () => {
+    const jobs: Promise<unknown>[] = [];
+    if (draftVisibility !== visibility) {
+      jobs.push(
+        updateVideoVisibility(videoId, draftVisibility).then(() =>
+          setVisibility(draftVisibility),
         ),
-      )
-      .catch(() => {
-        setVisibility(previous);
-        toast.error("Couldn’t update who can watch this video.");
-      });
+      );
+    }
+    if (draftCommentsOff !== commentsOff) {
+      jobs.push(
+        updateVideoCommentsSetting(videoId, draftCommentsOff).then(() =>
+          setCommentsOff(draftCommentsOff),
+        ),
+      );
+    }
+    if (jobs.length === 0) {
+      setDialog(null);
+      return;
+    }
+    setSavingSettings(true);
+    Promise.all(jobs)
+      .then(() => {
+        setDialog(null);
+        toast.success("Settings updated.");
+      })
+      .catch(() => toast.error("Couldn’t update settings. Please try again."))
+      .finally(() => setSavingSettings(false));
   };
 
   const confirmDelete = () => {
@@ -994,6 +1027,8 @@ function OwnerControls({
             role="menuitem"
             onClick={() => {
               setMenuOpen(false);
+              setDraftVisibility(visibility);
+              setDraftCommentsOff(commentsOff);
               setDialog("privacy");
             }}
             className="block w-full px-4 py-2.5 text-left text-[15px] text-[var(--tt-text)] hover:bg-white/10"
@@ -1023,21 +1058,48 @@ function OwnerControls({
             Who can watch this video
           </p>
           <select
-            value={visibility}
+            value={draftVisibility}
             onChange={(event) =>
-              changeVisibility(event.target.value as "PUBLIC" | "PRIVATE")
+              setDraftVisibility(event.target.value as VideoVisibility)
             }
             className="mt-2 w-full rounded-[8px] border border-[var(--tt-divider)] bg-[var(--tt-field)] px-3 py-2 text-[15px] text-[var(--tt-text)]"
           >
             <option value="PUBLIC">Everyone</option>
+            <option value="FRIENDS">Friends</option>
             <option value="PRIVATE">Only you</option>
           </select>
+
+          <div className="mt-5 flex items-center justify-between">
+            <span className="text-[15px] font-semibold text-[var(--tt-text)]">
+              Allow comments
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!draftCommentsOff}
+              aria-label="Allow comments"
+              onClick={() => setDraftCommentsOff((v) => !v)}
+              className={cn(
+                "inline-flex h-6 w-11 flex-none items-center rounded-full p-0.5 transition-colors",
+                draftCommentsOff ? "bg-[var(--tt-field)]" : "bg-[var(--tt-red)]",
+              )}
+            >
+              <span
+                className={cn(
+                  "h-5 w-5 rounded-full bg-white transition-transform",
+                  draftCommentsOff ? "translate-x-0" : "translate-x-5",
+                )}
+              />
+            </button>
+          </div>
+
           <button
             type="button"
-            onClick={() => setDialog(null)}
-            className="mt-6 w-full text-center text-[16px] font-semibold text-[var(--tt-text)] hover:opacity-80"
+            onClick={saveSettings}
+            disabled={savingSettings}
+            className="mt-6 w-full text-center text-[16px] font-semibold text-[var(--tt-text)] hover:opacity-80 disabled:opacity-60"
           >
-            Done
+            {savingSettings ? "Saving…" : "Done"}
           </button>
         </Modal>
       )}
