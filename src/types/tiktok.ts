@@ -82,10 +82,15 @@ export interface FeedVideo {
   /** Whether a "See translation" affordance appears under the caption. */
   hasTranslation: boolean;
   /**
-   * PUBLIC/PRIVATE, carried only for backend videos — it seeds the owner's
-   * Private toggle on the detail page. Undefined for mock feed videos.
+   * PUBLIC/FRIENDS/PRIVATE, carried only for backend videos — it seeds the
+   * owner's privacy select on the detail page. Undefined for mock feed videos.
    */
-  visibility?: "PUBLIC" | "PRIVATE";
+  visibility?: "PUBLIC" | "FRIENDS" | "PRIVATE";
+  /**
+   * The owner turned comments off. Carried only for backend videos; when true
+   * the comment panel shows the "commenting is off" state and no count renders.
+   */
+  commentsDisabled?: boolean;
 }
 
 export interface Comment {

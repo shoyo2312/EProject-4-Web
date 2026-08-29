@@ -221,8 +221,8 @@ export function deleteVideo(videoId: string): Promise<void> {
 }
 
 /**
- * `PATCH /api/v1/videos/{videoId}/visibility` — owner flips their own video
- * between PUBLIC and PRIVATE from the detail page. Owner-only; a non-owner gets
+ * `PATCH /api/v1/videos/{videoId}/visibility` — owner sets their own video to
+ * PUBLIC, FRIENDS or PRIVATE from the detail page. Owner-only; a non-owner gets
  * `NOT_VIDEO_OWNER`.
  */
 export function updateVideoVisibility(
@@ -232,6 +232,22 @@ export function updateVideoVisibility(
   return apiFetch<VideoResponse>(`/videos/${videoId}/visibility`, {
     method: "PATCH",
     body: { visibility },
+    auth: "required",
+  });
+}
+
+/**
+ * `PATCH /api/v1/videos/{videoId}/comments-setting` — owner turns comments on or
+ * off for their own video. Owner-only. With comments off, interaction-service
+ * refuses new comments and video-service stops reporting the comment total.
+ */
+export function updateVideoCommentsSetting(
+  videoId: string,
+  disabled: boolean,
+): Promise<VideoResponse> {
+  return apiFetch<VideoResponse>(`/videos/${videoId}/comments-setting`, {
+    method: "PATCH",
+    body: { disabled },
     auth: "required",
   });
 }

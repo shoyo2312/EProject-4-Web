@@ -139,7 +139,7 @@ export interface MeResponse {
 /* --- video-service ------------------------------------------------------- */
 
 export type VideoStatus = "PROCESSING" | "PUBLISHED" | "FAILED" | "TAKEN_DOWN";
-export type VideoVisibility = "PUBLIC" | "PRIVATE";
+export type VideoVisibility = "PUBLIC" | "FRIENDS" | "PRIVATE";
 
 /** The profile header's counters — `GET /videos/users/{userId}/stats`. */
 export interface UserVideoStatsResponse {
@@ -167,7 +167,10 @@ export interface VideoResponse {
   visibility: VideoVisibility;
   viewCount: number;
   likeCount: number;
-  commentCount: number;
+  /** Null when `commentsDisabled` — a video with comments off exposes no comment total. */
+  commentCount: number | null;
+  /** The owner turned comments off; interaction-service then rejects new comments. */
+  commentsDisabled: boolean;
   createdAt: string;
 }
 
