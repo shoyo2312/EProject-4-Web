@@ -10,6 +10,7 @@ import { videoToFeedVideo } from "@/lib/api/adapters";
 import { resolveAuthor } from "@/lib/api/authors";
 import { messageFor } from "@/lib/api/errors";
 import { getUserVideos, getVideo, pollUntilReady } from "@/lib/api/videos";
+import { getOverlayCollection } from "@/lib/overlay-origin";
 import type { VideoStatus } from "@/lib/api/types";
 import type { FeedVideo } from "@/types/tiktok";
 
@@ -31,9 +32,10 @@ export function BackendVideoDetail({ videoId }: { videoId: string }) {
    * to null, which left the buttons permanently disabled — a backend video had
    * no collection to step through at all.
    *
-   * The collection is the author's own videos, in the order their profile grid
-   * lists them: this page is reached by tapping a tile on that grid, so
-   * stepping walks the grid the viewer just came from.
+   * The collection is whichever grid opened this page — a Favorites or Liked
+   * grid stashes its own ordered id list (see `overlay-origin`), and only a
+   * grid that stashed none (the author's own Videos tab, or a direct visit)
+   * falls back to listing the author's uploads.
    */
   const [neighbours, setNeighbours] = useState<{
     previousId: string | null;
@@ -72,10 +74,18 @@ export function BackendVideoDetail({ videoId }: { videoId: string }) {
           });
         }
 
-        // After the video is on screen, not before: a slow or failed listing
-        // must cost the page nothing but two disabled buttons.
-        const page = await getUserVideos(raw.userId, 0, 30, controller.signal);
-        const ids = page.content.map((entry) => entry.id);
+        // A grid that stashed its own id list (Favorites, Liked) steps through
+        // that, with no request at all. Only when there is none — the author's
+        // Videos tab, or a direct visit — list the author's uploads instead.
+        const stashed = getOverlayCollection();
+        const ids =
+          stashed?.includes(videoId)
+            ? stashed
+            : (
+                // After the video is on screen, not before: a slow or failed
+                // listing must cost the page nothing but two disabled buttons.
+                await getUserVideos(raw.userId, 0, 30, controller.signal)
+              ).content.map((entry) => entry.id);
         const index = ids.indexOf(videoId);
         if (index === -1) return;
         setNeighbours({

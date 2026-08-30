@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
   EmptyGridIcon,
@@ -27,6 +28,13 @@ const TABS: { id: ProfileTab; label: string; Icon: typeof PlayIcon }[] = [
 
 const SORTS = ["Latest", "Popular", "Oldest"] as const;
 type Sort = (typeof SORTS)[number];
+
+const TAB_IDS = TABS.map((entry) => entry.id);
+
+/** The tab named by `?tab=`, or "videos" for a missing or unknown value. */
+function tabFromParam(value: string | null): ProfileTab {
+  return TAB_IDS.includes(value as ProfileTab) ? (value as ProfileTab) : "videos";
+}
 
 /**
  * `.DivFeedTabWrapper` + `.DivVideoFeedV2` — the tab bar, its sort control and
@@ -83,8 +91,32 @@ export function ProfileBody({
    */
   onTabSelect?: (tab: ProfileTab) => void;
 }) {
-  const [tab, setTab] = useState<ProfileTab>("videos");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  /**
+   * The tab lives in the URL (`?tab=liked`) so that Close on the video overlay —
+   * a `router.back()` — returns to the tab the viewer left, not always Videos.
+   */
+  const tab = tabFromParam(searchParams.get("tab"));
   const [sort, setSort] = useState<Sort>("Latest");
+
+  const selectTab = (id: ProfileTab) => {
+    const query = id === "videos" ? "" : `?tab=${id}`;
+    router.replace(`${pathname}${query}`, { scroll: false });
+    onTabSelect?.(id);
+  };
+
+  /**
+   * Returning to `?tab=favorites` via Close remounts this page fresh, so the
+   * tab's videos have to be re-requested — `onTabSelect` fires on click only.
+   */
+  useEffect(() => {
+    if (tab !== "videos") onTabSelect?.(tab);
+    // Mount only: a later tab change already goes through `selectTab`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const posts = useMemo(() => {
     const list = profile.posts[tab];
@@ -105,10 +137,7 @@ export function ProfileBody({
               type="button"
               role="tab"
               aria-selected={id === tab}
-              onClick={() => {
-                setTab(id);
-                onTabSelect?.(id);
-              }}
+              onClick={() => selectTab(id)}
               className={cn(
                 "flex h-11 items-center gap-1 px-8 text-[18px] leading-6 font-semibold transition-colors tt-840:px-4",
                 id === tab
@@ -134,7 +163,16 @@ export function ProfileBody({
       ) : (
         <div className={GRID_CLASS}>
           {posts.map((post) => (
-            <ProfileTile key={post.id} post={post} />
+            <ProfileTile
+              key={post.id}
+              post={post}
+              onOpen={() =>
+                markOverlayOrigin(
+                  window.location.pathname + window.location.search,
+                  posts.map((entry) => entry.id),
+                )
+              }
+            />
           ))}
         </div>
       )}
@@ -216,7 +254,14 @@ function SegmentedControl({
 }
 
 /** `.DivItemContainerV2` — cover, view count, muted preview on hover. */
-function ProfileTile({ post }: { post: ProfileVideo }) {
+function ProfileTile({
+  post,
+  onOpen,
+}: {
+  post: ProfileVideo;
+  /** Records the origin route and this grid's id list for the overlay. */
+  onOpen: () => void;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const preview = (playing: boolean) => {
@@ -234,7 +279,7 @@ function ProfileTile({ post }: { post: ProfileVideo }) {
   return (
     <Link
       href={`/video/${encodeURIComponent(post.id)}`}
-      onClick={() => markOverlayOrigin(window.location.pathname)}
+      onClick={onOpen}
       onMouseEnter={() => preview(true)}
       onMouseLeave={() => preview(false)}
       className="relative block aspect-[1/1.3265] overflow-hidden rounded-[8px] bg-[var(--tt-field)]"
