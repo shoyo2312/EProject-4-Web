@@ -32,7 +32,8 @@ import { toast } from "@/components/ui/toast";
 
 /** video-service refuses anything else, and would only do so after the upload. */
 const ACCEPT = ACCEPTED_UPLOAD_TYPES.join(",");
-const MAX_BYTES = 2 * 1024 * 1024 * 1024;
+const MAX_BYTES = 500 * 1024 * 1024;
+const MAX_DURATION_SECONDS = 600;
 
 export function UploadPage() {
   const { user, isLoading, openLogin } = useSession();
@@ -83,7 +84,7 @@ export function UploadPage() {
       setProgress(0);
       try {
         const target = await createUploadUrl({ contentType: file.type });
-        await uploadToStorage(target.uploadUrl, file, setProgress, signal);
+        await uploadToStorage(target.uploadUrl, file, target.formFields, setProgress, signal);
 
         const created = await createVideo({
           title: values.title.trim(),
@@ -112,7 +113,9 @@ export function UploadPage() {
         setProcessing(false);
         setProgress(null);
         if (latest.status === "FAILED") {
-          const message = "Transcoding failed. Try uploading the file again.";
+          const message =
+            latest.failureReason ??
+            "Transcoding failed. Try uploading the file again.";
           setFormError(message);
           toast.error(message);
         } else {
@@ -134,14 +137,26 @@ export function UploadPage() {
     },
   });
 
-  function chooseFile(next: File | null) {
+  async function chooseFile(next: File | null) {
     if (!next) return;
     if (!ACCEPTED_UPLOAD_TYPES.includes(next.type as never)) {
       setFileError("That file isn’t a supported video. Use MP4, MOV or WebM.");
       return;
     }
     if (next.size > MAX_BYTES) {
-      setFileError("That file is over 2 GB.");
+      setFileError("That file is over 500 MB.");
+      return;
+    }
+
+    let seconds: number;
+    try {
+      seconds = await readDuration(next);
+    } catch {
+      setFileError("That file isn’t a video we can read.");
+      return;
+    }
+    if (seconds > MAX_DURATION_SECONDS) {
+      setFileError("That video is longer than 10 minutes.");
       return;
     }
 
@@ -467,6 +482,26 @@ function Preview({
 function formatBytes(bytes: number): string {
   const mb = bytes / (1024 * 1024);
   return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
+}
+
+/** Reads a video file's length via a detached media element. Rejects if it has none. */
+function readDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const probe = document.createElement("video");
+    probe.preload = "metadata";
+    probe.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      const seconds = probe.duration;
+      if (Number.isFinite(seconds)) resolve(seconds);
+      else reject(new Error("no-duration"));
+    };
+    probe.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("not-media"));
+    };
+    probe.src = url;
+  });
 }
 
 function CloudIcon() {

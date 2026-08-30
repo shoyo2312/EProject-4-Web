@@ -138,9 +138,10 @@ export const ACCEPTED_UPLOAD_TYPES = [
 /**
  * `POST /api/v1/videos/upload-url` — step one of posting a video.
  *
- * The file goes straight from the browser to object storage with the presigned
- * PUT this returns; nothing but the URL passes through the API. Step two is
- * `uploadToStorage`, step three is `createVideo` with the `fileUrl` from here.
+ * Returns the bucket URL plus the `formFields` the browser posts alongside the
+ * file as one multipart POST straight to object storage; nothing but that
+ * metadata passes through the API. Step two is `uploadToStorage`, step three is
+ * `createVideo` with the `fileUrl` from here.
  */
 export function createUploadUrl(
   input: UploadUrlRequest,

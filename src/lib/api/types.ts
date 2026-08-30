@@ -177,8 +177,8 @@ export interface VideoResponse {
 }
 
 /**
- * `POST /api/v1/videos/upload-url` — asks video-service to presign a PUT the
- * browser sends the file to directly, so the bytes never cross the gateway.
+ * `POST /api/v1/videos/upload-url` — asks video-service to presign a multipart
+ * POST the browser sends the file to directly, so the bytes never cross the gateway.
  */
 export interface UploadUrlRequest {
   /** MIME type of the file. Only `video/mp4`, `video/quicktime` and `video/webm`. */
