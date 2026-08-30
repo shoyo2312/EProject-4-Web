@@ -2,6 +2,7 @@
 
 import { apiFetch } from "@/lib/api/client";
 import type {
+  CommentLikeResponse,
   CommentPageResponse,
   CommentResponse,
   LikeStatusResponse,
@@ -129,14 +130,19 @@ export function listComments(
   });
 }
 
-/** `POST /interactions/videos/{videoId}/comments`. */
+/**
+ * `POST /interactions/videos/{videoId}/comments`. Pass `parentId` — a top-level
+ * comment's id — to post a reply; the backend nests exactly one level and
+ * flattens a reply-to-a-reply onto its top-level ancestor.
+ */
 export function addComment(
   videoId: string,
   content: string,
+  parentId?: string,
 ): Promise<CommentResponse> {
   return apiFetch<CommentResponse>(`/interactions/videos/${videoId}/comments`, {
     method: "POST",
-    body: { content },
+    body: parentId ? { content, parentId } : { content },
     auth: "required",
   });
 }
@@ -148,6 +154,28 @@ export function deleteComment(
 ): Promise<void> {
   return apiFetch<void>(
     `/interactions/videos/${videoId}/comments/${commentId}`,
+    { method: "DELETE", auth: "required" },
+  );
+}
+
+/** `POST /interactions/videos/{videoId}/comments/{commentId}/like` — idempotent. */
+export function likeComment(
+  videoId: string,
+  commentId: string,
+): Promise<CommentLikeResponse> {
+  return apiFetch<CommentLikeResponse>(
+    `/interactions/videos/${videoId}/comments/${commentId}/like`,
+    { method: "POST", auth: "required" },
+  );
+}
+
+/** `DELETE /interactions/videos/{videoId}/comments/{commentId}/like` — no-op if not liked. */
+export function unlikeComment(
+  videoId: string,
+  commentId: string,
+): Promise<CommentLikeResponse> {
+  return apiFetch<CommentLikeResponse>(
+    `/interactions/videos/${videoId}/comments/${commentId}/like`,
     { method: "DELETE", auth: "required" },
   );
 }

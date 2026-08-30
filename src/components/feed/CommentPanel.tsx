@@ -20,7 +20,9 @@ import {
   COMMENT_PAGE_SIZE,
   addComment,
   deleteComment as deleteCommentApi,
+  likeComment,
   listComments,
+  unlikeComment,
 } from "@/lib/api/interactions";
 import { getFollowing, searchUsers } from "@/lib/api/users";
 import type { UserProfileResponse } from "@/lib/api/types";
@@ -39,6 +41,74 @@ function removeCommentById(list: Comment[], id: string): Comment[] {
         ? { ...comment, replies: removeCommentById(comment.replies, id) }
         : comment,
     );
+}
+
+/** Swaps an optimistic id for the real one once the server responds — top-level or one reply deep. */
+function remapCommentId(list: Comment[], fromId: string, toId: string): Comment[] {
+  return list.map((comment) => {
+    if (comment.id === fromId) return { ...comment, id: toId };
+    if (comment.replies?.some((reply) => reply.id === fromId)) {
+      return {
+        ...comment,
+        replies: comment.replies.map((reply) =>
+          reply.id === fromId ? { ...reply, id: toId } : reply,
+        ),
+      };
+    }
+    return comment;
+  });
+}
+
+/** A fetched comment paired with the id it hangs off — `null` for a top-level comment. */
+type CommentEntry = { ui: Comment; parentId: string | null };
+
+/**
+ * interaction-service returns one flat list per video, newest first, with replies
+ * mixed in carrying a `parentId` that points at their top-level comment. This folds
+ * a freshly-fetched page into the tree already on screen: new top-level comments
+ * append, a reply attaches under its parent when that parent is loaded, and a reply
+ * whose parent sits on a page not yet fetched waits in `pending` until it is.
+ *
+ * ponytail: replies attach in page order within a thread, so a thread split across
+ * pages can show its replies slightly out of order. The real fix is sorting by
+ * snowflake id, which the optimistic `pending-*` ids don't have — not worth it for
+ * threads that almost always fit one page.
+ */
+function mergeComments(
+  existing: Comment[],
+  incoming: CommentEntry[],
+  pending: { ui: Comment; parentId: string }[],
+): Comment[] {
+  const next: Comment[] = existing.map((comment) => ({
+    ...comment,
+    replies: comment.replies ? [...comment.replies] : undefined,
+  }));
+  const topById = new Map(next.map((comment) => [comment.id, comment] as const));
+
+  const attach = (ui: Comment, parentId: string): boolean => {
+    const parent = topById.get(parentId);
+    if (!parent) return false;
+    parent.replies ??= [];
+    if (!parent.replies.some((reply) => reply.id === ui.id)) parent.replies.push(ui);
+    return true;
+  };
+
+  for (const { ui, parentId } of incoming) {
+    if (parentId) continue;
+    if (!topById.has(ui.id)) {
+      next.push(ui);
+      topById.set(ui.id, ui);
+    }
+  }
+  // Oldest-first within a thread: the page is newest-first, so walk it backwards.
+  for (const { ui, parentId } of [...incoming].reverse()) {
+    if (!parentId) continue;
+    if (!attach(ui, parentId)) pending.push({ ui, parentId });
+  }
+  for (let i = pending.length - 1; i >= 0; i -= 1) {
+    if (attach(pending[i].ui, pending[i].parentId)) pending.splice(i, 1);
+  }
+  return next;
 }
 
 /**
@@ -131,6 +201,14 @@ interface ReplyTarget {
   parentId: string;
   /** Handle shown in the composer placeholder — may be a reply's author. */
   username: string;
+  /**
+   * Id of the comment whose "Reply" was actually clicked — sent to the backend, which flattens a
+   * reply-to-a-reply onto its top-level ancestor and derives `replyToUserId` from it. Equals
+   * `parentId` when replying straight to a top-level comment.
+   */
+  replyToCommentId?: string;
+  /** Name for the "author › replyToName" label — set only when replying to another reply. */
+  replyToName?: string;
 }
 
 /**
@@ -211,19 +289,32 @@ export function CommentPanel({
   const [loadingMore, setLoadingMore] = useState(false);
   const composerRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  /** Replies whose parent lands on a later page — held across `loadMore` calls until it arrives. */
+  const pendingRepliesRef = useRef<{ ui: Comment; parentId: string }[]>([]);
 
-  /** interaction-service's flat DTO → the UI's `Comment`, author resolved by id. */
+  /** interaction-service's flat DTO → the UI's `Comment` plus its `parentId`, author resolved by id. */
   const toUiComment = useCallback(async (raw: {
     commentId: string;
     userId: string;
     content: string;
     createdAt: string;
-  }): Promise<Comment> => ({
-    id: raw.commentId,
-    author: await resolveAuthor(raw.userId),
-    text: raw.content,
-    timestamp: formatRelativeTime(raw.createdAt),
-    likes: 0,
+    parentId: string | null;
+    replyToUserId: string | null;
+    likeCount: number;
+    likedByMe: boolean;
+  }): Promise<CommentEntry> => ({
+    ui: {
+      id: raw.commentId,
+      author: await resolveAuthor(raw.userId),
+      text: raw.content,
+      timestamp: formatRelativeTime(raw.createdAt),
+      likes: raw.likeCount,
+      likedByMe: raw.likedByMe,
+      replyToName: raw.replyToUserId
+        ? (await resolveAuthor(raw.replyToUserId)).nickname
+        : undefined,
+    },
+    parentId: raw.parentId,
   }), []);
 
   // Real comments load once per video; the mock path keeps the prop as its
@@ -236,12 +327,13 @@ export function CommentPanel({
     }
     let cancelled = false;
     setLoading(true);
+    pendingRepliesRef.current = [];
 
     listComments(videoId)
       .then(async (page) => {
-        const items = await Promise.all(page.items.map(toUiComment));
+        const entries = await Promise.all(page.items.map(toUiComment));
         if (cancelled) return;
-        setComments(items);
+        setComments(mergeComments([], entries, pendingRepliesRef.current));
         setCursor(page.nextCursor);
         setHasMore(page.hasMore);
       })
@@ -262,8 +354,8 @@ export function CommentPanel({
     setLoadingMore(true);
     try {
       const page = await listComments(videoId, cursor);
-      const items = await Promise.all(page.items.map(toUiComment));
-      setComments((current) => [...current, ...items]);
+      const entries = await Promise.all(page.items.map(toUiComment));
+      setComments((current) => mergeComments(current, entries, pendingRepliesRef.current));
       setCursor(page.nextCursor);
       setHasMore(page.hasMore);
     } catch {
@@ -278,7 +370,7 @@ export function CommentPanel({
     composerRef.current?.focus();
   };
 
-  const postBackendComment = async (text: string) => {
+  const postBackendComment = async (text: string, target: ReplyTarget | null) => {
     if (!user) return;
     const optimistic: Comment = {
       id: `pending-${Date.now()}`,
@@ -286,19 +378,28 @@ export function CommentPanel({
       text,
       timestamp: "now",
       likes: 0,
+      replyToName: target?.replyToName,
     };
-    setComments((current) => [optimistic, ...current]);
+    setComments((current) =>
+      target
+        ? current.map((comment) =>
+            comment.id === target.parentId
+              ? { ...comment, replies: [...(comment.replies ?? []), optimistic] }
+              : comment,
+          )
+        : [optimistic, ...current],
+    );
     setJustAddedId(optimistic.id);
-    listRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    if (!target) listRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     onCommentAdded();
 
     try {
-      const saved = await addComment(videoId, text);
-      setComments((current) =>
-        current.map((comment) =>
-          comment.id === optimistic.id ? { ...comment, id: saved.commentId } : comment,
-        ),
+      const saved = await addComment(
+        videoId,
+        text,
+        target?.replyToCommentId ?? target?.parentId,
       );
+      setComments((current) => remapCommentId(current, optimistic.id, saved.commentId));
     } catch {
       // Roll back both the optimistic row and the count bump, and say so —
       // unlike a like, a lost comment leaves no visible trace to explain it.
@@ -309,11 +410,10 @@ export function CommentPanel({
   };
 
   const post = (text: string) => {
-    // A reply has nowhere to live on the backend — CommentByVideo is flat —
-    // so a reply always stays a local, this-session-only addition, on both a
-    // mock video and a real one.
-    if (isBackend && !replyTo) {
-      void postBackendComment(text);
+    // A real video persists both a top-level comment and a reply through
+    // interaction-service; the mock path keeps everything local.
+    if (isBackend) {
+      void postBackendComment(text, replyTo);
       setReplyTo(null);
       return;
     }
@@ -324,6 +424,7 @@ export function CommentPanel({
       text,
       timestamp: "now",
       likes: 0,
+      replyToName: replyTo?.replyToName,
     };
 
     setComments((current) =>
@@ -420,6 +521,8 @@ export function CommentPanel({
           <CommentItem
             key={comment.id}
             comment={comment}
+            videoId={videoId}
+            isBackend={isBackend}
             onReply={startReply}
             justAddedId={justAddedId}
             currentUserId={user?.userId}
@@ -576,6 +679,8 @@ function CommentText({ text }: { text: string }) {
 
 function CommentItem({
   comment,
+  videoId,
+  isBackend,
   isReply = false,
   onReply,
   justAddedId,
@@ -586,6 +691,10 @@ function CommentItem({
   onDelete,
 }: {
   comment: Comment;
+  /** Backend video id — used to persist a like against this comment. */
+  videoId: string;
+  /** A real video persists likes through interaction-service; a mock one toggles locally. */
+  isBackend: boolean;
   isReply?: boolean;
   onReply?: (target: ReplyTarget) => void;
   justAddedId?: string | null;
@@ -596,9 +705,45 @@ function CommentItem({
   canModerate?: boolean;
   onDelete?: (id: string) => void;
 }) {
-  const [liked, setLiked] = useState(false);
+  const { user, openLogin } = useSession();
+  const [liked, setLiked] = useState(comment.likedByMe ?? false);
+  const [likeCount, setLikeCount] = useState(comment.likes);
+  const [likePending, setLikePending] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // A comment still waiting on its POST has no real id to like against yet.
+  const canPersistLike = isBackend && /^\d+$/.test(comment.id);
+
+  const toggleLike = async () => {
+    if (isBackend && !user) {
+      openLogin();
+      return;
+    }
+    if (!canPersistLike) {
+      // Mock video, or an optimistic row not yet saved — keep the old local-only toggle.
+      setLiked((v) => !v);
+      setLikeCount((n) => n + (liked ? -1 : 1));
+      return;
+    }
+    if (likePending) return;
+    const next = !liked;
+    setLiked(next);
+    setLikeCount((n) => Math.max(0, n + (next ? 1 : -1)));
+    setLikePending(true);
+    try {
+      const result = next
+        ? await likeComment(videoId, comment.id)
+        : await unlikeComment(videoId, comment.id);
+      setLiked(result.liked);
+      setLikeCount(result.likeCount);
+    } catch {
+      setLiked(!next);
+      setLikeCount((n) => Math.max(0, n + (next ? -1 : 1)));
+      toast.error("Couldn’t update your like. Please try again.");
+    } finally {
+      setLikePending(false);
+    }
+  };
   const avatarSize = isReply ? 24 : 32;
   // Mock authors carry no `userId`, so this is false for every mock comment —
   // the "⋯" stays decorative there, same as before this was wired up.
@@ -655,6 +800,14 @@ function CommentItem({
               >
                 {comment.author.nickname}
               </Link>
+              {comment.replyToName && (
+                <>
+                  <ReplyArrowGlyph />
+                  <span className="max-w-[8rem] truncate text-[13px] font-medium leading-[16.9px] text-[var(--tt-text-secondary)]">
+                    {comment.replyToName}
+                  </span>
+                </>
+              )}
               {comment.isCreator && (
                 <span className="rounded-[4px] bg-[var(--tt-field)] px-1 text-[11px] font-medium leading-4 text-[var(--tt-text-secondary)]">
                   Creator
@@ -706,6 +859,8 @@ function CommentItem({
                   onReply?.({
                     parentId: parentId ?? comment.id,
                     username: comment.author.username,
+                    replyToCommentId: comment.id,
+                    replyToName: isReply ? comment.author.nickname : undefined,
                   })
                 }
                 className={cn(
@@ -721,8 +876,8 @@ function CommentItem({
 
             <button
               type="button"
-              onClick={() => setLiked((v) => !v)}
-              aria-label="Like comment"
+              onClick={toggleLike}
+              aria-label={liked ? "Unlike comment" : "Like comment"}
               aria-pressed={liked}
               className="flex flex-none items-center justify-center gap-1"
             >
@@ -733,7 +888,7 @@ function CommentItem({
                 )}
               />
               <span className="text-[14px] leading-[21px] text-white/60">
-                {formatCount(comment.likes + (liked ? 1 : 0))}
+                {formatCount(likeCount)}
               </span>
             </button>
           </div>
@@ -744,6 +899,8 @@ function CommentItem({
         <ReplyThread
           replies={comment.replies}
           parentId={comment.id}
+          videoId={videoId}
+          isBackend={isBackend}
           onReply={onReply}
           justAddedId={justAddedId}
         />
@@ -771,11 +928,15 @@ function CommentItem({
 function ReplyThread({
   replies,
   parentId,
+  videoId,
+  isBackend,
   onReply,
   justAddedId,
 }: {
   replies: Comment[];
   parentId: string;
+  videoId: string;
+  isBackend: boolean;
   onReply?: (target: ReplyTarget) => void;
   justAddedId?: string | null;
 }) {
@@ -802,6 +963,8 @@ function ReplyThread({
           <CommentItem
             key={reply.id}
             comment={reply}
+            videoId={videoId}
+            isBackend={isBackend}
             isReply
             parentId={parentId}
             onReply={onReply}
@@ -837,6 +1000,20 @@ function ChevronDownGlyph() {
     <svg
       viewBox="0 0 48 48"
       className="h-[13px] w-[13px] flex-none text-white/60"
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="m24 27.76 13.17-13.17a1 1 0 0 1 1.42 0l2.82 2.82a1 1 0 0 1 0 1.42L25.06 35.18a1.5 1.5 0 0 1-2.12 0L6.59 18.83a1 1 0 0 1 0-1.42L9.4 14.6a1 1 0 0 1 1.42 0L24 27.76Z" />
+    </svg>
+  );
+}
+
+/** The "›" between a reply's author and the person it replies to. */
+function ReplyArrowGlyph() {
+  return (
+    <svg
+      viewBox="0 0 48 48"
+      className="h-[11px] w-[11px] flex-none -rotate-90 text-[var(--tt-placeholder)]"
       fill="currentColor"
       aria-hidden
     >

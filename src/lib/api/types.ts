@@ -275,9 +275,11 @@ export interface ShareResponse {
 }
 
 /**
- * A comment as interaction-service stores it: flat, no reply nesting, no
+ * A comment as interaction-service stores it: one flat list per video with no
  * per-comment like count. `userId` is all it knows about the author — the
- * client resolves a name and avatar itself via `resolveAuthor`.
+ * client resolves a name and avatar itself via `resolveAuthor`. Replies live in
+ * the same list; `parentId` is `null` for a top-level comment and the top-level
+ * comment's id for a reply (TikTok nests exactly one level).
  */
 export interface CommentResponse {
   commentId: string;
@@ -285,6 +287,19 @@ export interface CommentResponse {
   userId: string;
   content: string;
   createdAt: string;
+  parentId: string | null;
+  /** Set only when this reply targets another reply — its author, for the "A > B" label. */
+  replyToUserId: string | null;
+  likeCount: number;
+  /** Whether the requesting user has liked it — always false for an unauthenticated listing. */
+  likedByMe: boolean;
+}
+
+/** `POST` / `DELETE .../comments/{commentId}/like` — the new state plus the denormalised tally. */
+export interface CommentLikeResponse {
+  commentId: string;
+  liked: boolean;
+  likeCount: number;
 }
 
 /** `GET .../comments` — cursor paged like the feed, but also reports `hasMore`. */

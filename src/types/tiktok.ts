@@ -100,6 +100,14 @@ export interface Comment {
   /** Relative time as rendered on the live site, e.g. "3d ago". */
   timestamp: string;
   likes: number;
+  /** Whether the signed-in viewer has liked this comment — drives the heart's filled state. */
+  likedByMe?: boolean;
+  /**
+   * Display name of the person this reply is replying to, shown as "author › replyToName".
+   * Set only on a reply that targets another reply — a direct reply to the top-level comment
+   * leaves it undefined (its target is the thread owner shown above).
+   */
+  replyToName?: string;
   /** Marks the video's own creator — renders the "Creator" pill. */
   isCreator?: boolean;
   /**
