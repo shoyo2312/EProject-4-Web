@@ -153,23 +153,24 @@ export function createUploadUrl(
 }
 
 /**
- * PUTs the file at a presigned URL, reporting progress 0–1.
- *
- * XHR rather than `fetch` because only XHR reports **upload** progress, and a
- * multi-hundred-megabyte upload with no progress bar reads as a frozen page.
- * The presigned signature covers the key and expiry, not headers, so sending
- * `Content-Type` is safe — storage keeps it for media-worker to read back.
+ * POSTs the file to object storage as a multipart form: the presigned policy fields
+ * first, then the file **last** (S3 requires that order). XHR rather than `fetch` so
+ * upload progress can drive the bar. Storage answers 2xx with an empty body.
  */
 export function uploadToStorage(
   uploadUrl: string,
   file: File,
+  formFields: Record<string, string>,
   onProgress?: (fraction: number) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    const body = new FormData();
+    for (const [name, value] of Object.entries(formFields)) body.append(name, value);
+    body.append("file", file); // must be last
+
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", uploadUrl);
-    xhr.setRequestHeader("Content-Type", file.type);
+    xhr.open("POST", uploadUrl);
 
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress?.(event.loaded / event.total);
@@ -180,22 +181,18 @@ export function uploadToStorage(
         resolve();
         return;
       }
-      // Storage answers in XML, and its wording ("NoSuchBucket") is for us, not
-      // the uploader — the status is all the caller needs to tell them.
       reject(new ApiError(xhr.status, "UPLOAD_FAILED", "Upload failed"));
     };
     xhr.onerror = () =>
       reject(new ApiError(0, "NETWORK_ERROR", "Cannot reach the storage host"));
     xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
 
-    // Reject rather than return: a promise settled by nobody leaves the caller
-    // showing "uploading" for as long as the page is open.
     if (signal?.aborted) {
       reject(new DOMException("Aborted", "AbortError"));
       return;
     }
     signal?.addEventListener("abort", () => xhr.abort(), { once: true });
-    xhr.send(file);
+    xhr.send(body);
   });
 }
 
