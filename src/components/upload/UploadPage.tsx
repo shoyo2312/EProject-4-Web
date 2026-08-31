@@ -22,8 +22,8 @@ import { toast } from "@/components/ui/toast";
  *
  * Three hops, because the bytes never go through the API:
  *
- *   1. `POST /videos/upload-url` presigns a PUT into object storage;
- *   2. the browser PUTs the file straight there (progress comes from XHR);
+ *   1. `POST /videos/upload-url` presigns a multipart POST into object storage;
+ *   2. the browser POSTs the file straight there (progress comes from XHR);
  *   3. `POST /videos` publishes it with the `s3://` location step 1 handed back.
  *
  * Only step 3 creates anything, so a page closed mid-upload leaves an orphan
@@ -42,7 +42,7 @@ export function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
-  /** 0–1 while the PUT runs, null otherwise — it is also what drives the bar. */
+  /** 0–1 while the POST runs, null otherwise — it is also what drives the bar. */
   const [progress, setProgress] = useState<number | null>(null);
   /** True from the moment the post exists until transcoding finishes. */
   const [processing, setProcessing] = useState(false);
@@ -355,7 +355,7 @@ function DropZone({
 
       <dl className="mt-10 grid gap-6 text-left sm:grid-cols-3">
         <Fact term="Size and duration">
-          Up to 2 GB. Longer clips just take longer to transcode.
+          Up to 500 MB and 10 minutes.
         </Fact>
         <Fact term="File formats">
           MP4, MOV and WebM — the formats the transcoder can read.
@@ -564,12 +564,31 @@ function TextField({
     "aria-invalid": error ? true : undefined,
   } as const;
 
+  const atLimit = maxLength !== undefined && value.length >= maxLength;
+  const counterId = maxLength !== undefined ? `${label}-count` : undefined;
+
   return (
     <Labelled label={label} error={error}>
       {multiline ? (
-        <textarea {...shared} className={`${className} h-24 resize-none py-2`} />
+        <textarea
+          {...shared}
+          aria-describedby={counterId}
+          className={`${className} h-24 resize-none py-2`}
+        />
       ) : (
-        <input {...shared} className={className} />
+        <input {...shared} aria-describedby={counterId} className={className} />
+      )}
+      {maxLength !== undefined && (
+        <p
+          id={counterId}
+          className={`mt-1 text-right text-[13px] leading-[18px] ${
+            atLimit
+              ? "text-[var(--tt-red-active)]"
+              : "text-[var(--tt-text-secondary)]"
+          }`}
+        >
+          {value.length} / {maxLength}
+        </p>
       )}
     </Labelled>
   );
