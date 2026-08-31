@@ -188,6 +188,8 @@ export function uploadToStorage(
       reject(new ApiError(0, "NETWORK_ERROR", "Cannot reach the storage host"));
     xhr.onabort = () => reject(new DOMException("Aborted", "AbortError"));
 
+    // Reject rather than return: a promise settled by nobody leaves the caller
+    // showing "uploading" for as long as the page is open.
     if (signal?.aborted) {
       reject(new DOMException("Aborted", "AbortError"));
       return;

@@ -53,7 +53,7 @@ export function UploadPage() {
    * StrictMode mounts, unmounts and remounts in dev, so a controller created in
    * the ref initialiser is already aborted by the time anything uses it — and
    * an aborted controller cannot be reset. That was an upload stuck on
-   * "Uploading… 0%" forever, because the PUT was cancelled before it was sent.
+   * "Uploading… 0%" forever, because the POST was cancelled before it was sent.
    */
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
@@ -148,14 +148,17 @@ export function UploadPage() {
       return;
     }
 
-    let seconds: number;
+    // A best-effort pre-check over a server backstop that already enforces this. The browser
+    // cannot decode every accepted container (an HEVC .mov from an iPhone fails here but
+    // transcodes fine), so a read failure must not block the upload — only a duration we
+    // actually measured and that is over the limit does.
+    let seconds: number | null = null;
     try {
       seconds = await readDuration(next);
     } catch {
-      setFileError("That file isn’t a video we can read.");
-      return;
+      // undecodable in this browser ≠ undecodable server-side; let media-worker be the judge.
     }
-    if (seconds > MAX_DURATION_SECONDS) {
+    if (seconds !== null && seconds > MAX_DURATION_SECONDS) {
       setFileError("That video is longer than 10 minutes.");
       return;
     }
@@ -400,7 +403,7 @@ function Preview({
 }) {
   const input = useRef<HTMLInputElement>(null);
   /**
-   * One bar for both halves of the wait. The PUT is the only part with real
+   * One bar for both halves of the wait. The POST is the only part with real
    * bytes to count, so it owns 0–90%; transcoding has no progress to report
    * and holds a pulsing 90% until it finishes, at which point the page is
    * already navigating away.
