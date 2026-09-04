@@ -76,17 +76,25 @@ export function preloadSocialSdks(): void {
 
 /** Resolves with the provider token to post to auth-service. */
 export function getProviderToken(provider: SocialProvider): Promise<string> {
-  if (!isProviderConfigured(provider)) {
+  // Google no longer comes through here — its account chooser is opened by the
+  // Google-rendered button (`renderGoogleButton`), not a click we control.
+  if (provider === "google") {
     return Promise.reject(
       new SocialAuthError(
-        "unconfigured",
-        provider === "google"
-          ? "Google sign-in isn’t configured on this deployment."
-          : "Facebook sign-in isn’t configured on this deployment.",
+        "unavailable",
+        "Use the Google button to choose an account.",
       ),
     );
   }
-  return provider === "google" ? googleIdToken() : facebookAccessToken();
+  if (!isProviderConfigured("facebook")) {
+    return Promise.reject(
+      new SocialAuthError(
+        "unconfigured",
+        "Facebook sign-in isn’t configured on this deployment.",
+      ),
+    );
+  }
+  return facebookAccessToken();
 }
 
 /* --- Google Identity Services -------------------------------------------- */
@@ -97,11 +105,6 @@ interface GoogleCredentialResponse {
   credential?: string;
 }
 
-interface GooglePromptNotification {
-  isNotDisplayed?: () => boolean;
-  isSkippedMoment?: () => boolean;
-}
-
 interface GoogleAccountsId {
   initialize: (config: {
     client_id: string;
@@ -109,82 +112,76 @@ interface GoogleAccountsId {
     auto_select?: boolean;
     cancel_on_tap_outside?: boolean;
   }) => void;
-  prompt: (listener?: (notification: GooglePromptNotification) => void) => void;
+  renderButton: (
+    parent: HTMLElement,
+    options: {
+      type?: "standard" | "icon";
+      theme?: "outline" | "filled_blue" | "filled_black";
+      text?: "signin_with" | "signup_with" | "continue_with" | "signin";
+      shape?: "rectangular" | "pill" | "circle" | "square";
+      size?: "large" | "medium" | "small";
+      width?: number;
+    },
+  ) => void;
   cancel: () => void;
 }
 
 /**
- * Nothing settles a prompt Google decides not to show. Under FedCM the two
- * notification predicates below are deprecated and answer nothing, so a
- * suppressed prompt fires no callback, no notification and no error — which
- * left the caller's `pending` flag on "Connecting…" and every login row
- * disabled until a reload. This is the backstop that ends that wait.
- */
-const GOOGLE_PROMPT_TIMEOUT_MS = 60_000;
-
-/**
- * The account chooser, via `google.accounts.id.prompt()`.
+ * Renders Google's own "Continue with Google" button into `el`, and calls
+ * `onCredential` with the ID token once the viewer picks an account.
  *
- * ponytail: this is the One Tap / FedCM prompt rather than a rendered Google
- * button, so the TikTok-styled row stays the thing the viewer clicks. The cost
- * is that a viewer who has dismissed the prompt repeatedly gets suppressed by
- * Google, and now lands in the `unavailable` branch via the timeout instead of
- * hanging. If that shows up in practice, swap to
- * `google.accounts.id.renderButton` over the row — the only flow Google does
- * not suppress that still yields the ID token auth-service verifies.
+ * ponytail: this is `renderButton`, not One Tap (`prompt()`). The button is the
+ * only Google flow that opens the real account-chooser popup, is not
+ * suppressed after repeated dismissals, and still yields the `credential` ID
+ * token auth-service verifies. The caller overlays it transparently on the
+ * styled row, so the row stays the thing the viewer sees.
+ *
+ * Returns a cleanup that cancels any open prompt and empties `el`.
  */
-async function googleIdToken(): Promise<string> {
-  await loadScript(GOOGLE_SDK_SRC);
-  const accounts = window.google?.accounts?.id;
-  if (!accounts) {
-    throw new SocialAuthError("unavailable", "Google sign-in failed to load.");
+export function renderGoogleButton(
+  el: HTMLElement,
+  onCredential: (idToken: string) => void,
+): () => void {
+  let cancelled = false;
+
+  if (!isProviderConfigured("google")) {
+    return () => undefined;
   }
 
-  return new Promise<string>((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      accounts.cancel();
-      fail(
-        new SocialAuthError(
-          "unavailable",
-          "Google didn’t open its sign-in dialog. Check that third-party sign-in is allowed in this browser, or log in with your email instead.",
-        ),
-      );
-    }, GOOGLE_PROMPT_TIMEOUT_MS);
+  void loadScript(GOOGLE_SDK_SRC)
+    .then(() => {
+      if (cancelled) return;
+      const id = window.google?.accounts?.id;
+      if (!id) return;
+      id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        callback: (response) => {
+          if (response.credential) onCredential(response.credential);
+        },
+      });
+      id.renderButton(el, {
+        type: "standard",
+        theme: "filled_black",
+        text: "continue_with",
+        shape: "pill",
+        size: "large",
+        // Google clamps width to 200–400; the row sits inside that range.
+        width: Math.min(400, Math.max(200, Math.round(el.offsetWidth) || 320)),
+      });
+    })
+    .catch(() => undefined);
 
-    const done = (credential: string) => {
-      window.clearTimeout(timer);
-      resolve(credential);
-    };
-    const fail = (error: SocialAuthError) => {
-      window.clearTimeout(timer);
-      reject(error);
-    };
-
-    accounts.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      auto_select: false,
-      cancel_on_tap_outside: true,
-      callback: (response) => {
-        if (response.credential) done(response.credential);
-        else fail(new SocialAuthError("cancelled", "Google sign-in cancelled."));
-      },
-    });
-
-    accounts.prompt((notification) => {
-      // Both predicates are optional under FedCM, hence the guards. When one
-      // does answer true, the callback above will never fire, so settle here.
-      if (notification.isNotDisplayed?.()) {
-        fail(
-          new SocialAuthError(
-            "unavailable",
-            "Google didn’t open its sign-in dialog. Check that third-party sign-in is allowed in this browser.",
-          ),
-        );
-      } else if (notification.isSkippedMoment?.()) {
-        fail(new SocialAuthError("cancelled", "Google sign-in cancelled."));
-      }
-    });
-  });
+  return () => {
+    cancelled = true;
+    try {
+      window.google?.accounts?.id?.cancel();
+    } catch {
+      // SDK never finished loading — nothing to cancel.
+    }
+    el.replaceChildren();
+  };
 }
 
 /* --- Facebook JS SDK ------------------------------------------------------ */

@@ -54,6 +54,13 @@ interface VideoCardProps {
    * comment sidebar on the video the viewer scrolled to.
    */
   onActive?: () => void;
+  /**
+   * This card's offset from the one being watched — `0` for it, `1` for the
+   * card directly below, negative for cards already scrolled past. Only the
+   * first two fetch any media; see `useHlsSource`. Defaults to `0` for the
+   * single-card pages, where the card on screen is the only one there is.
+   */
+  distance?: number;
 }
 
 /** How long to wait for a second click before treating one as a plain tap. */
@@ -82,6 +89,7 @@ interface FloatingHeart {
  */
 export function VideoCard({
   video,
+  distance = 0,
   onLike,
   showCaption = true,
   showVolumeControl = true,
@@ -138,7 +146,7 @@ export function VideoCard({
 
   // Backend videos arrive as HLS playlists, which need hls.js everywhere but
   // Safari; the mock feed's .mp4 files keep using the plain `src` below.
-  useHlsSource(videoRef, video.videoUrl);
+  useHlsSource(videoRef, video.videoUrl, distance);
 
   /*
    * How long this card was watched, reported once the viewer moves on. It is the
@@ -281,6 +289,9 @@ export function VideoCard({
           // attaches.
           src={isHlsManifest(video.videoUrl) ? undefined : video.videoUrl}
           poster={video.posterUrl || undefined}
+          // Same window as `useHlsSource`: the card on screen and the next one
+          // fetch, the rest stay at their poster until they get close.
+          preload={distance >= 0 && distance <= 1 ? "auto" : "none"}
           loop={!onEnded}
           onEnded={onEnded}
           playsInline

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ClockIcon, CloseIcon, DotIcon, SearchIcon, TrendingIcon } from "@/components/icons";
@@ -86,6 +87,7 @@ function writeHistory(terms: string[]): void {
  *   100vw × 100vh; z-index: 99.
  */
 export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const router = useRouter();
   const { user } = useSession();
   const [query, setQuery] = useState("");
   const [history, setHistory] = useState<string[]>([]);
@@ -145,6 +147,22 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
       controller.abort();
     };
   }, [term, user, open]);
+
+  /**
+   * Submitting the field is a video search, not an account one: the accounts
+   * list below answers as you type, while videos live behind
+   * `GET /search/videos`, which is paged and belongs on its own route. A term
+   * starting with `#` searches that one hashtag — see `searchParamsFor`.
+   */
+  const submit = useCallback(
+    (value: string) => {
+      const entry = value.trim();
+      if (!entry) return;
+      router.push(`/search?q=${encodeURIComponent(entry)}`);
+      onClose();
+    },
+    [router, onClose],
+  );
 
   const remember = useCallback((value: string) => {
     const entry = value.trim();
@@ -219,6 +237,7 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
           onSubmit={(event) => {
             event.preventDefault();
             remember(term);
+            submit(term);
           }}
           className="me-2 flex items-center rounded-[92px] bg-[var(--tt-field)] py-2.5 ps-4 pe-1"
         >
@@ -259,7 +278,10 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
                       key={entry}
                       icon={<ClockIcon className="h-4 w-4 text-[rgb(255_255_255/0.34)]" />}
                       label={entry}
-                      onSelect={() => setQuery(entry)}
+                      onSelect={() => {
+                        setQuery(entry);
+                        submit(entry);
+                      }}
                       onRemove={() => forget(entry)}
                     />
                   ))}
@@ -282,6 +304,7 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
                     onSelect={() => {
                       setQuery(suggestion.term);
                       remember(suggestion.term);
+                      submit(suggestion.term);
                     }}
                   />
                 ))}
@@ -289,6 +312,15 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
             </>
           ) : (
             <ul>
+              <Row
+                icon={<SearchIcon className="h-4 w-4 text-[rgb(255_255_255/0.34)]" />}
+                label={term.startsWith("#") ? `Videos tagged ${term}` : `Videos for “${term}”`}
+                onSelect={() => {
+                  remember(term);
+                  submit(term);
+                }}
+              />
+
               <ListHeader>Accounts</ListHeader>
               {results.length === 0 || !user ? (
                 <li className="px-4 py-2 text-[14px] text-[var(--tt-text-secondary)]">

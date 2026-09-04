@@ -6,6 +6,7 @@ import {
   PersonIcon,
   QrCodeIcon,
 } from "@/components/icons";
+import { GoogleSignInOverlay } from "@/components/auth/GoogleSignInOverlay";
 import type { SocialProvider } from "@/lib/auth/social";
 import type { LoginOption } from "@/types/tiktok";
 
@@ -30,6 +31,7 @@ export function AuthOptions({
   description,
   options,
   onSelect,
+  mountGoogle,
   pending = null,
   error = null,
 }: {
@@ -38,6 +40,11 @@ export function AuthOptions({
   options: LoginOption[];
   /** Called with the row's label; the caller decides where it leads. */
   onSelect: (option: LoginOption) => void;
+  /**
+   * Mounts Google's own button over the Google row. Omitted where there is no
+   * Google row, or no social sign-in wired up.
+   */
+  mountGoogle?: (el: HTMLElement) => () => void;
   /** The provider whose dialog is open, if any — the list freezes meanwhile. */
   pending?: SocialProvider | null;
   /** A failed social login, shown under the list rather than in a dialog. */
@@ -77,6 +84,9 @@ export function AuthOptions({
                   : option.label}
               </span>
             </button>
+            {option.provider === "google" && mountGoogle && (
+              <GoogleSignInOverlay mount={mountGoogle} />
+            )}
           </div>
         ))}
 

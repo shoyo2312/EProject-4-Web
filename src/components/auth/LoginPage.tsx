@@ -96,6 +96,7 @@ function OptionsStep({ options }: { options: LoginOption[] }) {
       description="Manage your account, check notifications, comment on videos, and more."
       options={options}
       onSelect={social.select}
+      mountGoogle={social.mountGoogle}
       pending={social.pending}
       error={social.error}
     />
