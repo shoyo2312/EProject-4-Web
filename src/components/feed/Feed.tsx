@@ -241,6 +241,14 @@ export function Feed({
     commentsOpenRef.current = commentsOpen;
   }, [commentsOpen]);
 
+  /**
+   * Which card owns the viewport. Only the media window reads it: the card on
+   * screen and the one below it fetch video, everything else waits — see
+   * `useHlsSource`. Reported by the cards themselves, because the observer that
+   * decides which one is playing is the only thing that knows.
+   */
+  const [activeIndex, setActiveIndex] = useState(0);
+
   const followActiveVideo = useCallback((video: FeedVideo) => {
     if (!commentsOpenRef.current) return;
     if (unmountTimer.current) clearTimeout(unmountTimer.current);
@@ -298,7 +306,7 @@ export function Feed({
           // both matching the measured article widths exactly.
           className="no-scrollbar relative h-screen w-full snap-y snap-mandatory overflow-y-scroll pr-16 tt-1024:pr-0"
         >
-          {videos.map((video) => (
+          {videos.map((video, index) => (
             <article
               key={video.id}
               className={cn(
@@ -343,8 +351,12 @@ export function Feed({
               >
                 <VideoCard
                   video={video}
+                  distance={index - activeIndex}
                   onLike={() => likeOnly(video.id)}
-                  onActive={() => followActiveVideo(video)}
+                  onActive={() => {
+                    setActiveIndex(index);
+                    followActiveVideo(video);
+                  }}
                   // The feed's counterpart to auto scroll on `/video/[id]`:
                   // there, finishing a clip navigates to the next video; here
                   // it scrolls the snap container on by one card. Passing this
