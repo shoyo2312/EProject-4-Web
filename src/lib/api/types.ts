@@ -308,3 +308,29 @@ export interface CommentPageResponse {
   nextCursor: string | null;
   hasMore: boolean;
 }
+
+/* --- search-service ------------------------------------------------------ */
+
+/**
+ * `GET /api/v1/search/videos` — one hit from the Elasticsearch projection, not
+ * a `VideoResponse`. It is built from Kafka events, so it carries only what
+ * those events published: no `hlsUrl` (a tile shows the poster and links to the
+ * detail page, which fetches the playable video), no visibility (the index only
+ * ever holds PUBLISHED videos), and `description`/`tags` only for videos
+ * published after those fields were added to `VideoPublishedEvent`.
+ */
+export interface VideoSearchResponse {
+  id: string;
+  userId: string;
+  title: string;
+  description: string | null;
+  thumbnailUrl: string | null;
+  status: VideoStatus;
+  /** Normalised by video-service: lowercase, no leading `#`. Empty when untagged. */
+  tags: string[];
+  viewCount: number;
+  likeCount: number;
+  commentCount: number;
+  shareCount: number;
+  createdAt: string;
+}
