@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+import { GoogleSignInOverlay } from "@/components/auth/GoogleSignInOverlay";
 import { SocialLinkForm } from "@/components/auth/SocialLinkForm";
 import { useSocialSignIn } from "@/components/auth/use-social-sign-in";
 import {
@@ -181,20 +182,27 @@ export function LoginModal({
              signalled. */
           <div className="no-scrollbar mx-auto w-[380px] max-w-full overflow-y-auto pt-2 pr-8 pl-10">
             {options.map((option) => (
-              <button
+              <div
                 key={option.label}
-                type="button"
-                onClick={() => social.select(option)}
-                disabled={social.pending !== null}
-                className="mb-2 flex h-12 w-[300px] max-w-full items-center justify-center rounded-[24px] bg-[var(--tt-field)] pr-3.5 pl-2.5 text-[16px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-shape-neutral-3)] disabled:opacity-50"
+                className="relative mb-2 w-[300px] max-w-full"
               >
-                <OptionIcon option={option} />
-                <span className="flex-1 text-center">
-                  {social.pending && social.pending === option.provider
-                    ? "Connecting…"
-                    : option.label}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => social.select(option)}
+                  disabled={social.pending !== null}
+                  className="flex h-12 w-full items-center justify-center rounded-[24px] bg-[var(--tt-field)] pr-3.5 pl-2.5 text-[16px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-shape-neutral-3)] disabled:opacity-50"
+                >
+                  <OptionIcon option={option} />
+                  <span className="flex-1 text-center">
+                    {social.pending && social.pending === option.provider
+                      ? "Connecting…"
+                      : option.label}
+                  </span>
+                </button>
+                {option.provider === "google" && social.mountGoogle && (
+                  <GoogleSignInOverlay mount={social.mountGoogle} />
+                )}
+              </div>
             ))}
 
             {social.error && (

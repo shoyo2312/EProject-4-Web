@@ -10,6 +10,7 @@ import {
   isSocialAuthError,
   isSocialCancellation,
   preloadSocialSdks,
+  renderGoogleButton,
   type SocialProvider,
 } from "@/lib/auth/social";
 import type { LoginOption } from "@/types/tiktok";
@@ -70,12 +71,44 @@ export function useSocialSignIn({
     [redirectTo, router],
   );
 
+  /**
+   * Everything after a provider token is in hand, shared by the Facebook click
+   * flow and the Google button callback: trade it for our session, or fall
+   * into the mail-a-code link challenge.
+   */
+  const completeSignIn = useCallback(
+    async (provider: SocialProvider, token: string) => {
+      setError(null);
+      setPending(provider);
+      try {
+        const { requiresEmail } = await signInWithProvider(provider, token);
+        land(requiresEmail);
+      } catch (cause) {
+        // Not an error: the account exists, and has to prove the mailbox is
+        // theirs before the two are merged.
+        if (isApiError(cause) && cause.is("SOCIAL_LINK_VERIFICATION_REQUIRED")) {
+          setChallenge({ provider, token });
+          return;
+        }
+        setError(messageFor(cause));
+      } finally {
+        setPending(null);
+      }
+    },
+    [land, signInWithProvider],
+  );
+
   const select = useCallback(
     async (option: LoginOption) => {
       if (!option.provider) {
         onFallback(option);
         return;
       }
+
+      // Google is driven by the Google-rendered button overlaid on the row
+      // (see `mountGoogle`), not by this click — a popup it opens has to come
+      // from Google's own element, not one of ours.
+      if (option.provider === "google") return;
 
       const provider = option.provider;
       setError(null);
@@ -95,22 +128,21 @@ export function useSocialSignIn({
         return;
       }
 
-      try {
-        const { requiresEmail } = await signInWithProvider(provider, token);
-        land(requiresEmail);
-      } catch (cause) {
-        // Not an error either: the account exists, and has to prove the mailbox
-        // is theirs before the two are merged.
-        if (isApiError(cause) && cause.is("SOCIAL_LINK_VERIFICATION_REQUIRED")) {
-          setChallenge({ provider, token });
-          return;
-        }
-        setError(messageFor(cause));
-      } finally {
-        setPending(null);
-      }
+      await completeSignIn(provider, token);
     },
-    [land, onFallback, signInWithProvider],
+    [completeSignIn, onFallback],
+  );
+
+  /**
+   * Mounts Google's own button into `el` and wires its credential into the
+   * same completion path. Returns the cleanup the caller runs on unmount.
+   */
+  const mountGoogle = useCallback(
+    (el: HTMLElement) =>
+      renderGoogleButton(el, (token) => {
+        void completeSignIn("google", token);
+      }),
+    [completeSignIn],
   );
 
   /**
@@ -144,5 +176,5 @@ export function useSocialSignIn({
     setError(null);
   }, []);
 
-  return { select, confirm, cancel, challenge, error, pending };
+  return { select, mountGoogle, confirm, cancel, challenge, error, pending };
 }
