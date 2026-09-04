@@ -171,12 +171,14 @@ export interface VideoResponse {
   commentCount: number | null;
   /** The owner turned comments off; interaction-service then rejects new comments. */
   commentsDisabled: boolean;
+  /** Why the transcode failed; present only when `status === "FAILED"`. */
+  failureReason?: string | null;
   createdAt: string;
 }
 
 /**
- * `POST /api/v1/videos/upload-url` — asks video-service to presign a PUT the
- * browser sends the file to directly, so the bytes never cross the gateway.
+ * `POST /api/v1/videos/upload-url` — asks video-service to presign a multipart
+ * POST the browser sends the file to directly, so the bytes never cross the gateway.
  */
 export interface UploadUrlRequest {
   /** MIME type of the file. Only `video/mp4`, `video/quicktime` and `video/webm`. */
@@ -184,9 +186,11 @@ export interface UploadUrlRequest {
 }
 
 export interface UploadUrlResponse {
-  /** Presigned PUT. Expires — upload straight away, do not store it. */
+  /** The bucket URL to POST the multipart form to. Expires — upload straight away. */
   uploadUrl: string;
-  /** The `s3://` location to send back as `rawFileUrl` once the PUT succeeds. */
+  /** Every field the multipart POST must carry. Append these, then the file last. */
+  formFields: Record<string, string>;
+  /** The `s3://` location to send back as `rawFileUrl` once the POST succeeds. */
   fileUrl: string;
   expiresInSeconds: number;
 }

@@ -22,8 +22,8 @@ import { toast } from "@/components/ui/toast";
  *
  * Three hops, because the bytes never go through the API:
  *
- *   1. `POST /videos/upload-url` presigns a PUT into object storage;
- *   2. the browser PUTs the file straight there (progress comes from XHR);
+ *   1. `POST /videos/upload-url` presigns a multipart POST into object storage;
+ *   2. the browser POSTs the file straight there (progress comes from XHR);
  *   3. `POST /videos` publishes it with the `s3://` location step 1 handed back.
  *
  * Only step 3 creates anything, so a page closed mid-upload leaves an orphan
@@ -32,7 +32,8 @@ import { toast } from "@/components/ui/toast";
 
 /** video-service refuses anything else, and would only do so after the upload. */
 const ACCEPT = ACCEPTED_UPLOAD_TYPES.join(",");
-const MAX_BYTES = 2 * 1024 * 1024 * 1024;
+const MAX_BYTES = 500 * 1024 * 1024;
+const MAX_DURATION_SECONDS = 600;
 
 export function UploadPage() {
   const { user, isLoading, openLogin } = useSession();
@@ -41,7 +42,7 @@ export function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
-  /** 0–1 while the PUT runs, null otherwise — it is also what drives the bar. */
+  /** 0–1 while the POST runs, null otherwise — it is also what drives the bar. */
   const [progress, setProgress] = useState<number | null>(null);
   /** True from the moment the post exists until transcoding finishes. */
   const [processing, setProcessing] = useState(false);
@@ -52,7 +53,7 @@ export function UploadPage() {
    * StrictMode mounts, unmounts and remounts in dev, so a controller created in
    * the ref initialiser is already aborted by the time anything uses it — and
    * an aborted controller cannot be reset. That was an upload stuck on
-   * "Uploading… 0%" forever, because the PUT was cancelled before it was sent.
+   * "Uploading… 0%" forever, because the POST was cancelled before it was sent.
    */
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
@@ -83,7 +84,7 @@ export function UploadPage() {
       setProgress(0);
       try {
         const target = await createUploadUrl({ contentType: file.type });
-        await uploadToStorage(target.uploadUrl, file, setProgress, signal);
+        await uploadToStorage(target.uploadUrl, file, target.formFields, setProgress, signal);
 
         const created = await createVideo({
           title: values.title.trim(),
@@ -112,7 +113,9 @@ export function UploadPage() {
         setProcessing(false);
         setProgress(null);
         if (latest.status === "FAILED") {
-          const message = "Transcoding failed. Try uploading the file again.";
+          const message =
+            latest.failureReason ??
+            "Transcoding failed. Try uploading the file again.";
           setFormError(message);
           toast.error(message);
         } else {
@@ -134,14 +137,29 @@ export function UploadPage() {
     },
   });
 
-  function chooseFile(next: File | null) {
+  async function chooseFile(next: File | null) {
     if (!next) return;
     if (!ACCEPTED_UPLOAD_TYPES.includes(next.type as never)) {
       setFileError("That file isn’t a supported video. Use MP4, MOV or WebM.");
       return;
     }
     if (next.size > MAX_BYTES) {
-      setFileError("That file is over 2 GB.");
+      setFileError("That file is over 500 MB.");
+      return;
+    }
+
+    // A best-effort pre-check over a server backstop that already enforces this. The browser
+    // cannot decode every accepted container (an HEVC .mov from an iPhone fails here but
+    // transcodes fine), so a read failure must not block the upload — only a duration we
+    // actually measured and that is over the limit does.
+    let seconds: number | null = null;
+    try {
+      seconds = await readDuration(next);
+    } catch {
+      // undecodable in this browser ≠ undecodable server-side; let media-worker be the judge.
+    }
+    if (seconds !== null && seconds > MAX_DURATION_SECONDS) {
+      setFileError("That video is longer than 10 minutes.");
       return;
     }
 
@@ -340,7 +358,7 @@ function DropZone({
 
       <dl className="mt-10 grid gap-6 text-left sm:grid-cols-3">
         <Fact term="Size and duration">
-          Up to 2 GB. Longer clips just take longer to transcode.
+          Up to 500 MB and 10 minutes.
         </Fact>
         <Fact term="File formats">
           MP4, MOV and WebM — the formats the transcoder can read.
@@ -385,7 +403,7 @@ function Preview({
 }) {
   const input = useRef<HTMLInputElement>(null);
   /**
-   * One bar for both halves of the wait. The PUT is the only part with real
+   * One bar for both halves of the wait. The POST is the only part with real
    * bytes to count, so it owns 0–90%; transcoding has no progress to report
    * and holds a pulsing 90% until it finishes, at which point the page is
    * already navigating away.
@@ -469,6 +487,26 @@ function formatBytes(bytes: number): string {
   return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
 }
 
+/** Reads a video file's length via a detached media element. Rejects if it has none. */
+function readDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const probe = document.createElement("video");
+    probe.preload = "metadata";
+    probe.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      const seconds = probe.duration;
+      if (Number.isFinite(seconds)) resolve(seconds);
+      else reject(new Error("no-duration"));
+    };
+    probe.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("not-media"));
+    };
+    probe.src = url;
+  });
+}
+
 function CloudIcon() {
   return (
     <svg
@@ -529,12 +567,31 @@ function TextField({
     "aria-invalid": error ? true : undefined,
   } as const;
 
+  const atLimit = maxLength !== undefined && value.length >= maxLength;
+  const counterId = maxLength !== undefined ? `${label}-count` : undefined;
+
   return (
     <Labelled label={label} error={error}>
       {multiline ? (
-        <textarea {...shared} className={`${className} h-24 resize-none py-2`} />
+        <textarea
+          {...shared}
+          aria-describedby={counterId}
+          className={`${className} h-24 resize-none py-2`}
+        />
       ) : (
-        <input {...shared} className={className} />
+        <input {...shared} aria-describedby={counterId} className={className} />
+      )}
+      {maxLength !== undefined && (
+        <p
+          id={counterId}
+          className={`mt-1 text-right text-[13px] leading-[18px] ${
+            atLimit
+              ? "text-[var(--tt-red-active)]"
+              : "text-[var(--tt-text-secondary)]"
+          }`}
+        >
+          {value.length} / {maxLength}
+        </p>
       )}
     </Labelled>
   );
