@@ -155,8 +155,8 @@ function Centered({ children }: { children: React.ReactNode }) {
  */
 function VideoDetailSkeleton() {
   return (
-    <main className="flex flex-1 flex-row">
-      <div className="relative h-screen flex-1 overflow-hidden bg-[var(--tt-page)]">
+    <main className="flex min-w-0 flex-1 flex-row">
+      <div className="relative h-screen min-w-0 flex-1 overflow-hidden bg-[var(--tt-page)]">
         <Skeleton className="absolute top-4 left-4 z-20 h-10 w-10 rounded-full" />
         <Skeleton className="absolute top-4 right-4 z-20 h-10 w-10 rounded-full" />
 
@@ -170,10 +170,11 @@ function VideoDetailSkeleton() {
         <div className="flex h-full items-center justify-center px-4 py-4">
           <Skeleton
             className={cn(
-              "grow rounded-[1rem] [aspect-ratio:0.5625/1] min-w-[348px]",
+              "grow rounded-[1rem] [aspect-ratio:0.5625/1] min-w-[348px] tt-1024:min-w-0",
               "[height:var(--one-column-available-height)]",
               "[max-height:var(--one-column-available-height)]",
-              "[max-width:calc(var(--one-column-available-height)*0.5625)]",
+              "[max-width:min(calc(var(--one-column-available-height)*0.5625),100%)]",
+              "tt-1024:[height:auto]",
             )}
           />
         </div>
@@ -195,7 +196,7 @@ function VideoDetailSkeleton() {
           <Skeleton className="mt-2 h-[21px] w-48" />
 
           {/* like / comment / save / share counts */}
-          <div className="mt-4 flex items-center gap-4">
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 tt-1024:gap-x-2">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-9 w-[72px] rounded-full" />
             ))}

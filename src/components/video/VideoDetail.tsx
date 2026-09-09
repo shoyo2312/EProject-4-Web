@@ -171,6 +171,9 @@ export function VideoDetail({
           // Silent rollback, matching the feed's like button.
           setLiked(!next);
           setLikeCount((count) => count + (next ? -1 : 1));
+        })
+        .finally(() => {
+          likeInFlight.current = false;
         });
     },
     [video.id],
@@ -264,10 +267,10 @@ export function VideoDetail({
   }, []);
 
   return (
-    <main className="flex flex-1 flex-row">
+    <main className="flex min-w-0 flex-1 flex-row">
       <div
         ref={playerRef}
-        className="relative h-screen flex-1 overflow-hidden overscroll-contain bg-[var(--tt-page)]"
+        className="relative h-screen min-w-0 flex-1 overflow-hidden overscroll-contain bg-[var(--tt-page)]"
       >
         <button
           type="button"
@@ -322,7 +325,7 @@ export function VideoDetail({
         <div className="flex h-full items-center justify-center px-4 py-4">
           <div
             className={cn(
-              "flex w-full flex-1 justify-center",
+              "flex w-full min-w-0 flex-1 justify-center",
               video.width > video.height ? "items-center" : "items-end",
               entering === "next" && "[animation:tt-video-in-next_300ms_ease-out]",
               entering === "previous" && "[animation:tt-video-in-previous_300ms_ease-out]",
@@ -802,7 +805,7 @@ function VideoSummary({
 
       {/* The feed's vertical rail, laid out horizontally — same actions, same
           counts, which is how the live site presents them on this page. */}
-      <div className="mt-4 flex items-center gap-4">
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 tt-1024:gap-x-2">
         <CountButton
           label={liked ? "Unlike" : "Like"}
           onClick={onToggleLike}

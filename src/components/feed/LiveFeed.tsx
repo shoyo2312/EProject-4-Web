@@ -116,10 +116,11 @@ export function FeedSkeleton() {
             <div className="flex w-full flex-1 items-end justify-center gap-4">
               <Skeleton
                 className={cn(
-                  "grow rounded-[1rem] [aspect-ratio:0.5625/1] min-w-[348px]",
+                  "grow rounded-[1rem] [aspect-ratio:0.5625/1] min-w-[348px] tt-1024:min-w-0",
                   "[height:var(--one-column-available-height)]",
                   "[max-height:var(--one-column-available-height)]",
-                  "[max-width:calc(var(--one-column-available-height)*0.5625)]",
+                  "[max-width:min(calc(var(--one-column-available-height)*0.5625),100%)]",
+                  "tt-1024:[height:auto]",
                 )}
               />
 

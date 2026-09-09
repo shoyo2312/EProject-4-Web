@@ -255,7 +255,11 @@ export function VideoCard({
         "group/player relative self-center overflow-hidden rounded-[1rem] bg-[#111]",
         // Shared by both branches on the live site.
         "grow [aspect-ratio:var(--r)/1]",
+        // The 348px floor is a desktop measurement: below 1024 the column is
+        // narrower than the height-derived width, and an unshrinkable card
+        // pushes the comment column off-screen.
         "min-w-[348px] [min-height:calc(348px/var(--r))]",
+        "tt-1024:min-w-0 tt-1024:[min-height:0]",
         isLandscape
           ? [
               // `max-width: min(availH * r, 60vw)` — the 60vw cap is the only
@@ -263,18 +267,22 @@ export function VideoCard({
               // on a wide screen (measured live at 1920×936: 60vw = 1152px wins
               // over availH * 1.775 = 1604px, giving a 1152×649 card).
               "w-full",
-              "[max-width:min(calc(var(--one-column-available-height)*var(--r)),60vw)]",
+              "[max-width:min(calc(var(--one-column-available-height)*var(--r)),60vw,100%)]",
               "[max-height:min(var(--one-column-available-height),calc(60vw/var(--r)))]",
               // <=1280 drops the 60vw cap entirely, so the card goes back to
               // being purely height-bound.
-              "tt-1280:[max-width:calc(var(--one-column-available-height)*var(--r))]",
+              "tt-1280:[max-width:min(calc(var(--one-column-available-height)*var(--r)),100%)]",
               "tt-1280:[max-height:var(--one-column-available-height)]",
             ].join(" ")
           : [
               // Portrait is always height-bound: no viewport-width cap at all.
               "[height:var(--one-column-available-height)]",
               "[max-height:var(--one-column-available-height)]",
-              "[max-width:calc(var(--one-column-available-height)*var(--r))]",
+              "[max-width:min(calc(var(--one-column-available-height)*var(--r)),100%)]",
+              // Once the column, not the viewport height, is what binds, the
+              // explicit height would beat the aspect ratio and the media
+              // would be cropped sideways. Let the ratio set it instead.
+              "tt-1024:[height:auto]",
             ].join(" "),
       )}
     >
