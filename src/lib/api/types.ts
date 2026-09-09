@@ -138,7 +138,23 @@ export interface MeResponse {
 
 /* --- video-service ------------------------------------------------------- */
 
-export type VideoStatus = "PROCESSING" | "PUBLISHED" | "FAILED" | "TAKEN_DOWN";
+/**
+ * Only `PUBLISHED` is watchable. The two `PENDING_*` states are the automatic
+ * moderation pass that sits between transcoding and publication: a video is
+ * never on a feed before a verdict, and a verdict that could not be reached
+ * sends it to a human rather than publishing it.
+ *
+ * `REJECTED` is the classifier's own removal, `TAKEN_DOWN` an admin's. Both are
+ * reversible by an admin; only the owner ever sees either.
+ */
+export type VideoStatus =
+  | "PROCESSING"
+  | "PENDING_MODERATION"
+  | "PENDING_REVIEW"
+  | "PUBLISHED"
+  | "FAILED"
+  | "REJECTED"
+  | "TAKEN_DOWN";
 export type VideoVisibility = "PUBLIC" | "FRIENDS" | "PRIVATE";
 
 /** The profile header's counters — `GET /videos/users/{userId}/stats`. */

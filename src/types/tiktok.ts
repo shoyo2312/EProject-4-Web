@@ -1,5 +1,7 @@
 /** Content structures observed on the TikTok For You feed. */
 
+import type { VideoStatus } from "@/lib/api/types";
+
 export interface Author {
   /**
    * The backend's account id, present only for authors that came from the API
@@ -175,6 +177,12 @@ export interface ProfileVideo {
   views: number;
   /** `visibility: "PRIVATE"` — the grid marks it with a lock. Owner-only. */
   isPrivate?: boolean;
+  /**
+   * video-service's status. Absent on mock profiles, and on someone else's
+   * grid every tile is PUBLISHED anyway — it is the owner's own grid that
+   * carries videos still processing, waiting on a moderator, or removed.
+   */
+  status?: VideoStatus;
 }
 
 /** The header of `/@handle` plus the content behind each of its tabs. */

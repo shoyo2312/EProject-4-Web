@@ -127,8 +127,12 @@ export function BackendVideoDetail({ videoId }: { videoId: string }) {
 /** Only the owner ever sees any of these — everyone else got a 404. */
 const STATUS_NOTE: Record<VideoStatus, string> = {
   PROCESSING: "Still processing — it will play once transcoding finishes.",
+  PENDING_MODERATION: "Being checked — it goes live as soon as the check clears.",
+  PENDING_REVIEW: "Waiting on a moderator. It goes live once it is approved.",
   PUBLISHED: "",
   FAILED: "Transcoding failed. Delete this video and upload it again.",
+  REJECTED:
+    "Removed automatically for likely adult content. Contact support to have it reviewed.",
   TAKEN_DOWN: "This video was taken down by a moderator.",
 };
 

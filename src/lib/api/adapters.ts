@@ -142,6 +142,7 @@ export function videoToProfileVideo(video: VideoResponse): ProfileVideo {
     videoUrl: video.hlsUrl ?? "",
     views: video.viewCount,
     isPrivate: video.visibility === "PRIVATE",
+    status: video.status,
   };
 }
 

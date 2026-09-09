@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { VideoVisibility } from "@/lib/api/types";
+import type { VideoStatus, VideoVisibility } from "@/lib/api/types";
 import {
   ACCEPTED_UPLOAD_TYPES,
   createUploadUrl,
@@ -35,6 +35,28 @@ const ACCEPT = ACCEPTED_UPLOAD_TYPES.join(",");
 const MAX_BYTES = 500 * 1024 * 1024;
 const MAX_DURATION_SECONDS = 600;
 
+/**
+ * What the uploader is told when the poll ends on anything but PUBLISHED.
+ *
+ * A rejection says what happened and what to do about it, without explaining
+ * which frames tripped the classifier — that is a map for getting the next
+ * upload past it. PENDING_REVIEW is deliberately not framed as a problem: most
+ * videos that land there are fine, and the honest thing to say is that a person
+ * is looking.
+ */
+const OUTCOME_MESSAGE: Record<VideoStatus, string> = {
+  PROCESSING: "Still processing. It will appear on your profile when it is done.",
+  PENDING_MODERATION:
+    "Still being reviewed. It will appear on your profile when the check finishes.",
+  PENDING_REVIEW:
+    "This video is waiting on a moderator before it goes live. You will see it on your profile once it is approved.",
+  PUBLISHED: "",
+  FAILED: "Transcoding failed. Try uploading the file again.",
+  REJECTED:
+    "This video was removed automatically for likely adult content. If that is wrong, contact support to have it reviewed.",
+  TAKEN_DOWN: "This video was taken down by a moderator.",
+};
+
 export function UploadPage() {
   const { user, isLoading, openLogin } = useSession();
   const router = useRouter();
@@ -46,6 +68,11 @@ export function UploadPage() {
   const [progress, setProgress] = useState<number | null>(null);
   /** True from the moment the post exists until transcoding finishes. */
   const [processing, setProcessing] = useState(false);
+  /** The verdict of the last post that did not end PUBLISHED; null before the first one. */
+  const [outcome, setOutcome] = useState<{
+    status: VideoStatus;
+    message: string;
+  } | null>(null);
 
   /**
    * The upload and the poll outlive their handler, so unmounting is what
@@ -72,9 +99,9 @@ export function UploadPage() {
       description: "",
       visibility: "PUBLIC" as VideoVisibility,
     },
-    onSubmit: async (values, { setFormError }) => {
+    onSubmit: async (values) => {
       if (!file) {
-        setFormError("Choose a video file first.");
+        toast.error("Choose a video file first.");
         return;
       }
 
@@ -109,21 +136,33 @@ export function UploadPage() {
           return;
         }
 
-        // FAILED, or still PROCESSING when the five-minute budget ran out.
+        // Anything that is not PUBLISHED: a broken transcode, a moderation
+        // verdict, or still unfinished when the five-minute budget ran out.
         setProcessing(false);
         setProgress(null);
-        if (latest.status === "FAILED") {
-          const message =
-            latest.failureReason ??
-            "Transcoding failed. Try uploading the file again.";
-          setFormError(message);
-          toast.error(message);
-        } else {
-          const message =
-            "Still processing. It will appear on your profile when it is done.";
-          setFormError(message);
-          toast.warning(message);
-        }
+
+        /**
+         * The post exists whatever the verdict came back as, so the file is done
+         * here. Leaving it in the form makes Post a button that uploads the same
+         * bytes again — and a rejected video re-posted is just a second rejected
+         * video, plus another raw file in the bucket. Clearing it drops back to
+         * the drop zone with the verdict above it, where the message stays put
+         * instead of leaving with a toast that is gone before it is read.
+         */
+        setOutcome({
+          status: latest.status,
+          message:
+            latest.status === "FAILED"
+              ? (latest.failureReason ?? OUTCOME_MESSAGE.FAILED)
+              : OUTCOME_MESSAGE[latest.status],
+        });
+        setFile(null);
+        setPreviewUrl(null);
+        form.reset({
+          title: "",
+          description: "",
+          visibility: values.visibility,
+        });
         return;
       } catch (cause) {
         // An abort is the page going away, not a failure to report; anything
@@ -131,7 +170,7 @@ export function UploadPage() {
         setProgress(null);
         setProcessing(false);
         if (signal.aborted) return;
-        // `useForm` turns this into both the form-level line and an error toast.
+        // `useForm` turns this into an error toast.
         throw cause;
       }
     },
@@ -164,6 +203,7 @@ export function UploadPage() {
     }
 
     setFileError(null);
+    setOutcome(null);
     setFile(next);
     setPreviewUrl(URL.createObjectURL(next));
     // Same courtesy the real Studio does: the filename is a usable first title.
@@ -197,6 +237,10 @@ export function UploadPage() {
         <h1 className="mb-6 text-[24px] leading-8 font-bold text-[var(--tt-text)]">
           Upload video
         </h1>
+
+        {outcome && !file ? (
+          <Outcome status={outcome.status} message={outcome.message} />
+        ) : null}
 
         {!file ? (
           <DropZone accept={ACCEPT} onFile={chooseFile} error={fileError} />
@@ -240,15 +284,10 @@ export function UploadPage() {
                   className={FIELD}
                 >
                   <option value="PUBLIC">Everyone</option>
+                  <option value="FRIENDS">Friends</option>
                   <option value="PRIVATE">Only you</option>
                 </select>
               </Labelled>
-
-              {form.formError && (
-                <p role="alert" className="text-[14px] text-[var(--tt-red-active)]">
-                  {form.formError}
-                </p>
-              )}
 
               <div className="flex gap-3">
                 <button
@@ -280,6 +319,30 @@ export function UploadPage() {
 
       </div>
     </main>
+  );
+}
+
+/**
+ * What became of the last post, shown over the empty drop zone.
+ *
+ * A banner rather than a toast because this is the only place the reason is
+ * ever said: the video is already on the profile in whatever state the verdict
+ * left it, and the uploader's next move — pick a different file, or go contact
+ * support — depends on reading it. It clears when a new file is chosen.
+ */
+function Outcome({ status, message }: { status: VideoStatus; message: string }) {
+  const bad = status === "REJECTED" || status === "FAILED" || status === "TAKEN_DOWN";
+  return (
+    <div
+      role="status"
+      className={`mb-6 rounded-[4px] border px-4 py-3 text-[14px] leading-5 ${
+        bad
+          ? "border-[var(--tt-red-active)]/40 bg-[var(--tt-red-active)]/10 text-[var(--tt-text)]"
+          : "border-white/[0.12] bg-white/[0.06] text-[var(--tt-text)]"
+      }`}
+    >
+      {message}
+    </div>
   );
 }
 
@@ -576,7 +639,7 @@ function TextField({
         <textarea
           {...shared}
           aria-describedby={counterId}
-          className={`${className} h-24 resize-none py-2`}
+          className={`${className} no-scrollbar h-24 resize-none py-2`}
         />
       ) : (
         <input {...shared} aria-describedby={counterId} className={className} />

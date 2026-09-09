@@ -257,10 +257,15 @@ const POLL_DELAYS_MS = [2_000, 5_000, 10_000];
 const POLL_TIMEOUT_MS = 5 * 60_000;
 
 /**
- * Polls a freshly created video until it is watchable. Resolves with the last
- * response seen: `PUBLISHED` on success, `FAILED` when transcoding broke, or
+ * Polls a freshly created video until it has settled. Resolves with the last
+ * response seen: `PUBLISHED` on success, `FAILED` when transcoding broke,
+ * `REJECTED` or `PENDING_REVIEW` when automatic moderation stopped it, or
  * whatever it was still stuck on when the five-minute budget ran out — the
  * caller then shows "still processing, check back later" rather than an error.
+ *
+ * `PENDING_MODERATION` is polled through, not stopped on: it is the gap between
+ * a finished transcode and a verdict, usually a second or two, and stopping
+ * there would report every successful upload as unfinished.
  */
 export async function pollUntilReady(
   videoId: string,
@@ -273,7 +278,7 @@ export async function pollUntilReady(
   onUpdate?.(latest);
 
   while (
-    latest.status === "PROCESSING" &&
+    (latest.status === "PROCESSING" || latest.status === "PENDING_MODERATION") &&
     Date.now() < deadline &&
     !signal?.aborted
   ) {

@@ -14,6 +14,9 @@ import {
   RepostIcon,
 } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/components/ui/toast";
+import { deleteVideo } from "@/lib/api/videos";
+import type { VideoStatus } from "@/lib/api/types";
 import { formatCount } from "@/lib/format";
 import { markOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
@@ -30,6 +33,23 @@ const SORTS = ["Latest", "Popular", "Oldest"] as const;
 type Sort = (typeof SORTS)[number];
 
 const TAB_IDS = TABS.map((entry) => entry.id);
+
+/**
+ * The badge a tile wears when it is not live. Only the owner's grid ever shows
+ * one — every other read path filters to PUBLISHED — and PUBLISHED itself is
+ * absent here on purpose: a live video is the normal case and wears nothing.
+ *
+ * REJECTED and TAKEN_DOWN read the same to the uploader ("Removed") because the
+ * difference is who removed it, which is not theirs to act on either way.
+ */
+const STATUS_LABEL: Partial<Record<VideoStatus, string>> = {
+  PROCESSING: "Processing",
+  PENDING_MODERATION: "Checking",
+  PENDING_REVIEW: "In review",
+  FAILED: "Failed",
+  REJECTED: "Removed",
+  TAKEN_DOWN: "Removed",
+};
 
 /** The tab named by `?tab=`, or "videos" for a missing or unknown value. */
 function tabFromParam(value: string | null): ProfileTab {
@@ -118,12 +138,35 @@ export function ProfileBody({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Ids deleted from this grid since it loaded. The list itself belongs to
+   * whoever passed `profile` in, and a delete is not worth refetching the whole
+   * profile for — hiding the tile is the whole of what the viewer expects, and
+   * the next load has it gone for real.
+   */
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+
   const posts = useMemo(() => {
-    const list = profile.posts[tab];
+    const list = profile.posts[tab].filter((post) => !removed.has(post.id));
     if (sort === "Latest") return list;
     if (sort === "Oldest") return [...list].reverse();
     return [...list].sort((a, b) => b.views - a.views);
-  }, [profile.posts, sort, tab]);
+  }, [profile.posts, removed, sort, tab]);
+
+  /**
+   * Only offered on the owner's own tiles that are not live — a published video
+   * is deleted from its detail page, where the confirm sits next to the video
+   * being deleted rather than next to a thumbnail in a grid of them.
+   */
+  const remove = async (id: string) => {
+    if (!window.confirm("Delete this video? This cannot be undone.")) return;
+    try {
+      await deleteVideo(id);
+      setRemoved((current) => new Set(current).add(id));
+    } catch {
+      toast.error("Could not delete that video. Try again.");
+    }
+  };
 
   const tabRowRef = useRef<HTMLDivElement>(null);
 
@@ -139,7 +182,7 @@ export function ProfileBody({
               aria-selected={id === tab}
               onClick={() => selectTab(id)}
               className={cn(
-                "flex h-11 items-center gap-1 px-8 text-[18px] leading-6 font-semibold transition-colors tt-840:px-4",
+                "flex h-11 items-center gap-1 px-8 text-[18px] leading-6 font-semibold whitespace-nowrap transition-colors tt-1024:px-5 tt-840:px-3",
                 id === tab
                   ? "text-[var(--tt-text)]"
                   : "text-[rgb(255_255_255/0.5)] hover:text-[var(--tt-text)]",
@@ -166,6 +209,7 @@ export function ProfileBody({
             <ProfileTile
               key={post.id}
               post={post}
+              onDelete={isOwner ? () => remove(post.id) : undefined}
               onOpen={() =>
                 markOverlayOrigin(
                   window.location.pathname + window.location.search,
@@ -257,12 +301,16 @@ function SegmentedControl({
 function ProfileTile({
   post,
   onOpen,
+  onDelete,
 }: {
   post: ProfileVideo;
   /** Records the origin route and this grid's id list for the overlay. */
   onOpen: () => void;
+  /** Owner's grid only; the button shows on tiles that are not live. */
+  onDelete?: () => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const label = post.status ? STATUS_LABEL[post.status] : undefined;
 
   const preview = (playing: boolean) => {
     const video = videoRef.current;
@@ -309,6 +357,35 @@ function ProfileTile({
           <PrivacyLockIcon className="h-3.5 w-3.5" />
           <span className="sr-only">Private</span>
         </div>
+      )}
+
+      {label && (
+        <>
+          {/*
+            Dimmed, because the point of the badge is that this tile is not what
+            the rest of the grid is: nobody else can see it.
+          */}
+          <div className="pointer-events-none absolute inset-0 bg-black/50" />
+          <div className="pointer-events-none absolute top-2 right-2 rounded-[4px] bg-black/70 px-1.5 py-1 text-[12px] leading-4 font-semibold text-white">
+            {label}
+          </div>
+          {onDelete && (
+            <button
+              type="button"
+              title="Delete this video"
+              onClick={(event) => {
+                // The tile is a Link; without this the confirm opens behind a
+                // navigation to the video that is about to be deleted.
+                event.preventDefault();
+                event.stopPropagation();
+                onDelete();
+              }}
+              className="absolute right-2 bottom-2 z-10 rounded-[4px] bg-black/70 px-2 py-1 text-[12px] leading-4 font-semibold text-white hover:bg-[var(--tt-red-active)]"
+            >
+              Delete
+            </button>
+          )}
+        </>
       )}
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/30 to-transparent px-3 pt-5 pb-2 text-[14px] font-semibold text-white">
