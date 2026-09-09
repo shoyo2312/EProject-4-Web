@@ -140,21 +140,44 @@ export function VideoDetail({
   const [extraComments, setExtraComments] = useState(0);
   const [extraShares, setExtraShares] = useState(0);
 
-  // Seed the heart for a returning viewer. Mock videos have no backend to ask.
+  /** Set while a like/unlike round trip is open, so a poll landing mid-flight
+   *  does not overwrite the optimistic heart with a server count that has not
+   *  caught up yet — the mutation's own `.then` is the authority in that window. */
+  const likeInFlight = useRef(false);
+
+  /**
+   * Seed the heart for a returning viewer, then keep the count live. The like
+   * count moves whenever anyone else likes the video; `getLikeStatus` returns
+   * the absolute figure, so re-asking it on an interval is the whole of the
+   * refresh — no reload needed. Mock videos have no backend to ask.
+   *
+   * Deliberately dumb polling. A single open video page does not warrant a live
+   * channel; if the comment list needs the same treatment that is where SSE
+   * earns its keep, not here.
+   */
   useEffect(() => {
     if (!isBackendHandle(video.id)) return;
     let cancelled = false;
-    getLikeStatus(video.id)
-      .then((status) => {
-        if (cancelled) return;
-        setLiked(status.liked);
-        setLikeCount(status.likeCount);
-      })
-      .catch(() => {
-        // No session, or the call failed — the heart just starts unfilled.
-      });
+
+    const sync = () =>
+      getLikeStatus(video.id)
+        .then((status) => {
+          if (cancelled || likeInFlight.current) return;
+          setLiked(status.liked);
+          setLikeCount(status.likeCount);
+        })
+        .catch(() => {
+          // No session, or the call failed — leave whatever is on screen.
+        });
+
+    sync();
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") sync();
+    }, 10_000);
+
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
   }, [video.id]);
 
@@ -164,6 +187,7 @@ export function VideoDetail({
       setLikeCount((count) => count + (next ? 1 : -1));
       if (!isBackendHandle(video.id)) return;
 
+      likeInFlight.current = true;
       (next ? likeVideo(video.id) : unlikeVideo(video.id))
         // The optimistic bump above is only a guess at the shared count.
         .then((status) => setLikeCount(status.likeCount))
