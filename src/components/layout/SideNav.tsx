@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ComponentType, type SVGProps } from "react";
+import { useEffect, useState, type ComponentType, type SVGProps } from "react";
 
 import { ActivityDrawer } from "@/components/layout/ActivityDrawer";
 import { SearchDrawer } from "@/components/layout/SearchDrawer";
@@ -20,6 +20,7 @@ import {
   UploadIcon,
 } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
+import { Tooltip } from "@/components/ui/Tooltip";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import { cn } from "@/lib/utils";
 import type { ActivityGroup, FooterSection, NavItem } from "@/types/tiktok";
@@ -72,6 +73,18 @@ export function SideNav({
   // Both drawers sit in the same slot beside the rail, so opening one closes
   // the other, and either one collapses the rail the same way.
   const collapsed = activityOpen || searchOpen;
+  // Below 1024px the rail is icon-only regardless of the drawers (the `tt-1024:`
+  // classes on every label). The row labels only exist in the DOM when neither
+  // this nor `collapsed` is true, so a hover tip stands in for them otherwise.
+  const [railBelow, setRailBelow] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 1024px)");
+    const sync = () => setRailBelow(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+  const iconOnly = collapsed || railBelow;
   // The highlighted row follows the URL, so every new route lights itself up
   // without touching the nav data.
   const pathname = usePathname();
@@ -160,6 +173,7 @@ export function SideNav({
         >
           <SearchField
             collapsed={collapsed}
+            iconOnly={iconOnly}
             onOpen={() => {
               setActivityOpen(false);
               setSearchOpen(true);
@@ -198,6 +212,7 @@ export function SideNav({
               item={item}
               avatarUrl={user?.avatarUrl ?? DEFAULT_AVATAR}
               collapsed={collapsed}
+              iconOnly={iconOnly}
               active={item.href === pathname}
               selected={item.label === "Activity" && activityOpen}
               onClick={
@@ -262,6 +277,7 @@ function NavRow({
   item,
   avatarUrl,
   collapsed = false,
+  iconOnly = false,
   active = false,
   selected = false,
   onClick,
@@ -271,6 +287,9 @@ function NavRow({
   avatarUrl: string;
   /** True while a drawer holds the sidebar at 4.5rem. */
   collapsed?: boolean;
+  /** True whenever the label is off screen — a drawer is open *or* the rail is
+   *  below its 1024px breakpoint. Gates the hover tip that stands in for the label. */
+  iconOnly?: boolean;
   /** The row whose href matches the current route. */
   active?: boolean;
   selected?: boolean;
@@ -336,22 +355,33 @@ function NavRow({
     </span>
   );
 
-  if (item.kind === "link" && item.href) {
-    return (
-      <Link href={item.href} className={cn(collapsed ? "w-10" : "w-full")}>
+  const row =
+    item.kind === "link" && item.href ? (
+      <Link
+        href={item.href}
+        aria-label={iconOnly ? item.label : undefined}
+        className={cn(collapsed ? "w-10" : "w-full")}
+      >
         {inner}
       </Link>
+    ) : (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={iconOnly ? item.label : undefined}
+        aria-expanded={onClick ? selected : undefined}
+        className={cn("text-left", collapsed ? "w-10" : "w-full")}
+      >
+        {inner}
+      </button>
     );
-  }
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-expanded={onClick ? selected : undefined}
-      className={cn("text-left", collapsed ? "w-10" : "w-full")}
-    >
-      {inner}
-    </button>
+
+  return iconOnly ? (
+    <Tooltip label={item.label} placement="right">
+      {row}
+    </Tooltip>
+  ) : (
+    row
   );
 }
 
@@ -457,12 +487,14 @@ function SidebarFooter({
  */
 function SearchField({
   collapsed = false,
+  iconOnly = false,
   onOpen,
 }: {
   collapsed?: boolean;
+  iconOnly?: boolean;
   onOpen: () => void;
 }) {
-  return (
+  const button = (
     <button
       type="button"
       onClick={onOpen}
@@ -484,6 +516,14 @@ function SearchField({
         Search
       </span>
     </button>
+  );
+
+  return iconOnly ? (
+    <Tooltip label="Search" placement="right">
+      {button}
+    </Tooltip>
+  ) : (
+    button
   );
 }
 

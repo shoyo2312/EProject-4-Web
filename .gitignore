@@ -41,6 +41,9 @@ next-env.d.ts
 # Local settings (not project config)
 .claude/settings.local.json
 
+# Agent worktrees
+.claude/worktrees/
+
 # User-specific skills (not part of the template)
 .claude/skills/customize/
 .claude/skills/release/

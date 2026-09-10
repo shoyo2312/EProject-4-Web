@@ -182,7 +182,7 @@ export function ProfileBody({
               aria-selected={id === tab}
               onClick={() => selectTab(id)}
               className={cn(
-                "flex h-11 items-center gap-1 px-8 text-[18px] leading-6 font-semibold whitespace-nowrap transition-colors tt-1024:px-5 tt-840:px-3",
+                "flex h-11 items-center gap-1 px-8 text-[18px] leading-6 font-semibold whitespace-nowrap transition-colors tt-1200:px-5 tt-840:px-3",
                 id === tab
                   ? "text-[var(--tt-text)]"
                   : "text-[rgb(255_255_255/0.5)] hover:text-[var(--tt-text)]",

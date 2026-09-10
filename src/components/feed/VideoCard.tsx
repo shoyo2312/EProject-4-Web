@@ -255,11 +255,13 @@ export function VideoCard({
         "group/player relative self-center overflow-hidden rounded-[1rem] bg-[#111]",
         // Shared by both branches on the live site.
         "grow [aspect-ratio:var(--r)/1]",
-        // The 348px floor is a desktop measurement: below 1024 the column is
-        // narrower than the height-derived width, and an unshrinkable card
-        // pushes the comment column off-screen.
-        "min-w-[348px] [min-height:calc(348px/var(--r))]",
-        "tt-1024:min-w-0 tt-1024:[min-height:0]",
+        // No width floor: the card is sized by the two caps below, and any
+        // floor at all is a min-content the feed column cannot shrink past.
+        // With the comment sidebar out at 1025-1083px the old 348px floor
+        // pushed the page 49px wider than the viewport — a horizontal
+        // scrollbar on the whole site — and just under it the action rail was
+        // clipped instead. The column is the honest limit; let it bind.
+        "min-w-0 [min-height:0]",
         isLandscape
           ? [
               // `max-width: min(availH * r, 60vw)` — the 60vw cap is the only
@@ -275,14 +277,15 @@ export function VideoCard({
               "tt-1280:[max-height:var(--one-column-available-height)]",
             ].join(" ")
           : [
-              // Portrait is always height-bound: no viewport-width cap at all.
-              "[height:var(--one-column-available-height)]",
+              // Portrait is height-bound through `max-height`, never through an
+              // explicit height: with the comment sidebar out, the column can
+              // be narrower than `availH * r`, and a fixed height would beat
+              // the aspect ratio there — the media stretches sideways and the
+              // card's own min-content keeps the row wider than the viewport.
+              // Ratio + the two caps give the same card whenever height is
+              // what binds, and shrink honestly when the column is.
               "[max-height:var(--one-column-available-height)]",
               "[max-width:min(calc(var(--one-column-available-height)*var(--r)),100%)]",
-              // Once the column, not the viewport height, is what binds, the
-              // explicit height would beat the aspect ratio and the media
-              // would be cropped sideways. Let the ratio set it instead.
-              "tt-1024:[height:auto]",
             ].join(" "),
       )}
     >
