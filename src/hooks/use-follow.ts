@@ -7,6 +7,8 @@ import {
   follow,
   isFollowing,
   peekFollowState,
+  setFollowState,
+  subscribeFollowState,
   unfollow,
 } from "@/lib/api/users";
 
@@ -72,6 +74,20 @@ export function useFollow(
     };
   }, [answered, authorId, viewerId, isSelf]);
 
+  // The cache is the tab's single answer, and the same author appears on many
+  // videos at once. Without this, the second card keeps the copy it mounted
+  // with and only a reload agrees with the button that was actually pressed.
+  useEffect(() => {
+    if (!authorId) return;
+
+    return subscribeFollowState(() => {
+      const answer = peekFollowState(authorId);
+      if (answer === undefined) return;
+      setFollowing(answer);
+      setAnswered(true);
+    });
+  }, [authorId]);
+
   const toggle = useCallback(() => {
     if (!requireSignIn()) return;
 
@@ -79,8 +95,14 @@ export function useFollow(
     setFollowing(next);
     if (!authorId) return;
 
+    // Written before the request, not after it: the other cards by this author
+    // repaint now, and a card mounting mid-flight seeds from the cache instead
+    // of walking the following list the server has not updated yet.
+    setFollowState(authorId, next);
+
     (next ? follow(authorId) : unfollow(authorId)).catch(() => {
       // Silent rollback, matching the like button.
+      setFollowState(authorId, !next);
       setFollowing(!next);
     });
   }, [authorId, following, requireSignIn]);

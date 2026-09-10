@@ -99,9 +99,37 @@ export function uploadMyAvatar(file: File): Promise<UserProfileResponse> {
  */
 const followState = new Map<string, boolean>();
 
+/**
+ * Every mounted Follow control. The cache is the single answer for the whole
+ * tab, so a toggle on one video's button has to reach the button on the next
+ * video by the same author — which is already rendered and would otherwise keep
+ * its own stale copy until a reload.
+ */
+const followListeners = new Set<() => void>();
+
+function notifyFollowState(): void {
+  for (const listener of followListeners) listener();
+}
+
+/** Subscribe to follow-cache writes. Returns the unsubscribe. */
+export function subscribeFollowState(listener: () => void): () => void {
+  followListeners.add(listener);
+  return () => {
+    followListeners.delete(listener);
+  };
+}
+
+/** The one way to write the cache: every write has to wake the buttons. */
+export function setFollowState(userId: string, value: boolean): void {
+  if (followState.get(userId) === value) return;
+  followState.set(userId, value);
+  notifyFollowState();
+}
+
 /** Called on sign-in/sign-out: one viewer's answers must not serve another. */
 export function clearFollowCache(): void {
   followState.clear();
+  notifyFollowState();
 }
 
 /**
@@ -119,14 +147,14 @@ export async function follow(userId: string): Promise<FollowResponse> {
       method: "POST",
       auth: "required",
     });
-    followState.set(userId, true);
+    setFollowState(userId, true);
     return result;
   } catch (cause) {
     // `ALREADY_FOLLOWING` is the server saying it already agrees with where
     // the button moved. The cache has to hear that too, or it keeps answering
     // with the stale value that made the call redundant in the first place.
     if (isApiError(cause) && cause.is("ALREADY_FOLLOWING")) {
-      followState.set(userId, true);
+      setFollowState(userId, true);
     }
     throw cause;
   }
@@ -138,10 +166,10 @@ export async function unfollow(userId: string): Promise<void> {
       method: "DELETE",
       auth: "required",
     });
-    followState.set(userId, false);
+    setFollowState(userId, false);
   } catch (cause) {
     if (isApiError(cause) && cause.is("NOT_FOLLOWING")) {
-      followState.set(userId, false);
+      setFollowState(userId, false);
     }
     throw cause;
   }
@@ -240,6 +268,7 @@ export async function getFollowingIds(
 ): Promise<string[]> {
   const ids = await collectIds((page) => getFollowing(viewerId, page, 50), max);
   for (const userId of ids) followState.set(userId, true);
+  notifyFollowState();
   return ids;
 }
 
@@ -314,11 +343,12 @@ export async function isFollowing(
   for (let page = 0; page < maxPages; page += 1) {
     const result = await getFollowing(viewerId, page, 50);
     for (const profile of result.content) followState.set(profile.userId, true);
+    notifyFollowState();
 
     if (result.content.some((profile) => profile.userId === userId)) return true;
 
     if (page + 1 >= result.page.totalPages) {
-      followState.set(userId, false);
+      setFollowState(userId, false);
       return false;
     }
   }
