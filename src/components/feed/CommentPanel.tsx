@@ -24,13 +24,34 @@ import {
   listComments,
   unlikeComment,
 } from "@/lib/api/interactions";
+import { getAccessToken } from "@/lib/api/tokens";
 import { getFollowing, searchUsers } from "@/lib/api/users";
 import type { UserProfileResponse } from "@/lib/api/types";
+import { getStompClient, onStompConnect } from "@/lib/realtime/stompClient";
 import { cn } from "@/lib/utils";
 import { formatCount, formatRelativeTime } from "@/lib/format";
 import { CURRENT_USER } from "@/lib/mock-feed";
 import { toast } from "@/components/ui/toast";
 import type { Comment } from "@/types/tiktok";
+
+/**
+ * One message on `/topic/videos.{videoId}.comments`. Mirrors
+ * `CommentFrame` in chat-service — see that file for field docs. No
+ * `parentId`: the backend doesn't distinguish a reply here, so every
+ * realtime arrival lands at the top level regardless of what it actually
+ * replied to, same simplification the frame shape forces.
+ */
+type CommentRealtimeFrame = {
+  type: "comment.created" | "comment.deleted";
+  videoId: string;
+  commentId: string;
+  userId?: string;
+  content?: string;
+  createdAt?: string;
+};
+
+/** Matches interaction-service `AddCommentRequest` `@Size(max = 150)`. */
+const COMMENT_MAX_LENGTH = 150;
 
 /** Removes a comment wherever it lives — top-level, or nested one reply deep. */
 function removeCommentById(list: Comment[], id: string): Comment[] {
@@ -41,6 +62,13 @@ function removeCommentById(list: Comment[], id: string): Comment[] {
         ? { ...comment, replies: removeCommentById(comment.replies, id) }
         : comment,
     );
+}
+
+/** True if a comment with `id` is already in the list — top-level or one reply deep. */
+function hasCommentId(list: Comment[], id: string): boolean {
+  return list.some(
+    (comment) => comment.id === id || comment.replies?.some((reply) => reply.id === id),
+  );
 }
 
 /** Swaps an optimistic id for the real one once the server responds — top-level or one reply deep. */
@@ -279,6 +307,12 @@ export function CommentPanel({
   const isDetail = variant === "detail";
   const isBackend = isBackendHandle(videoId);
   const { user } = useSession();
+  // Same pattern as `Feed.tsx`'s `wsToken`: read during render so a token
+  // change (login, or a rotation that happens to land on a re-render) is a
+  // dependency the realtime-subscribe effect below can react to — reading it
+  // only inside that effect would close over whatever `getStompClient` built
+  // at mount and never notice a later swap.
+  const token = user ? getAccessToken() : null;
   const [comments, setComments] = useState<Comment[]>(isBackend ? [] : initialComments);
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   /** Newest locally-posted comment — drives the slide-in and the auto-expand. */
@@ -349,6 +383,65 @@ export function CommentPanel({
     };
   }, [videoId, isBackend, commentsDisabled, toUiComment]);
 
+  /**
+   * The panel is only ever mounted while the sidebar is open for this video
+   * (`Feed` unmounts it on close and re-keys it per video), so subscribing
+   * here for the panel's lifetime already matches "subscribe while open,
+   * unsubscribe when it's shut" — no separate open/close flag needed.
+   */
+  useEffect(() => {
+    if (!isBackend) return;
+    if (!token) return;
+
+    const client = getStompClient(token);
+    let subscription: { unsubscribe: () => void } | null = null;
+
+    const onComment = (frame: CommentRealtimeFrame) => {
+      if (frame.type === "comment.deleted") {
+        setComments((current) => removeCommentById(current, frame.commentId));
+        return;
+      }
+      // Deduped by id, not by "is this my own comment": the same viewer can
+      // have this panel open on two devices (or two tabs), and a userId guard
+      // dropped the frame in *every* one of them, not just the tab that
+      // posted — see `postBackendComment`, which resolves the matching race
+      // in the other direction by yielding to whichever of the frame or the
+      // HTTP response lands first.
+      resolveAuthor(frame.userId ?? "")
+        .then((author) => {
+          setComments((current) => {
+            if (current.some((comment) => comment.id === frame.commentId)) return current;
+            const ui: Comment = {
+              id: frame.commentId,
+              author,
+              text: frame.content ?? "",
+              timestamp: formatRelativeTime(frame.createdAt ?? new Date().toISOString()),
+              likes: 0,
+            };
+            return [ui, ...current];
+          });
+          onCommentAdded();
+        })
+        .catch(() => {
+          // Author lookup failed — skip rather than show a comment with no author.
+        });
+    };
+
+    const subscribe = () => {
+      if (!client.connected) return;
+      subscription = client.subscribe(`/topic/videos.${videoId}.comments`, (message) => {
+        onComment(JSON.parse(message.body) as CommentRealtimeFrame);
+      });
+    };
+    subscribe();
+    const unsubscribeConnect = onStompConnect(subscribe);
+
+    return () => {
+      unsubscribeConnect();
+      subscription?.unsubscribe();
+    };
+  }, [videoId, isBackend, token, onCommentAdded]);
+
   const loadMore = async () => {
     if (!cursor || loadingMore) return;
     setLoadingMore(true);
@@ -399,7 +492,18 @@ export function CommentPanel({
         text,
         target?.replyToCommentId ?? target?.parentId,
       );
-      setComments((current) => remapCommentId(current, optimistic.id, saved.commentId));
+      setComments((current) =>
+        // The realtime frame for this same comment can land before this HTTP
+        // response does — it is a broadcast to every device, including this
+        // one, and nothing about it waits for this request to finish. When
+        // that happens `saved.commentId` is already in the list (inserted by
+        // the subscription above), so remapping would leave two rows with
+        // the same id; drop the placeholder and keep the one already there
+        // instead.
+        hasCommentId(current, saved.commentId)
+          ? removeCommentById(current, optimistic.id)
+          : remapCommentId(current, optimistic.id, saved.commentId),
+      );
     } catch {
       // Roll back both the optimistic row and the count bump, and say so —
       // unlike a like, a lost comment leaves no visible trace to explain it.
@@ -1065,11 +1169,20 @@ function CommentComposer({
   const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
   const [mentionResults, setMentionResults] = useState<UserProfileResponse[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [limitHit, setLimitHit] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
   const canPost = value.trim() !== "";
   const { user, openLogin } = useSession();
   const mentionQuery = mention?.query ?? null;
   const mentionOpen = mention !== null && mentionResults.length > 0;
+
+  /* The "max reached" hint is transient — clear it a couple seconds after the
+     last blocked keystroke. */
+  useEffect(() => {
+    if (!limitHit) return;
+    const id = window.setTimeout(() => setLimitHit(false), 3500);
+    return () => window.clearTimeout(id);
+  }, [limitHit]);
 
   /* Any click outside the bar dismisses whichever tray is open. */
   useEffect(() => {
@@ -1181,7 +1294,22 @@ function CommentComposer({
   }
 
   return (
-    <div className="flex flex-none flex-col pt-3">
+    <div className="relative flex flex-none flex-col pt-3">
+      {/* Max-length hint — floats above the bar (opaque background, z-30) so its
+          show/hide neither reflows the comment list nor shows through it.
+          Kept mounted and toggled by class so it animates in AND out. */}
+      <p
+        role="status"
+        aria-hidden={!limitHit}
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-full z-30 mb-1.5 rounded-[8px] border border-[var(--tt-divider)] bg-[var(--tt-sheet-3)] px-3 py-1.5 text-[12px] leading-[16px] text-[#f6708a] shadow-lg transition-all duration-150 ease-out",
+          limitHit ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0",
+        )}
+      >
+        Bình luận tối đa {COMMENT_MAX_LENGTH} ký tự.
+      </p>
+
+
       {/* Reply banner — names the thread the composer is aimed at. */}
       {replyTo && (
         <div className="mb-2 flex animate-[tt-comment-in_200ms_ease-out] items-center justify-between rounded-[8px] bg-[var(--tt-field)] px-3 py-1.5">
@@ -1211,21 +1339,47 @@ function CommentComposer({
         alt={user.nickname}
         width={32}
         height={32}
-        className="h-8 w-8 flex-none rounded-full object-cover"
+        // Hidden from the tablet width down, as the live site does: at 18rem
+        // the sidebar has no room for it and the input is what the viewer came
+        // for. The avatar is decorative here — the viewer knows who they are.
+        className="h-8 w-8 flex-none rounded-full object-cover tt-1024:hidden"
       />
 
-      <div className="flex h-[42px] flex-1 items-center gap-1 rounded-[22px] bg-[var(--tt-field)] px-2">
+      {/*
+        `min-w-0`: the input's own min-width:0 lets the input shrink, but this
+        field is itself a flex item whose automatic minimum is its content's —
+        which still counts the input's default 20-character width. Without it
+        the bar is 342px wide inside a 256px panel at tablet widths, and the
+        emoji/@/send controls sit outside the sidebar, clipped and unclickable.
+      */}
+      <div className="flex h-[42px] min-w-0 flex-1 items-center gap-1 rounded-[22px] bg-[var(--tt-field)] px-2">
         <input
           ref={ref}
           value={value}
+          maxLength={COMMENT_MAX_LENGTH}
           onChange={(event) => {
             setValue(event.target.value);
             syncMention(event.target.value, event.target.selectionStart);
+            if (event.target.value.length < COMMENT_MAX_LENGTH) setLimitHit(false);
           }}
           onSelect={(event) =>
             syncMention(event.currentTarget.value, event.currentTarget.selectionStart)
           }
           onKeyDown={(event) => {
+            /* At the cap, a printable keystroke with no selection to replace is
+               silently dropped by `maxLength` — surface it as a small hint. */
+            const el = event.currentTarget;
+            if (
+              el.value.length >= COMMENT_MAX_LENGTH &&
+              el.selectionStart === el.selectionEnd &&
+              event.key.length === 1 &&
+              !event.ctrlKey &&
+              !event.metaKey &&
+              !event.altKey
+            ) {
+              setLimitHit(true);
+            }
+
             /* While the mention list is up it owns the arrows and Enter. */
             if (mentionOpen) {
               if (event.key === "ArrowDown" || event.key === "ArrowUp") {

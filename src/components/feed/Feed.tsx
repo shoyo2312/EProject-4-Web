@@ -1,15 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ActionRail } from "@/components/feed/ActionRail";
 import { CommentPanel } from "@/components/feed/CommentPanel";
 import { VideoCard } from "@/components/feed/VideoCard";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
+import { useLikeDebounce } from "@/hooks/useLikeDebounce";
+import { useVideoRealtime, type VideoFrame } from "@/hooks/useVideoRealtime";
 import { isBackendHandle } from "@/lib/api/adapters";
 import { useSavedVideos } from "@/hooks/use-saved-videos";
 import { getLikeStatuses, likeVideo, unlikeVideo } from "@/lib/api/interactions";
+import { getAccessToken } from "@/lib/api/tokens";
+import { getVideo } from "@/lib/api/videos";
 import { cn } from "@/lib/utils";
 import type { Comment, FeedVideo } from "@/types/tiktok";
 
@@ -78,6 +82,24 @@ export function Feed({
   // the gate only has to exist once.
   const { user, requireSignIn } = useSession();
 
+  /**
+   * Confirmed once a per-video `useLikeDebounce` (see `FeedVideoCard` below)
+   * gets a real response back — `likedIds` is that hook's `serverLiked`, and
+   * has to move in lockstep with `likeCounts` or the offset each card
+   * computes (`liked !== serverLiked ? ±1 : 0`) double-counts against a
+   * `likeCounts` entry that already includes the change.
+   */
+  const onLikeConfirmed = useCallback((id: string, liked: boolean, likeCount: number) => {
+    setLikeCounts((current) => ({ ...current, [id]: likeCount }));
+    setLikedIds((current) => {
+      if (current.has(id) === liked) return current;
+      const next = new Set(current);
+      if (liked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
   // Seed hearts for videos the viewer already liked in a previous session.
   // Backend videos only — mock ids have no like-status endpoint to ask.
   useEffect(() => {
@@ -112,66 +134,54 @@ export function Feed({
   }, [videos, user]);
 
   /**
-   * Moves one video's count by `delta` from whatever is on screen — the server
-   * count if we have one, the count the feed was rendered with otherwise.
+   * Snapshot of the latest `counts` realtime frame per video id — a video not
+   * present here just shows the count the feed already knows. `state` frames
+   * (status/visibility changed) don't carry counts; they drive `hiddenIds`
+   * below instead.
    */
-  const bumpCount = useCallback(
-    (id: string, delta: number) => {
-      const rendered = videos.find((video) => video.id === id)?.stats.likes ?? 0;
-      setLikeCounts((current) => ({
-        ...current,
-        [id]: (current[id] ?? rendered) + delta,
-      }));
-    },
+  const [liveFrames, setLiveFrames] = useState<Record<string, VideoFrame>>({});
+
+  /**
+   * A `state` frame said this video's status/visibility may no longer pass
+   * the whitelist every read path applies (see CLAUDE.md §Kiểm duyệt video tự
+   * động) — set from a refetch through the same API client every other read
+   * uses, never from the frame's own fields, which are a hint and not the
+   * truth.
+   */
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
+
+  const handleRealtimeFrame = useCallback((frame: VideoFrame) => {
+    if (frame.type === "counts") {
+      setLiveFrames((current) => ({ ...current, [frame.videoId]: frame }));
+      return;
+    }
+    getVideo(frame.videoId)
+      .then((video) => {
+        const visible = video.status === "PUBLISHED" && video.visibility === "PUBLIC";
+        setHiddenIds((current) => {
+          if (current.has(frame.videoId) === !visible) return current;
+          const next = new Set(current);
+          if (visible) next.delete(frame.videoId);
+          else next.add(frame.videoId);
+          return next;
+        });
+      })
+      .catch(() => {
+        // Transient — leave visibility as it was until the next frame.
+      });
+  }, []);
+
+  // The realtime scope is the whole rendered feed, not just the playing card.
+  const backendVideoIds = useMemo(
+    () => videos.filter((video) => isBackendHandle(video.id)).map((video) => video.id),
     [videos],
   );
+  const wsToken = user ? getAccessToken() : null;
+  useVideoRealtime(backendVideoIds, wsToken, handleRealtimeFrame);
 
-  const setLike = useCallback(
-    (id: string, liked: boolean) => {
-      setLikedIds((current) => {
-        const next = new Set(current);
-        if (liked) next.add(id);
-        else next.delete(id);
-        return next;
-      });
-      bumpCount(id, liked ? 1 : -1);
-      if (!isBackendHandle(id)) return;
-
-      (liked ? likeVideo(id) : unlikeVideo(id))
-        // The reply carries the true count, which the optimistic bump only
-        // guessed — it is stale the moment anyone else likes the same video.
-        .then((status) =>
-          setLikeCounts((current) => ({ ...current, [id]: status.likeCount })),
-        )
-        .catch(() => {
-          // Silent rollback — see brainstorming design: no toast, just undo.
-          setLikedIds((current) => {
-            const next = new Set(current);
-            if (liked) next.delete(id);
-            else next.add(id);
-            return next;
-          });
-          bumpCount(id, liked ? -1 : 1);
-        });
-    },
-    [bumpCount],
-  );
-
-  const toggleLike = useCallback(
-    (id: string) => {
-      if (!requireSignIn()) return;
-      setLike(id, !likedIds.has(id));
-    },
-    [likedIds, requireSignIn, setLike],
-  );
-
-  const likeOnly = useCallback(
-    (id: string) => {
-      if (!requireSignIn()) return;
-      if (likedIds.has(id)) return;
-      setLike(id, true);
-    },
-    [likedIds, requireSignIn, setLike],
+  const visibleVideos = useMemo(
+    () => videos.filter((video) => !hiddenIds.has(video.id)),
+    [videos, hiddenIds],
   );
 
   /**
@@ -306,78 +316,28 @@ export function Feed({
           // both matching the measured article widths exactly.
           className="no-scrollbar relative h-screen w-full snap-y snap-mandatory overflow-y-scroll pr-16 tt-1024:pr-0"
         >
-          {videos.map((video, index) => (
-            <article
+          {visibleVideos.map((video, index) => (
+            <FeedVideoCard
               key={video.id}
-              className={cn(
-                // Live site uses the two-axis value `start center` (block/inline).
-                "relative flex snap-always items-center justify-center gap-4 overflow-hidden py-4",
-                "[scroll-snap-align:start_center]",
-                "[min-height:calc(100vh-var(--one-column-top-content-height)-var(--one-column-item-bottom-content-height))]",
-                "mx-auto transition-[margin,height,width,padding] duration-300 ease-[var(--tt-ease)]",
-                commentsOpen
-                  ? // With the sidebar open the live site swaps in an emotion class
-                    // whose only padding declaration is `padding-inline: 1rem` — all
-                    // four breakpoint branches below collapse into it.
-                    "[padding-inline:1rem]"
-                  : [
-                      // >1280 — mirrors the base rule on the live site
-                      "[padding-inline-start:calc(var(--feed-nav-button-width)+1rem)]",
-                      "[padding-inline-end:calc(15rem-var(--feed-nav-button-width)-1rem)]",
-                      // <=1280
-                      "tt-1280:[padding-inline-start:1rem]",
-                      "tt-1280:[padding-inline-end:calc(15rem-(var(--feed-nav-button-width)*2)-1rem)]",
-                      // <=1024
-                      "tt-1024:[padding-inline-start:var(--feed-nav-button-width)]",
-                      "tt-1024:[padding-inline-end:1rem]",
-                      // <=768
-                      "tt-768:[padding-inline:1rem]",
-                    ].join(" "),
-              )}
-            >
-              {/*
-               * `.DivContentFlexLayout` — full article content width, centred,
-               * 16px gap; the card grows into it and its own max-width decides
-               * where it stops. Cross-axis alignment is the one thing that
-               * differs by orientation, measured live at 1920×936:
-               *   portrait  align-items: end     rail bottom-aligned  (y 1476)
-               *   landscape align-items: center  rail centred         (y 252)
-               */}
-              <div
-                className={cn(
-                  "flex w-full flex-1 justify-center gap-4",
-                  video.width > video.height ? "items-center" : "items-end",
-                )}
-              >
-                <VideoCard
-                  video={video}
-                  distance={index - activeIndex}
-                  onLike={() => likeOnly(video.id)}
-                  onActive={() => {
-                    setActiveIndex(index);
-                    followActiveVideo(video);
-                  }}
-                  // The feed's counterpart to auto scroll on `/video/[id]`:
-                  // there, finishing a clip navigates to the next video; here
-                  // it scrolls the snap container on by one card. Passing this
-                  // also turns `loop` off, which is what lets `ended` fire.
-                  onEnded={autoScroll ? () => scrollByItem(1) : undefined}
-                />
-                <ActionRail
-                  video={video}
-                  commentCount={
-                    video.stats.comments + (extraComments[video.id] ?? 0)
-                  }
-                  commentsOpen={commentsOpen && commentVideo?.id === video.id}
-                  onCommentClick={() => toggleComments(video)}
-                  liked={likedIds.has(video.id)}
-                  likes={likeCounts[video.id] ?? video.stats.likes}
-                  onToggleLike={() => toggleLike(video.id)}
-                  saved={isSaved(video.id)}
-                  onToggleSave={() => toggleSave(video.id)}
-                />
-              </div>
-            </article>
+              video={video}
+              index={index}
+              activeIndex={activeIndex}
+              commentsOpen={commentsOpen && commentVideo?.id === video.id}
+              commentCount={video.stats.comments + (extraComments[video.id] ?? 0)}
+              liveFrame={liveFrames[video.id]}
+              baseLikeCount={likeCounts[video.id] ?? video.stats.likes}
+              serverLiked={likedIds.has(video.id)}
+              requireSignIn={requireSignIn}
+              onLikeConfirmed={onLikeConfirmed}
+              onActive={() => {
+                setActiveIndex(index);
+                followActiveVideo(video);
+              }}
+              onEnded={autoScroll ? () => scrollByItem(1) : undefined}
+              onCommentClick={() => toggleComments(video)}
+              saved={isSaved(video.id)}
+              onToggleSave={() => toggleSave(video.id)}
+            />
           ))}
         </div>
 
@@ -415,6 +375,151 @@ export function Feed({
         )}
       </aside>
     </main>
+  );
+}
+
+/**
+ * One card + its action rail. Pulled out of `Feed`'s `.map` because the like
+ * state now lives behind `useLikeDebounce` — a hook, which cannot be called a
+ * variable number of times inside a loop in the parent's own render. Each
+ * mounted instance owns exactly one `useLikeDebounce` call, so the feed's
+ * length can change across renders without breaking the rules of hooks.
+ */
+function FeedVideoCard({
+  video,
+  index,
+  activeIndex,
+  commentsOpen,
+  commentCount,
+  liveFrame,
+  baseLikeCount,
+  serverLiked,
+  requireSignIn,
+  onLikeConfirmed,
+  onActive,
+  onEnded,
+  onCommentClick,
+  saved,
+  onToggleSave,
+}: {
+  video: FeedVideo;
+  index: number;
+  activeIndex: number;
+  /** True when this video's comment sidebar is the one currently open. */
+  commentsOpen: boolean;
+  /** Mock count plus anything the viewer posted this session or the server broadcast. */
+  commentCount: number;
+  /** Latest `counts` realtime frame for this video, if one has arrived. */
+  liveFrame?: VideoFrame;
+  /** Server-confirmed like count, before this card's own pending toggle. */
+  baseLikeCount: number;
+  /** Server-confirmed liked state — `useLikeDebounce`'s `serverLiked`. */
+  serverLiked: boolean;
+  requireSignIn: () => boolean;
+  onLikeConfirmed: (id: string, liked: boolean, likeCount: number) => void;
+  onActive: () => void;
+  onEnded?: () => void;
+  onCommentClick: () => void;
+  saved: boolean;
+  onToggleSave: () => void;
+}) {
+  const send = useCallback(
+    async (liked: boolean) => {
+      if (!isBackendHandle(video.id)) return;
+      const status = liked ? await likeVideo(video.id) : await unlikeVideo(video.id);
+      // The reply carries the true state and count — the debounced tap only
+      // guessed, and is stale the moment anyone else likes the same video.
+      onLikeConfirmed(video.id, status.liked, status.likeCount);
+    },
+    [video.id, onLikeConfirmed],
+  );
+
+  const { liked, toggle } = useLikeDebounce(serverLiked, send);
+
+  const toggleLike = useCallback(() => {
+    if (!requireSignIn()) return;
+    toggle();
+  }, [requireSignIn, toggle]);
+
+  const likeOnly = useCallback(() => {
+    if (!requireSignIn()) return;
+    if (!liked) toggle();
+  }, [requireSignIn, liked, toggle]);
+
+  const likesBase = liveFrame?.likeCount ?? baseLikeCount;
+  const displayLikes = liked === serverLiked ? likesBase : likesBase + (liked ? 1 : -1);
+  const displayComments = liveFrame?.commentCount ?? commentCount;
+
+  return (
+    <article
+      className={cn(
+        // Live site uses the two-axis value `start center` (block/inline).
+        "relative flex snap-always items-center justify-center gap-4 overflow-hidden py-4",
+        "[scroll-snap-align:start_center]",
+        "[min-height:calc(100vh-var(--one-column-top-content-height)-var(--one-column-item-bottom-content-height))]",
+        "mx-auto transition-[margin,height,width,padding] duration-300 ease-[var(--tt-ease)]",
+        commentsOpen
+          ? // With the sidebar open the live site swaps in an emotion class
+            // whose only padding declaration is `padding-inline: 1rem` — all
+            // four breakpoint branches below collapse into it.
+            "[padding-inline:1rem]"
+          : [
+              // >1280 — mirrors the base rule on the live site
+              "[padding-inline-start:calc(var(--feed-nav-button-width)+1rem)]",
+              "[padding-inline-end:calc(15rem-var(--feed-nav-button-width)-1rem)]",
+              // <=1280
+              "tt-1280:[padding-inline-start:1rem]",
+              "tt-1280:[padding-inline-end:calc(15rem-(var(--feed-nav-button-width)*2)-1rem)]",
+              // <=1024
+              "tt-1024:[padding-inline-start:var(--feed-nav-button-width)]",
+              "tt-1024:[padding-inline-end:1rem]",
+              // <=768
+              "tt-768:[padding-inline:1rem]",
+            ].join(" "),
+      )}
+    >
+      {/*
+       * `.DivContentFlexLayout` — full article content width, centred,
+       * 16px gap; the card grows into it and its own max-width decides
+       * where it stops. Cross-axis alignment is the one thing that
+       * differs by orientation, measured live at 1920×936:
+       *   portrait  align-items: end     rail bottom-aligned  (y 1476)
+       *   landscape align-items: center  rail centred         (y 252)
+       */}
+      <div
+        className={cn(
+          // `min-w-0`: without it this row's automatic minimum is the
+          // card's min-content, which the feed column cannot shrink
+          // past — that is what put a horizontal scrollbar on the page
+          // between 1025px and 1083px with the comment sidebar open.
+          "flex w-full min-w-0 flex-1 justify-center gap-4",
+          video.width > video.height ? "items-center" : "items-end",
+        )}
+      >
+        <VideoCard
+          video={video}
+          distance={index - activeIndex}
+          onLike={likeOnly}
+          onActive={onActive}
+          // The feed's counterpart to auto scroll on `/video/[id]`:
+          // there, finishing a clip navigates to the next video; here
+          // it scrolls the snap container on by one card. Passing this
+          // also turns `loop` off, which is what lets `ended` fire.
+          onEnded={onEnded}
+        />
+        <ActionRail
+          video={video}
+          commentCount={displayComments}
+          commentsOpen={commentsOpen}
+          onCommentClick={onCommentClick}
+          liked={liked}
+          likes={displayLikes}
+          onToggleLike={toggleLike}
+          saved={saved}
+          onToggleSave={onToggleSave}
+        />
+      </div>
+    </article>
   );
 }
 
