@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { RepostBadge } from "@/components/feed/RepostBadge";
 import {
   VideoContextMenu,
   type MenuAnchor,
@@ -12,7 +13,7 @@ import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { useClampOverflow } from "@/hooks/use-clamp-overflow";
 import { useHlsSource, isHlsManifest } from "@/hooks/use-hls-source";
-import { useVideoPlayback } from "@/hooks/use-video-playback";
+import { useVideoPlayback, type VideoPlayback } from "@/hooks/use-video-playback";
 import { useWatchSession } from "@/hooks/use-watch-session";
 import { cn } from "@/lib/utils";
 import { formatDuration } from "@/lib/format";
@@ -55,6 +56,18 @@ interface VideoCardProps {
    */
   onActive?: () => void;
   /**
+   * The in-card seek bar along the player's bottom edge. `/video/[id]` draws
+   * its own, full-column-width one below the media (as the live site does), so
+   * it turns this off rather than showing two timelines.
+   */
+  showProgressBar?: boolean;
+  /**
+   * Hands the card's playback state and controls to the parent, so a
+   * play/pause button and a seek bar living *outside* the card can drive the
+   * same element. Called on mount and whenever the clock moves.
+   */
+  onPlayback?: (playback: VideoPlayback) => void;
+  /**
    * This card's offset from the one being watched — `0` for it, `1` for the
    * card directly below, negative for cards already scrolled past. Only the
    * first two fetch any media; see `useHlsSource`. Defaults to `0` for the
@@ -94,6 +107,8 @@ export function VideoCard({
   showCaption = true,
   showVolumeControl = true,
   showContextMenu = true,
+  showProgressBar = true,
+  onPlayback,
   onEnded,
   onActive,
 }: VideoCardProps) {
@@ -115,6 +130,14 @@ export function VideoCard({
   const ratio = video.width / video.height;
   const isLandscape = ratio > 1;
 
+  const playback = useVideoPlayback({
+    durationSeconds: video.durationSeconds,
+    muted,
+    volume,
+    hasSource,
+    playbackRate: speed,
+    onAutoplayBlocked: mute,
+  });
   const {
     containerRef,
     videoRef,
@@ -124,14 +147,24 @@ export function VideoCard({
     duration,
     togglePlay,
     seekToFraction,
-  } = useVideoPlayback({
-    durationSeconds: video.durationSeconds,
-    muted,
-    volume,
-    hasSource,
-    playbackRate: speed,
-    onAutoplayBlocked: mute,
+  } = playback;
+
+  /*
+   * Publish the playback surface to a parent that draws its own controls.
+   * Deliberately keyed on the *values*, not on the object — `useVideoPlayback`
+   * returns a fresh object every render, so depending on it would publish on
+   * every render, and a parent that stores what it receives would re-render
+   * this card and publish again, forever.
+   */
+  const playbackRef = useRef(playback);
+  const onPlaybackRef = useRef(onPlayback);
+  useEffect(() => {
+    playbackRef.current = playback;
+    onPlaybackRef.current = onPlayback;
   });
+  useEffect(() => {
+    onPlaybackRef.current?.(playbackRef.current);
+  }, [isPlaying, currentTime, duration, togglePlay, seekToFraction]);
 
   // Held in a ref so a parent that re-creates the callback each render cannot
   // re-announce the same card as newly active.
@@ -389,6 +422,12 @@ export function VideoCard({
                 : "bg-[linear-gradient(transparent_0%,rgba(0,0,0,0.5)_100%)]",
             )}
           />
+          {/* Above the owner line — RepostBadge renders nothing unless the viewer or
+              someone they follow reposted this video. */}
+          <div className="relative mb-2 flex justify-start">
+            <RepostBadge videoId={video.id} className="pointer-events-auto" />
+          </div>
+
           <p className="relative text-[17px] font-medium leading-[22.1px] text-[var(--tt-icon)]">
             {video.author.nickname}
           </p>
@@ -434,12 +473,14 @@ export function VideoCard({
         </div>
       </div>
 
-      <ProgressBar
-        fraction={fraction}
-        currentTime={currentTime}
-        duration={duration}
-        onSeek={seekToFraction}
-      />
+      {showProgressBar && (
+        <ProgressBar
+          fraction={fraction}
+          currentTime={currentTime}
+          duration={duration}
+          onSeek={seekToFraction}
+        />
+      )}
 
       {menuAnchor && (
         <VideoContextMenu

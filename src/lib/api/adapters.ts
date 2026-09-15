@@ -14,9 +14,10 @@ import type { Author, FeedVideo, ProfileVideo, UserProfile } from "@/types/tikto
  *     account's route handle is its numeric id — `/@123456789012345` — which
  *     resolves through `GET /users/{userId}`. Only the signed-in viewer knows
  *     their own username, which comes from auth-service.
- *  2. **No media dimensions or duration until transcoding lands.** The card
- *     needs an aspect ratio to size itself, so portrait 1080×1920 is assumed
- *     until `durationSeconds` and a thumbnail exist.
+ *  2. **No duration until transcoding lands.** `durationSeconds` is 0 until
+ *     the file has been probed. `width`/`height` are real once transcoding
+ *     finishes; portrait 1080×1920 is only the fallback before that, or for
+ *     videos uploaded before video-service measured them.
  *  3. **No music, no bookmark counter, no baseline share counter.** Bookmarking
  *     has no backing service at all. Sharing does — interaction-service records
  *     it — but `VideoResponse` carries no denormalized share count the way it
@@ -115,13 +116,16 @@ export function videoToFeedVideo(
     // Empty until transcoding produces the HLS manifest — VideoCard falls back
     // to a poster-only card, which is exactly the PROCESSING state.
     videoUrl: video.hlsUrl ?? "",
-    width: 1080,
-    height: 1920,
+    // video-service reports the true, rotation-corrected size once transcoding
+    // finishes; portrait is only the fallback for videos it hasn't measured.
+    width: video.width ?? 1080,
+    height: video.height ?? 1920,
     // Same reason as `videoToProfileVideo`: video-service has no thumbnails
     // yet, and one shared fallback made every card in the feed the same
     // picture. Empty means "no poster" — `VideoCard` handles it.
     posterUrl: video.thumbnailUrl ?? "",
     durationSeconds: video.durationSeconds ?? 0,
+    createdAt: video.createdAt,
     isFollowing: options.isFollowing ?? false,
     hasTranslation: false,
     visibility: video.visibility,

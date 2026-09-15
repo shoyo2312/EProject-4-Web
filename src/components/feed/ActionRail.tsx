@@ -34,7 +34,9 @@ export function ActionRail({
   likes,
   onToggleLike,
   saved,
+  saveCount,
   onToggleSave,
+  compact = false,
 }: {
   video: FeedVideo;
   /** Mock count plus anything the viewer posted this session. */
@@ -54,7 +56,19 @@ export function ActionRail({
   onToggleLike: () => void;
   /** Controlled by `Feed` so one saved-set answers every card on the page. */
   saved: boolean;
+  /**
+   * Authoritative total from the realtime counts frame — it already includes
+   * this viewer's own save. Undefined until the first frame lands, and on a
+   * mock video, where the static base plus the local toggle stands in.
+   */
+  saveCount?: number;
   onToggleSave: () => void;
+  /**
+   * The `/video/[id]` rail, measured on the live site: 32px wide instead of 48,
+   * bare 20px glyphs with no circular field behind them, and no music disc —
+   * it floats in the player column's right gutter, not over the media.
+   */
+  compact?: boolean;
 }) {
   const {
     isSelf,
@@ -75,16 +89,25 @@ export function ActionRail({
   };
 
   return (
-    <section className="flex w-12 flex-none flex-col items-center gap-2">
-      {/* Avatar + follow badge — 48×48 with a 24×24 badge overlapping the base */}
-      <div className="relative mb-3 h-12 w-12">
+    <section
+      className={cn(
+        "flex flex-none flex-col items-center",
+        compact ? "w-8 gap-0" : "w-12 gap-2",
+      )}
+    >
+      {/* Avatar + follow badge — 48×48 with a 24×24 badge overlapping the base
+          (32×32 with a 16×16 badge in the compact rail). */}
+      <div className={cn("relative", compact ? "mb-2.5 h-8 w-8" : "mb-3 h-12 w-12")}>
         <Link href={`/@${video.author.username}`} aria-label={video.author.nickname}>
           <Image
             src={video.author.avatarUrl}
             alt={video.author.nickname}
             width={48}
             height={48}
-            className="h-12 w-12 rounded-full object-cover"
+            className={cn(
+              "rounded-full object-cover",
+              compact ? "h-8 w-8" : "h-12 w-12",
+            )}
           />
         </Link>
         {/* Hidden on your own video: following yourself is not a thing the
@@ -100,7 +123,8 @@ export function ActionRail({
             }
             aria-pressed={following}
             className={cn(
-              "absolute -bottom-2.5 left-1/2 flex h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full transition-colors duration-200",
+              "absolute left-1/2 flex -translate-x-1/2 items-center justify-center rounded-full transition-colors duration-200",
+              compact ? "-bottom-2 h-4 w-4" : "-bottom-2.5 h-6 w-6",
               following
                 ? "bg-white hover:bg-white/85"
                 : "bg-[var(--tt-red)] hover:bg-[var(--tt-red-hover)]",
@@ -126,6 +150,7 @@ export function ActionRail({
         onClick={onToggleLike}
         active={liked}
         ariaLabel="Like"
+        compact={compact}
       >
         <HeartIcon className="h-[21px] w-[21px]" />
       </RailButton>
@@ -136,6 +161,7 @@ export function ActionRail({
         active={commentsOpen}
         activeColor="text-[var(--tt-icon)]"
         ariaLabel="Comments"
+        compact={compact}
       >
         <CommentIcon className="h-[21px] w-[21px]" />
       </RailButton>
@@ -144,11 +170,12 @@ export function ActionRail({
           video_counters has no save_count column, because a save is private
           and nothing public ever shows how many people made one. */}
       <RailButton
-        label={formatCount(video.stats.bookmarks + (saved ? 1 : 0))}
+        label={formatCount(saveCount ?? video.stats.bookmarks + (saved ? 1 : 0))}
         onClick={onToggleSave}
         active={saved}
         activeColor="text-[#facc15]"
         ariaLabel="Bookmark"
+        compact={compact}
       >
         <BookmarkIcon className="h-[21px] w-[21px]" />
       </RailButton>
@@ -159,27 +186,31 @@ export function ActionRail({
         active={shareOpen}
         activeColor="text-[var(--tt-icon)]"
         ariaLabel="Share video"
+        compact={compact}
       >
         <ShareIcon className="h-[21px] w-[21px]" />
       </RailButton>
 
       {shareOpen && (
         <ShareSheet
+          videoId={video.id}
           shares={video.stats.shares + extraShares}
           onClose={() => setShareOpen(false)}
         />
       )}
 
-      {/* Spinning music disc */}
-      <div className="mt-1 h-12 w-12 animate-[spin_6s_linear_infinite] rounded-full border-[6px] border-[#1f1f1f] bg-black">
-        <Image
-          src={video.music.coverUrl}
-          alt={video.music.title}
-          width={48}
-          height={48}
-          className="h-full w-full rounded-full object-cover"
-        />
-      </div>
+      {/* Spinning music disc — the live detail rail has none. */}
+      {!compact && (
+        <div className="mt-1 h-12 w-12 animate-[spin_6s_linear_infinite] rounded-full border-[6px] border-[#1f1f1f] bg-black">
+          <Image
+            src={video.music.coverUrl}
+            alt={video.music.title}
+            width={48}
+            height={48}
+            className="h-full w-full rounded-full object-cover"
+          />
+        </div>
+      )}
     </section>
   );
 }
@@ -191,6 +222,7 @@ function RailButton({
   active = false,
   activeColor = "text-[var(--tt-red)]",
   ariaLabel,
+  compact = false,
 }: {
   children: React.ReactNode;
   label: string;
@@ -198,9 +230,16 @@ function RailButton({
   active?: boolean;
   activeColor?: string;
   ariaLabel: string;
+  /** See `ActionRail` — 24×52 item, bare glyph, no circular field. */
+  compact?: boolean;
 }) {
   return (
-    <div className="flex h-[78px] w-12 flex-col items-center">
+    <div
+      className={cn(
+        "flex flex-col items-center",
+        compact ? "h-[52px] w-8" : "h-[78px] w-12",
+      )}
+    >
       <button
         type="button"
         onClick={onClick}
@@ -210,14 +249,21 @@ function RailButton({
           // 48×48 `.tux-interaction-container`, rgba(255,255,255,.13), 21px glyph.
           // Its :hover lives in a cross-origin TUX stylesheet that could not be
           // read; neutral-3 (.19) is a reconstruction, not an extraction.
-          "flex h-12 w-12 items-center justify-center rounded-full bg-[var(--tt-field)] transition-colors",
-          "hover:bg-[var(--tt-shape-neutral-3)]",
+          "flex items-center justify-center rounded-full transition-colors",
+          compact
+            ? "h-8 w-8 hover:opacity-80"
+            : "h-12 w-12 bg-[var(--tt-field)] hover:bg-[var(--tt-shape-neutral-3)]",
           active ? activeColor : "text-[var(--tt-icon)]",
         )}
       >
         {children}
       </button>
-      <strong className="mt-1 text-[12px] font-bold leading-4 text-[var(--tt-text-secondary)]">
+      <strong
+        className={cn(
+          "font-bold text-[var(--tt-text-secondary)]",
+          compact ? "text-[12px] leading-4" : "mt-1 text-[12px] leading-4",
+        )}
+      >
         {label}
       </strong>
     </div>

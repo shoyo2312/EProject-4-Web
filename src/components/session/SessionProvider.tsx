@@ -15,6 +15,8 @@ import { LoginModal } from "@/components/session/LoginModal";
 import { toast } from "@/components/ui/toast";
 import { authorFromMe } from "@/lib/api/adapters";
 import { clearAuthorCache } from "@/lib/api/authors";
+import { clearRepostContextCache } from "@/lib/repost-context";
+import { clearCommentCache } from "@/lib/comment-cache";
 import * as authApi from "@/lib/api/auth";
 import { isApiError } from "@/lib/api/errors";
 import { getAccessToken, getRefreshToken, onSessionEnded } from "@/lib/api/tokens";
@@ -172,6 +174,8 @@ export function SessionProvider({
     () =>
       onSessionEnded(() => {
         clearAuthorCache();
+        clearCommentCache();
+        clearRepostContextCache();
         usersApi.clearFollowCache();
         setUser(null);
         setLoading(false);
@@ -223,6 +227,8 @@ export function SessionProvider({
     // will not answer without a token — and those must not outlive the moment
     // a token exists.
     clearAuthorCache();
+    clearCommentCache();
+    clearRepostContextCache();
     usersApi.clearFollowCache();
     try {
       await loadMe();
@@ -273,6 +279,8 @@ export function SessionProvider({
       await authApi.logout();
     } finally {
       clearAuthorCache();
+      clearCommentCache();
+      clearRepostContextCache();
       usersApi.clearFollowCache();
       setUser(null);
       router.push("/");

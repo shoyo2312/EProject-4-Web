@@ -8,12 +8,13 @@ import { VideoCard } from "@/components/feed/VideoCard";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { useLikeDebounce } from "@/hooks/useLikeDebounce";
-import { useVideoRealtime, type VideoFrame } from "@/hooks/useVideoRealtime";
+import { useVideoRealtime, withLikeCount, type VideoFrame } from "@/hooks/useVideoRealtime";
 import { isBackendHandle } from "@/lib/api/adapters";
 import { useSavedVideos } from "@/hooks/use-saved-videos";
 import { getLikeStatuses, likeVideo, unlikeVideo } from "@/lib/api/interactions";
 import { getAccessToken } from "@/lib/api/tokens";
 import { getVideo } from "@/lib/api/videos";
+import { loadFirstCommentPage } from "@/lib/comment-cache";
 import { cn } from "@/lib/utils";
 import type { Comment, FeedVideo } from "@/types/tiktok";
 
@@ -82,24 +83,6 @@ export function Feed({
   // the gate only has to exist once.
   const { user, requireSignIn } = useSession();
 
-  /**
-   * Confirmed once a per-video `useLikeDebounce` (see `FeedVideoCard` below)
-   * gets a real response back — `likedIds` is that hook's `serverLiked`, and
-   * has to move in lockstep with `likeCounts` or the offset each card
-   * computes (`liked !== serverLiked ? ±1 : 0`) double-counts against a
-   * `likeCounts` entry that already includes the change.
-   */
-  const onLikeConfirmed = useCallback((id: string, liked: boolean, likeCount: number) => {
-    setLikeCounts((current) => ({ ...current, [id]: likeCount }));
-    setLikedIds((current) => {
-      if (current.has(id) === liked) return current;
-      const next = new Set(current);
-      if (liked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
-
   // Seed hearts for videos the viewer already liked in a previous session.
   // Backend videos only — mock ids have no like-status endpoint to ask.
   useEffect(() => {
@@ -149,6 +132,29 @@ export function Feed({
    * truth.
    */
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
+
+  /**
+   * Confirmed once a per-video `useLikeDebounce` (see `FeedVideoCard` below)
+   * gets a real response back — `likedIds` is that hook's `serverLiked`, and
+   * has to move in lockstep with `likeCounts` or the offset each card
+   * computes (`liked !== serverLiked ? ±1 : 0`) double-counts against a
+   * `likeCounts` entry that already includes the change.
+   */
+  const onLikeConfirmed = useCallback((id: string, liked: boolean, likeCount: number) => {
+    setLikeCounts((current) => ({ ...current, [id]: likeCount }));
+    // The last counts frame was read before this like landed, and the card
+    // prefers the frame over `likeCounts` — see `withLikeCount`. Left alone it
+    // pulls the count back to its pre-like value for the ~150ms until the next
+    // frame arrives, which is the flicker this corrects.
+    setLiveFrames((current) => withLikeCount(current, id, likeCount));
+    setLikedIds((current) => {
+      if (current.has(id) === liked) return current;
+      const next = new Set(current);
+      if (liked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
 
   const handleRealtimeFrame = useCallback((frame: VideoFrame) => {
     if (frame.type === "counts") {
@@ -215,9 +221,10 @@ export function Feed({
   }, []);
 
   /**
-   * `--comment-sidebar-width` lives on <html> because the TopBar has to read it
-   * too and is not a descendant of this component. Writing a class on the root
-   * element is a sync to an external system, not derived render state.
+   * `.comments-open` on <html> drives `--comment-sidebar-width` (globals.css)
+   * and lets TopBar unmount itself — both sit outside this component tree.
+   * Writing a class on the root is a sync to an external system, not derived
+   * render state.
    */
   useEffect(() => {
     const root = document.documentElement;
@@ -297,6 +304,21 @@ export function Feed({
     return () => list.removeEventListener("scroll", onScroll);
   }, [onReachEnd]);
 
+  /**
+   * With the panel open, warm the next card's comments while the viewer is
+   * still on this one. The fetch is the same cached one the panel makes on
+   * mount, so scrolling down finds the page already there and paints without
+   * a skeleton; nothing is fetched while the panel is shut.
+   */
+  useEffect(() => {
+    if (!commentsOpen) return;
+    const next = visibleVideos[activeIndex + 1];
+    if (!next || !isBackendHandle(next.id) || next.commentsDisabled) return;
+    loadFirstCommentPage(next.id).catch(() => {
+      // A prefetch that fails changes nothing: the panel retries on open.
+    });
+  }, [commentsOpen, activeIndex, visibleVideos]);
+
   const scrollByItem = useCallback((direction: 1 | -1) => {
     const list = listRef.current;
     if (!list) return;
@@ -366,6 +388,11 @@ export function Feed({
             comments={comments[commentVideo.id] ?? []}
             commentsDisabled={commentVideo.commentsDisabled}
             commentCount={
+              // Same source of truth as the card: the counts frame is
+              // authoritative, the local delta only covers the gap before the
+              // first frame lands. Adding the delta on top of the frame
+              // double-counted the poster's own comment.
+              liveFrames[commentVideo.id]?.commentCount ??
               commentVideo.stats.comments + (extraComments[commentVideo.id] ?? 0)
             }
             onClose={closeComments}
@@ -516,6 +543,7 @@ function FeedVideoCard({
           likes={displayLikes}
           onToggleLike={toggleLike}
           saved={saved}
+          saveCount={liveFrame?.saveCount}
           onToggleSave={onToggleSave}
         />
       </div>

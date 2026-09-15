@@ -207,6 +207,7 @@ export function VideoContextMenu({
 
       {shareOpen && (
         <ShareSheet
+          videoId={video.id}
           shares={video.stats.shares}
           onClose={() => {
             setShareOpen(false);

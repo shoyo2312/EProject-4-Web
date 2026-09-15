@@ -329,7 +329,7 @@ function NavRow({
           ) : Icon ? (
             <Icon
               className={cn(
-                "h-[19px] w-[19px]",
+                "h-[26px] w-[26px]",
                 active ? "text-[var(--tt-red-active)]" : "text-[var(--tt-icon)]",
               )}
             />

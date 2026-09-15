@@ -168,6 +168,7 @@
   --tt-placeholder: rgb(255 255 255 / 0.4); /* --ui-text-placeholder */
   --tt-field: rgb(255 255 255 / 0.13); /* --ui-shape-neutral-4, search bg */
   --tt-shape-neutral-3: rgb(255 255 255 / 0.19);
+  --tt-comment-panel: rgb(255 255 255 / 0.12); /* detail comment panel surface */
   --tt-sheet-3: #3a3a3a;
   --tt-divider: rgb(255 255 255 / 0.12); /* collapsed sidebar border */
 
@@ -405,4 +406,45 @@
   --normal-bg: #2a1116;
   --normal-border: rgb(254 44 85 / 0.45);
   --normal-text: #ff8fa5;
+}
+
+@keyframes equalizer {
+  0%,
+  100% {
+    transform: scaleY(0.5);
+  }
+
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.animate-equalizer-1,
+.animate-equalizer-2,
+.animate-equalizer-3,
+.animate-equalizer-4,
+.animate-equalizer-5 {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: equalizer 0.8s ease-in-out infinite;
+}
+
+.animate-equalizer-1 {
+  animation-delay: 0s;
+}
+
+.animate-equalizer-2 {
+  animation-delay: 0.15s;
+}
+
+.animate-equalizer-3 {
+  animation-delay: 0.3s;
+}
+
+.animate-equalizer-4 {
+  animation-delay: 0.45s;
+}
+
+.animate-equalizer-5 {
+  animation-delay: 0.6s;
 }

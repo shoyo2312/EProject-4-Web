@@ -6,6 +6,8 @@ import type {
   CommentPageResponse,
   CommentResponse,
   LikeStatusResponse,
+  RepostContextResponse,
+  RepostStatusResponse,
   SaveStatusResponse,
   ShareResponse,
   VideoIdPageResponse,
@@ -107,11 +109,47 @@ export function shareVideo(videoId: string): Promise<ShareResponse> {
   });
 }
 
+/** `POST /interactions/videos/{videoId}/repost`. */
+export function repostVideo(videoId: string): Promise<RepostStatusResponse> {
+  return apiFetch<RepostStatusResponse>(`/interactions/videos/${videoId}/repost`, {
+    method: "POST",
+    auth: "required",
+  });
+}
+
+/** `DELETE /interactions/videos/{videoId}/repost` — the badge's "Remove repost". */
+export function unrepostVideo(videoId: string): Promise<RepostStatusResponse> {
+  return apiFetch<RepostStatusResponse>(`/interactions/videos/${videoId}/repost`, {
+    method: "DELETE",
+    auth: "required",
+  });
+}
+
+/**
+ * `GET /interactions/videos/repost-context/batch` — who reposted each of these videos,
+ * one hop for a whole feed page, same reasoning as `getLikeStatuses`.
+ */
+export function getRepostContexts(videoIds: string[]): Promise<RepostContextResponse[]> {
+  if (videoIds.length === 0) return Promise.resolve([]);
+  return apiFetch<RepostContextResponse[]>("/interactions/videos/repost-context/batch", {
+    auth: "required",
+    query: { ids: videoIds.join(",") },
+  });
+}
+
 /**
  * How many comments one page holds — named so a skeleton can cap itself at
  * what a single fetch can actually return.
  */
 export const COMMENT_PAGE_SIZE = 20;
+
+/**
+ * The first page is smaller than the rest: only about five comments fit the
+ * panel, so a 20-row page spends most of its latency on rows nobody sees yet.
+ * Ten paints roughly twice as fast and the scroll sentinel fetches the rest at
+ * full `COMMENT_PAGE_SIZE` before the viewer reaches the bottom.
+ */
+export const COMMENT_FIRST_PAGE_SIZE = 10;
 
 /**
  * `GET /interactions/videos/{videoId}/comments` — cursor paged, newest first.
@@ -128,6 +166,28 @@ export function listComments(
     query: { cursor, size },
     signal,
   });
+}
+
+/** How many replies one "View more" click pulls down. */
+export const REPLY_PAGE_SIZE = 3;
+
+/**
+ * `GET /interactions/videos/{videoId}/comments/{commentId}/replies` — one
+ * thread, oldest first, cursor paged. Split from `listComments`, which returns
+ * top-level comments only: a thread of 200 replies is not something every
+ * comment page should carry.
+ */
+export function listReplies(
+  videoId: string,
+  commentId: string,
+  cursor?: string,
+  size = REPLY_PAGE_SIZE,
+  signal?: AbortSignal,
+): Promise<CommentPageResponse> {
+  return apiFetch<CommentPageResponse>(
+    `/interactions/videos/${videoId}/comments/${commentId}/replies`,
+    { auth: "optional", query: { cursor, size }, signal },
+  );
 }
 
 /**
@@ -235,6 +295,25 @@ export function listLikedVideos(
 ): Promise<VideoIdPageResponse> {
   return apiFetch<VideoIdPageResponse>("/interactions/users/me/likes", {
     auth: "required",
+    query: { cursor, size },
+    signal,
+  });
+}
+
+/**
+ * `GET /interactions/users/{userId}/reposts` — cursor paged, same shape as the saves list.
+ *
+ * Public, unlike likes and saves: a repost is shown on the reposter's profile to everyone, so
+ * this takes whose profile is open rather than assuming "me".
+ */
+export function listRepostedVideos(
+  userId: string,
+  cursor?: string,
+  size = 50,
+  signal?: AbortSignal,
+): Promise<VideoIdPageResponse> {
+  return apiFetch<VideoIdPageResponse>(`/interactions/users/${userId}/reposts`, {
+    auth: "optional",
     query: { cursor, size },
     signal,
   });

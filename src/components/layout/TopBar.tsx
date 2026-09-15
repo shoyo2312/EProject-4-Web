@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 
@@ -10,10 +10,9 @@ import { useSession } from "@/components/session/SessionProvider";
  * Fixed top-right actions: "Get Coins", "Get App", avatar.
  * Sits above the feed; the sidebar owns the top-left corner.
  *
- * The right offset tracks `--comment-sidebar-width` so the bar slides out of
- * the comment sidebar's way instead of overlapping its header — on the live
- * site the panel is `top: 0` with nothing above it. It eases `linear` to stay
- * locked to the sidebar, which uses the same easing.
+ * Hidden entirely while the feed comment panel is open — `Feed` toggles
+ * `.comments-open` on <html>, and the live site keeps the panel at `top: 0`
+ * with nothing floating above its header.
  *
  * Signed out, the trailing slot holds a Log in pill instead of the avatar —
  * measured on the live guest bar at 76 × 32, `border-radius: 999px`,
@@ -23,6 +22,19 @@ import { useSession } from "@/components/session/SessionProvider";
 export function TopBar() {
   const { user, isLoading, openLogin } = useSession();
   const pathname = usePathname();
+  const [commentsOpen, setCommentsOpen] = useState(false);
+
+  // `Feed` writes `.comments-open` on <html> so chrome outside the feed tree
+  // can react without a shared React context. Observe the class rather than
+  // reading it once — the bar mounts before the feed effect may have run.
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setCommentsOpen(root.classList.contains("comments-open"));
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   // `/login` and `/signup` are the only routes with chrome of their own: the
   // live pages drop the sidebar and this bar for a header holding just the
@@ -40,8 +52,13 @@ export function TopBar() {
     return null;
   }
 
+  // Comment sidebar owns the top-right corner while open; do not render over it.
+  if (commentsOpen) {
+    return null;
+  }
+
   return (
-    <div className="fixed top-3 z-[99] flex items-center gap-2 right-[calc(1.5rem+var(--comment-sidebar-width))] transition-[right] duration-300 ease-linear tt-1024:right-[calc(0.75rem+var(--comment-sidebar-width))]">
+    <div className="fixed top-3 right-6 z-[99] flex items-center gap-2 tt-1024:right-3">
       {/*<button*/}
       {/*  type="button"*/}
       {/*  className="flex h-9 items-center gap-2 rounded-[8px] px-3 text-[15px] font-medium text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)]"*/}

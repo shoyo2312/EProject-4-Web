@@ -1,7 +1,7 @@
 "use client";
 
 import { authorFromProfile, unknownAuthor } from "@/lib/api/adapters";
-import { getProfile } from "@/lib/api/users";
+import { MAX_PROFILE_BATCH, getProfile, getProfiles } from "@/lib/api/users";
 import { hasSession } from "@/lib/api/tokens";
 import type { Author } from "@/types/tiktok";
 
@@ -38,12 +38,60 @@ export function resolveAuthor(userId: string): Promise<Author> {
   return pending;
 }
 
-/** Resolves a batch of ids, de-duplicated, into an id → author map. */
+/**
+ * Resolves a batch of ids, de-duplicated, into an id → author map.
+ *
+ * One request per 100 uncached ids rather than one per id: a comment page of
+ * 20 comments by 20 people used to cost 20 round trips to user-service, and
+ * now costs one. Ids already in flight or cached from an earlier call are
+ * reused, so only the genuinely new ones go on the wire.
+ *
+ * The batch endpoint drops ids the viewer cannot see (missing profile, or a
+ * block either way), so an id absent from the answer falls back to the same
+ * placeholder `resolveAuthor` uses, and its cache entry is dropped so a later
+ * lookup can retry.
+ */
 export async function resolveAuthors(
   userIds: string[],
 ): Promise<Map<string, Author>> {
   const unique = [...new Set(userIds)];
-  const authors = await Promise.all(unique.map(resolveAuthor));
+  if (!hasSession()) {
+    return new Map(unique.map((userId) => [userId, unknownAuthor(userId)]));
+  }
+
+  const missing = unique.filter((userId) => !cache.has(userId));
+  for (let i = 0; i < missing.length; i += MAX_PROFILE_BATCH) {
+    const chunk = missing.slice(i, i + MAX_PROFILE_BATCH);
+    const byId = getProfiles(chunk)
+      .then(
+        (profiles) =>
+          new Map(
+            profiles.map(
+              (profile) =>
+                [String(profile.userId), authorFromProfile(profile)] as const,
+            ),
+          ),
+      )
+      // A failed batch must not poison every id in it — each falls through to
+      // the placeholder below, which un-caches itself and so retries later.
+      .catch(() => new Map<string, Author>());
+
+    for (const userId of chunk) {
+      cache.set(
+        userId,
+        byId.then((authors) => {
+          const author = authors.get(userId);
+          if (author) return author;
+          cache.delete(userId);
+          return unknownAuthor(userId);
+        }),
+      );
+    }
+  }
+
+  const authors = await Promise.all(
+    unique.map((userId) => cache.get(userId) ?? resolveAuthor(userId)),
+  );
 
   return new Map(unique.map((userId, index) => [userId, authors[index]]));
 }

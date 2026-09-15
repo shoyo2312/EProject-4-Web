@@ -78,3 +78,25 @@ export function useVideoRealtime(
     };
   }, [videoIds, token]);
 }
+
+/**
+ * Folds a like count the client just got straight from the server into the last
+ * counts frame for that video.
+ *
+ * The card renders `liveFrame.likeCount ?? likeCounts[id]`, and a frame is a
+ * snapshot with no version to compare — so the frame that predates the like
+ * response keeps winning until the next one lands (~150ms), which is the
+ * 1 -> 2 -> 1 -> 2 flicker. The response is newer than any frame received
+ * before it, so it replaces the stale number; every later frame still wins.
+ */
+export function withLikeCount(
+  frames: Record<string, VideoFrame>,
+  videoId: string,
+  likeCount: number,
+): Record<string, VideoFrame> {
+  const frame = frames[videoId];
+  if (!frame || frame.likeCount === likeCount) {
+    return frames;
+  }
+  return { ...frames, [videoId]: { ...frame, likeCount } };
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
 
   CodeXml,
@@ -14,9 +14,23 @@ import {
 } from "lucide-react";
 
 import { CloseIcon } from "@/components/icons";
+import { toast } from "@/components/ui/toast";
+import { useSession } from "@/components/session/SessionProvider";
+import { authorFromProfile } from "@/lib/api/adapters";
+import { isApiError } from "@/lib/api/errors";
+import { repostVideo } from "@/lib/api/interactions";
+import { setRepostedByMe } from "@/lib/repost-context";
+import { getFollowing, searchUsers } from "@/lib/api/users";
 import { cn } from "@/lib/utils";
 import { SHARE_FRIENDS, SHARE_TARGETS } from "@/lib/mock-feed";
 import type { Author, ShareTarget } from "@/types/tiktok";
+
+/** How many tiles the friends row shows, following or search results alike —
+ * matches the mock row it replaces and the sheet's own scroller width. */
+const FRIEND_LIMIT = 8;
+
+/** Same debounce as the comment panel's @mention search — see CommentPanel. */
+const SEARCH_DEBOUNCE_MS = 250;
 
 /**
  * The share sheet is a **modal**, not a popover — clicking the rail's share
@@ -47,13 +61,23 @@ import type { Author, ShareTarget } from "@/types/tiktok";
  *   └ label               12px / 400 / 15.6px, centred, #f6f6f6
  */
 export function ShareSheet({
+  videoId,
   shares,
   onClose,
 }: {
+  /** Mock video has no backend id to repost/share against — those tiles fall
+   *  back to a local toast rather than a request that has nothing to hit. */
+  videoId: string;
   /** Rendered into the title row's count on the live sheet's parent button. */
   shares: number;
   onClose: () => void;
 }) {
+  const { user, openLogin } = useSession();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [friends, setFriends] = useState<Author[]>(SHARE_FRIENDS);
+  const [results, setResults] = useState<Author[] | null>(null);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -61,6 +85,89 @@ export function ShareSheet({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
+
+  /* Real accounts once signed in — the mock trio (see SHARE_FRIENDS) stands
+     in for a guest, who has no following list to show. */
+  useEffect(() => {
+    if (!user) return;
+    getFollowing(user.userId, 0, FRIEND_LIMIT)
+      .then((page) => setFriends(page.content.map(authorFromProfile)))
+      .catch(() => {
+        // Left on the mock trio — a failed fetch should not empty the row.
+      });
+  }, [user]);
+
+  /* The search icon's own row: user-service's search over every account,
+     same debounce-and-abort shape as the comment panel's @mention lookup. */
+  useEffect(() => {
+    if (!searchOpen || !user) return;
+    const trimmed = query.trim();
+    // Clearing back to the friends row on an empty query is a direct response
+    // to the keystroke that emptied it — handled in the input's own onChange,
+    // not here, so this effect only ever fetches.
+    if (!trimmed) return;
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      searchUsers(trimmed, FRIEND_LIMIT, controller.signal)
+        .then((page) => {
+          if (controller.signal.aborted) return;
+          setResults(page.content.filter((p) => p.userId !== user.userId).map(authorFromProfile));
+        })
+        .catch(() => {
+          // Aborted or failed — the previous results stay rather than blinking out.
+        });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchOpen, query, user]);
+
+  const toggleSearch = () => {
+    setSearchOpen((open) => !open);
+    setQuery("");
+    setResults(null);
+  };
+
+  const isMockVideo = !/^\d+$/.test(videoId);
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        new URL(`/video/${videoId}`, window.location.origin).href,
+      );
+      toast.success("Link copied.");
+    } catch {
+      toast.warning("Couldn’t copy the link.");
+    }
+  };
+
+  const repost = async () => {
+    if (!user) {
+      openLogin();
+      return;
+    }
+    if (isMockVideo) {
+      toast.success("Reposted.");
+      return;
+    }
+    try {
+      await repostVideo(videoId);
+      setRepostedByMe(videoId, user.userId, true);
+      toast.success("Reposted.");
+    } catch (cause) {
+      if (isApiError(cause) && cause.is("REPOST_RATE_LIMITED")) {
+        toast.warning("You’re reposting too fast — try again later.");
+      } else {
+        toast.warning("Couldn’t repost this video.");
+      }
+    }
+  };
+
+  const targetActions: Partial<Record<string, () => void>> = {
+    copy: copyLink,
+    repost,
+  };
 
   return (
     <div
@@ -78,14 +185,31 @@ export function ShareSheet({
         <div className="flex h-[52px] items-center px-2">
           <button
             type="button"
-            aria-label="Search friends"
+            onClick={toggleSearch}
+            aria-label={searchOpen ? "Close search" : "Search friends"}
+            aria-pressed={searchOpen}
             className="flex h-11 w-11 flex-none items-center justify-center rounded-[4px] text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)]"
           >
             <Search className="h-6 w-6" strokeWidth={2} />
           </button>
-          <h2 className="flex-1 text-center text-[17px] font-medium leading-[25.5px] text-[var(--tt-text)]">
-            Share to
-          </h2>
+          {searchOpen ? (
+            <input
+              autoFocus
+              type="text"
+              value={query}
+              onChange={(event) => {
+                const value = event.target.value;
+                setQuery(value);
+                if (!value.trim()) setResults(null);
+              }}
+              placeholder="Search friends"
+              className="h-9 flex-1 rounded-full bg-[var(--tt-field)] px-4 text-[15px] text-[var(--tt-text)] outline-none placeholder:text-[var(--tt-text-secondary)]"
+            />
+          ) : (
+            <h2 className="flex-1 text-center text-[17px] font-medium leading-[25.5px] text-[var(--tt-text)]">
+              Share to
+            </h2>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -98,7 +222,7 @@ export function ShareSheet({
 
         <div className="flex flex-col gap-3">
           <ScrollRow>
-            {SHARE_FRIENDS.map((friend) => (
+            {(results ?? friends).map((friend) => (
               <FriendTile key={friend.username} friend={friend} />
             ))}
           </ScrollRow>
@@ -107,7 +231,7 @@ export function ShareSheet({
 
           <ScrollRow>
             {SHARE_TARGETS.map((target) => (
-              <TargetTile key={target.id} target={target} />
+              <TargetTile key={target.id} target={target} onClick={targetActions[target.id]} />
             ))}
           </ScrollRow>
         </div>
@@ -129,14 +253,17 @@ function ScrollRow({ children }: { children: React.ReactNode }) {
 
 function Tile({
   label,
+  onClick,
   children,
 }: {
   label: string;
+  onClick?: () => void;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
+      onClick={onClick}
       className="flex w-[88px] flex-none flex-col items-center px-3 pb-2 pt-3"
     >
       <span className="flex w-16 flex-col items-center gap-1.5">
@@ -177,12 +304,16 @@ function FriendTile({ friend }: { friend: Author }) {
  *
  * Lucide v1 dropped its brand icons (no `Facebook`, `Twitter`, `Linkedin`), so
  * substituting logos from the icon set was not an option regardless.
+ *
+ * `onClick` is only set for the tiles TikTok owns end to end here (Copy,
+ * Repost) — the third-party targets have no share-intent wiring yet and stay
+ * inert, same as before.
  */
-function TargetTile({ target }: { target: ShareTarget }) {
+function TargetTile({ target, onClick }: { target: ShareTarget; onClick?: () => void }) {
   const Glyph = NATIVE_GLYPHS[target.id];
 
   return (
-    <Tile label={target.label}>
+    <Tile label={target.label} onClick={onClick}>
       <span
         className={cn(
           "flex h-16 w-16 flex-none items-center justify-center rounded-full",

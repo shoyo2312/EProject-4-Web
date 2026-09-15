@@ -189,6 +189,13 @@ export interface VideoResponse {
   commentsDisabled: boolean;
   /** Why the transcode failed; present only when `status === "FAILED"`. */
   failureReason?: string | null;
+  /**
+   * The size a player should show the video at, corrected for rotation. Null
+   * while transcoding, when the file could not be measured, or for videos
+   * uploaded before this field existed — fall back to portrait, not zero.
+   */
+  width: number | null;
+  height: number | null;
   createdAt: string;
 }
 
@@ -294,12 +301,29 @@ export interface ShareResponse {
   shareCount: number;
 }
 
+/** Repost is a toggle, like a like — not an event log like a share. */
+export interface RepostStatusResponse {
+  videoId: string;
+  reposted: boolean;
+  repostCount: number;
+}
+
 /**
- * A comment as interaction-service stores it: one flat list per video with no
- * per-comment like count. `userId` is all it knows about the author — the
- * client resolves a name and avatar itself via `resolveAuthor`. Replies live in
- * the same list; `parentId` is `null` for a top-level comment and the top-level
- * comment's id for a reply (TikTok nests exactly one level).
+ * What the repost badge renders from. `reposterIds` is a capped, unordered sample of
+ * who reposted the video; the client keeps whichever of them the viewer follows.
+ */
+export interface RepostContextResponse {
+  videoId: string;
+  repostedByMe: boolean;
+  reposterIds: string[];
+}
+
+/**
+ * A comment as interaction-service stores it. `userId` is all it knows about
+ * the author — the client resolves a name and avatar itself via `resolveAuthor`.
+ * `parentId` is `null` for a top-level comment and the top-level comment's id
+ * for a reply (TikTok nests exactly one level); the two live behind separate
+ * endpoints, `listComments` and `listReplies`.
  */
 export interface CommentResponse {
   commentId: string;
@@ -313,6 +337,8 @@ export interface CommentResponse {
   likeCount: number;
   /** Whether the requesting user has liked it — always false for an unauthenticated listing. */
   likedByMe: boolean;
+  /** Live replies behind "View N replies". Always 0 on a reply — nesting is one level deep. */
+  replyCount: number;
 }
 
 /** `POST` / `DELETE .../comments/{commentId}/like` — the new state plus the denormalised tally. */

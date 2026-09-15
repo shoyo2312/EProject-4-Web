@@ -79,6 +79,12 @@ export interface FeedVideo {
   posterUrl: string;
   /** Duration in seconds — drives the "00:02 / 01:39" progress label. */
   durationSeconds: number;
+  /**
+   * When the video was posted, ISO-8601. Carried only for backend videos — the
+   * mock feed has no upload date — so the detail page's "· 3d ago" is dropped
+   * rather than invented when it is absent.
+   */
+  createdAt?: string;
   /** Whether the signed-in user already follows this author. */
   isFollowing: boolean;
   /** Whether a "See translation" affordance appears under the caption. */
@@ -113,11 +119,14 @@ export interface Comment {
   /** Marks the video's own creator — renders the "Creator" pill. */
   isCreator?: boolean;
   /**
-   * Replies to this comment. TikTok nests **exactly one level**: a reply has no
-   * `replies` of its own, and replying to a reply still lands in this same flat
-   * list. Present only on top-level comments.
+   * Replies to this comment that are currently loaded — the thread is fetched
+   * a page at a time, so this is usually shorter than `replyCount`. TikTok
+   * nests **exactly one level**: a reply has no `replies` of its own, and
+   * replying to a reply still lands in this same list.
    */
   replies?: Comment[];
+  /** Replies the server says this comment has — the number behind "View N replies". */
+  replyCount?: number;
 }
 
 /**

@@ -1,7 +1,11 @@
 /** Display formatters shared by every page. No data, no React. */
 
-/** TikTok's own abbreviation style: 355.8K, 20.1K, 6834 (no suffix under 10k). */
+/** TikTok's own abbreviation style: 1.2B, 355.8K, 20.1K, 6834 (no suffix under 10k). */
 export function formatCount(n: number): string {
+  if (n >= 1_000_000_000) {
+    const b = n / 1_000_000_000;
+    return `${b >= 100 ? Math.round(b) : b.toFixed(1).replace(/\.0$/, "")}B`;
+  }
   if (n >= 1_000_000) {
     const m = n / 1_000_000;
     return `${m >= 100 ? Math.round(m) : m.toFixed(1).replace(/\.0$/, "")}M`;

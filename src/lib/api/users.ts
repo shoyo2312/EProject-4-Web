@@ -28,6 +28,28 @@ export function getProfile(userId: string): Promise<UserProfileResponse> {
 }
 
 /**
+ * Cap on one `getProfiles` call, mirroring user-service's `MAX_BATCH_IDS`.
+ * More than this is a `TooManyProfileIdsException`, so callers chunk.
+ */
+export const MAX_PROFILE_BATCH = 100;
+
+/**
+ * `GET /api/v1/users?ids=1,2,3` — hydrates a list of ids in one request.
+ *
+ * Ids the viewer cannot see (no profile, or a block either way) are **absent
+ * from the answer** rather than failing it, so the list can come back shorter
+ * than `userIds` and in any order. Key it by `userId`; never index by position.
+ */
+export function getProfiles(
+  userIds: string[],
+): Promise<UserProfileResponse[]> {
+  return apiFetch<UserProfileResponse[]>("/users", {
+    query: { ids: userIds.join(",") },
+    auth: "required",
+  });
+}
+
+/**
  * `PATCH /api/v1/users/me` — a true partial update, with a trap: an **empty
  * string deletes the field**, while an absent key leaves it alone. So the
  * caller passes only what actually changed, and `""` only when the viewer

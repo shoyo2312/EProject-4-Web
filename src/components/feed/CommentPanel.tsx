@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { Trash2 } from "lucide-react";
+
 import {
   ArrowPostIcon,
   AtIcon,
@@ -11,23 +13,36 @@ import {
   CommentIcon,
   EmojiIcon,
   HeartIcon,
+  ReportIcon,
 } from "@/components/icons";
+import { ReportDialog } from "@/components/report/ReportDialog";
+import { COMMENT_REPORT_REASONS } from "@/lib/api/reports";
 import { useSession } from "@/components/session/SessionProvider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DEFAULT_AVATAR, isBackendHandle } from "@/lib/api/adapters";
 import { resolveAuthor } from "@/lib/api/authors";
 import {
-  COMMENT_PAGE_SIZE,
+  COMMENT_FIRST_PAGE_SIZE,
   addComment,
   deleteComment as deleteCommentApi,
   likeComment,
   listComments,
+  listReplies,
+  REPLY_PAGE_SIZE,
   unlikeComment,
 } from "@/lib/api/interactions";
 import { getAccessToken } from "@/lib/api/tokens";
 import { getFollowing, searchUsers } from "@/lib/api/users";
 import type { UserProfileResponse } from "@/lib/api/types";
 import { getStompClient, onStompConnect } from "@/lib/realtime/stompClient";
+import {
+  type CommentEntry,
+  type CommentPage,
+  invalidateCommentPage,
+  loadFirstCommentPage,
+  peekCommentPage,
+  toUiComments,
+} from "@/lib/comment-cache";
 import { cn } from "@/lib/utils";
 import { formatCount, formatRelativeTime } from "@/lib/format";
 import { CURRENT_USER } from "@/lib/mock-feed";
@@ -36,32 +51,68 @@ import type { Comment } from "@/types/tiktok";
 
 /**
  * One message on `/topic/videos.{videoId}.comments`. Mirrors
- * `CommentFrame` in chat-service — see that file for field docs. No
- * `parentId`: the backend doesn't distinguish a reply here, so every
- * realtime arrival lands at the top level regardless of what it actually
- * replied to, same simplification the frame shape forces.
+ * `CommentFrame` in chat-service — see that file for field docs. `parentId`
+ * is the top-level comment a reply hangs under (already flattened one level
+ * deep by interaction-service) and is absent on a top-level comment.
  */
 type CommentRealtimeFrame = {
-  type: "comment.created" | "comment.deleted";
+  type: "comment.created" | "comment.deleted" | "comment.liked";
   videoId: string;
   commentId: string;
   userId?: string;
   content?: string;
   createdAt?: string;
+  parentId?: string;
+  replyToUserId?: string;
+  likeCount?: number;
 };
 
 /** Matches interaction-service `AddCommentRequest` `@Size(max = 150)`. */
 const COMMENT_MAX_LENGTH = 150;
 
-/** Removes a comment wherever it lives — top-level, or nested one reply deep. */
+/** Sets a comment's like tally wherever it lives — top-level, or nested one reply deep. */
+function setCommentLikes(list: Comment[], id: string, likes: number): Comment[] {
+  return list.map((comment) => {
+    if (comment.id === id) return { ...comment, likes };
+    if (!comment.replies?.some((reply) => reply.id === id)) return comment;
+    return {
+      ...comment,
+      replies: comment.replies.map((reply) =>
+        reply.id === id ? { ...reply, likes } : reply,
+      ),
+    };
+  });
+}
+
+/**
+ * Removes a comment wherever it lives — top-level, or nested one reply deep —
+ * and takes its parent's "View N replies" tally down with it, which is the
+ * number the thread pages against.
+ */
 function removeCommentById(list: Comment[], id: string): Comment[] {
   return list
     .filter((comment) => comment.id !== id)
-    .map((comment) =>
-      comment.replies
-        ? { ...comment, replies: removeCommentById(comment.replies, id) }
-        : comment,
-    );
+    .map((comment) => {
+      if (!comment.replies?.some((reply) => reply.id === id)) return comment;
+      return {
+        ...comment,
+        replies: comment.replies.filter((reply) => reply.id !== id),
+        replyCount: Math.max(0, (comment.replyCount ?? 1) - 1),
+      };
+    });
+}
+
+/** Hangs one reply off its parent and moves the tally the thread pages against. */
+function addReply(list: Comment[], parentId: string, reply: Comment): Comment[] {
+  return list.map((comment) =>
+    comment.id === parentId
+      ? {
+          ...comment,
+          replies: [...(comment.replies ?? []), reply],
+          replyCount: (comment.replyCount ?? 0) + 1,
+        }
+      : comment,
+  );
 }
 
 /** True if a comment with `id` is already in the list — top-level or one reply deep. */
@@ -87,54 +138,30 @@ function remapCommentId(list: Comment[], fromId: string, toId: string): Comment[
   });
 }
 
-/** A fetched comment paired with the id it hangs off — `null` for a top-level comment. */
-type CommentEntry = { ui: Comment; parentId: string | null };
-
 /**
- * interaction-service returns one flat list per video, newest first, with replies
- * mixed in carrying a `parentId` that points at their top-level comment. This folds
- * a freshly-fetched page into the tree already on screen: new top-level comments
- * append, a reply attaches under its parent when that parent is loaded, and a reply
- * whose parent sits on a page not yet fetched waits in `pending` until it is.
- *
- * ponytail: replies attach in page order within a thread, so a thread split across
- * pages can show its replies slightly out of order. The real fix is sorting by
- * snowflake id, which the optimistic `pending-*` ids don't have — not worth it for
- * threads that almost always fit one page.
+ * Folds a freshly-fetched page of top-level comments into the list on screen.
+ * `listComments` returns top-level comments only — a thread is fetched behind
+ * its own "View N replies" — so the only replies here are ones a realtime
+ * frame delivered before its parent's page had loaded; those wait in `pending`
+ * and attach as soon as the parent arrives.
  */
 function mergeComments(
   existing: Comment[],
   incoming: CommentEntry[],
   pending: { ui: Comment; parentId: string }[],
 ): Comment[] {
-  const next: Comment[] = existing.map((comment) => ({
-    ...comment,
-    replies: comment.replies ? [...comment.replies] : undefined,
-  }));
-  const topById = new Map(next.map((comment) => [comment.id, comment] as const));
+  const next: Comment[] = [...existing];
+  const known = new Set(next.map((comment) => comment.id));
 
-  const attach = (ui: Comment, parentId: string): boolean => {
-    const parent = topById.get(parentId);
-    if (!parent) return false;
-    parent.replies ??= [];
-    if (!parent.replies.some((reply) => reply.id === ui.id)) parent.replies.push(ui);
-    return true;
-  };
-
-  for (const { ui, parentId } of incoming) {
-    if (parentId) continue;
-    if (!topById.has(ui.id)) {
-      next.push(ui);
-      topById.set(ui.id, ui);
-    }
-  }
-  // Oldest-first within a thread: the page is newest-first, so walk it backwards.
-  for (const { ui, parentId } of [...incoming].reverse()) {
-    if (!parentId) continue;
-    if (!attach(ui, parentId)) pending.push({ ui, parentId });
+  for (const { ui } of incoming) {
+    if (known.has(ui.id)) continue;
+    next.push(ui);
+    known.add(ui.id);
   }
   for (let i = pending.length - 1; i >= 0; i -= 1) {
-    if (attach(pending[i].ui, pending[i].parentId)) pending.splice(i, 1);
+    if (!known.has(pending[i].parentId)) continue;
+    const { ui, parentId } = pending.splice(i, 1)[0];
+    return mergeComments(addReply(next, parentId, ui), [], pending);
   }
   return next;
 }
@@ -298,9 +325,8 @@ export function CommentPanel({
   onCommentDeleted: () => void;
   /**
    * `sidebar` is the feed's collapsible panel, sized and shadowed as above.
-   * `detail` is the lower half of `/video/[id]`'s right column, which is wider
-   * than the feed's sidebar and never collapses, so the width caps and the
-   * edge shadow that separates a floating panel do not apply.
+   * `detail` is the lower half of `/video/[id]`'s right column — wider than
+   * the feed sidebar, and the page (not this panel) owns the collapse chrome.
    */
   variant?: "sidebar" | "detail";
 }) {
@@ -313,43 +339,30 @@ export function CommentPanel({
   // only inside that effect would close over whatever `getStompClient` built
   // at mount and never notice a later swap.
   const token = user ? getAccessToken() : null;
-  const [comments, setComments] = useState<Comment[]>(isBackend ? [] : initialComments);
+  /**
+   * The panel is keyed by video id, so every pass over a video in the feed
+   * remounts it. Seeding from the cache — synchronously, during the first
+   * render — is what makes a revisit paint its comments instead of a skeleton.
+   */
+  const cached: CommentPage | undefined = isBackend
+    ? peekCommentPage(videoId)
+    : undefined;
+  const [comments, setComments] = useState<Comment[]>(() =>
+    cached ? mergeComments([], cached.entries, []) : isBackend ? [] : initialComments,
+  );
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   /** Newest locally-posted comment — drives the slide-in and the auto-expand. */
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(isBackend);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(isBackend && !cached);
+  const [cursor, setCursor] = useState<string | null>(cached?.cursor ?? null);
+  const [hasMore, setHasMore] = useState(cached?.hasMore ?? false);
   const [loadingMore, setLoadingMore] = useState(false);
   const composerRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  /** Scrolled into view at the foot of the list — fetches the next page. */
+  const sentinelRef = useRef<HTMLButtonElement>(null);
   /** Replies whose parent lands on a later page — held across `loadMore` calls until it arrives. */
   const pendingRepliesRef = useRef<{ ui: Comment; parentId: string }[]>([]);
-
-  /** interaction-service's flat DTO → the UI's `Comment` plus its `parentId`, author resolved by id. */
-  const toUiComment = useCallback(async (raw: {
-    commentId: string;
-    userId: string;
-    content: string;
-    createdAt: string;
-    parentId: string | null;
-    replyToUserId: string | null;
-    likeCount: number;
-    likedByMe: boolean;
-  }): Promise<CommentEntry> => ({
-    ui: {
-      id: raw.commentId,
-      author: await resolveAuthor(raw.userId),
-      text: raw.content,
-      timestamp: formatRelativeTime(raw.createdAt),
-      likes: raw.likeCount,
-      likedByMe: raw.likedByMe,
-      replyToName: raw.replyToUserId
-        ? (await resolveAuthor(raw.replyToUserId)).nickname
-        : undefined,
-    },
-    parentId: raw.parentId,
-  }), []);
 
   // Real comments load once per video; the mock path keeps the prop as its
   // whole state, unchanged from before this was wired up.
@@ -363,12 +376,11 @@ export function CommentPanel({
     setLoading(true);
     pendingRepliesRef.current = [];
 
-    listComments(videoId)
-      .then(async (page) => {
-        const entries = await Promise.all(page.items.map(toUiComment));
+    loadFirstCommentPage(videoId)
+      .then((page) => {
         if (cancelled) return;
-        setComments(mergeComments([], entries, pendingRepliesRef.current));
-        setCursor(page.nextCursor);
+        setComments(mergeComments([], page.entries, pendingRepliesRef.current));
+        setCursor(page.cursor);
         setHasMore(page.hasMore);
       })
       .catch(() => {
@@ -381,7 +393,7 @@ export function CommentPanel({
     return () => {
       cancelled = true;
     };
-  }, [videoId, isBackend, commentsDisabled, toUiComment]);
+  }, [videoId, isBackend, commentsDisabled]);
 
   /**
    * The panel is only ever mounted while the sidebar is open for this video
@@ -397,6 +409,15 @@ export function CommentPanel({
     let subscription: { unsubscribe: () => void } | null = null;
 
     const onComment = (frame: CommentRealtimeFrame) => {
+      // Whatever the frame says, this video's cached first page is now stale.
+      invalidateCommentPage(videoId);
+      if (frame.type === "comment.liked") {
+        if (frame.likeCount === undefined) return;
+        setComments((current) =>
+          setCommentLikes(current, frame.commentId, frame.likeCount as number),
+        );
+        return;
+      }
       if (frame.type === "comment.deleted") {
         setComments((current) => removeCommentById(current, frame.commentId));
         return;
@@ -407,20 +428,35 @@ export function CommentPanel({
       // posted — see `postBackendComment`, which resolves the matching race
       // in the other direction by yielding to whichever of the frame or the
       // HTTP response lands first.
-      resolveAuthor(frame.userId ?? "")
-        .then((author) => {
+      Promise.all([
+        resolveAuthor(frame.userId ?? ""),
+        frame.replyToUserId ? resolveAuthor(frame.replyToUserId) : Promise.resolve(null),
+      ])
+        .then(([author, replyToAuthor]) => {
           setComments((current) => {
-            if (current.some((comment) => comment.id === frame.commentId)) return current;
+            // Checks replies too: a reply already attached is not a top-level
+            // absence, and re-inserting it would show the same row twice.
+            if (hasCommentId(current, frame.commentId)) return current;
             const ui: Comment = {
               id: frame.commentId,
               author,
               text: frame.content ?? "",
               timestamp: formatRelativeTime(frame.createdAt ?? new Date().toISOString()),
               likes: 0,
+              replyToName: replyToAuthor?.nickname,
             };
-            return [ui, ...current];
+            if (!frame.parentId) return [ui, ...current];
+            // Parent not on a loaded page yet — same holding pen `loadMore`
+            // uses, so it attaches as soon as its page arrives.
+            if (!current.some((comment) => comment.id === frame.parentId)) {
+              pendingRepliesRef.current.push({ ui, parentId: frame.parentId });
+              return current;
+            }
+            return addReply(current, frame.parentId, ui);
           });
-          onCommentAdded();
+          // No count bump here: the counts frame carries the authoritative
+          // comment total. Counting the row *and* the poster's optimistic
+          // bump made every comment worth +2 on the device that wrote it.
         })
         .catch(() => {
           // Author lookup failed — skip rather than show a comment with no author.
@@ -442,12 +478,12 @@ export function CommentPanel({
     };
   }, [videoId, isBackend, token, onCommentAdded]);
 
-  const loadMore = async () => {
+  const loadMore = useCallback(async () => {
     if (!cursor || loadingMore) return;
     setLoadingMore(true);
     try {
       const page = await listComments(videoId, cursor);
-      const entries = await Promise.all(page.items.map(toUiComment));
+      const entries = await toUiComments(page.items);
       setComments((current) => mergeComments(current, entries, pendingRepliesRef.current));
       setCursor(page.nextCursor);
       setHasMore(page.hasMore);
@@ -456,7 +492,51 @@ export function CommentPanel({
     } finally {
       setLoadingMore(false);
     }
-  };
+  }, [videoId, cursor, loadingMore]);
+
+  /**
+   * Infinite scroll. The sentinel *is* the "Load more" button rather than an
+   * empty div: the observer covers the mouse, and the button still answers a
+   * keyboard or a retry after a failed fetch. Root is the scrolling list, with
+   * a screen of lead time so the next page lands before the viewer arrives.
+   */
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) void loadMore();
+      },
+      { root: listRef.current, rootMargin: "200px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore]);
+
+  /**
+   * One fetched page of a thread, folded in under its parent.
+   *
+   * ponytail: appended, so a reply posted locally before the thread was opened
+   * sits above the older server replies that arrive after it. Sorting by
+   * snowflake id would fix it, and the optimistic `pending-*` ids do not have
+   * one — not worth it for the one row the poster already knows they wrote.
+   */
+  const appendReplies = useCallback((parentId: string, entries: Comment[]) => {
+    setComments((current) =>
+      current.map((comment) => {
+        if (comment.id !== parentId) return comment;
+        const known = new Set((comment.replies ?? []).map((reply) => reply.id));
+        return {
+          ...comment,
+          replies: [
+            ...(comment.replies ?? []),
+            ...entries.filter((entry) => !known.has(entry.id)),
+          ],
+        };
+      }),
+    );
+  }, []);
 
   const startReply = (target: ReplyTarget) => {
     setReplyTo(target);
@@ -465,6 +545,7 @@ export function CommentPanel({
 
   const postBackendComment = async (text: string, target: ReplyTarget | null) => {
     if (!user) return;
+    invalidateCommentPage(videoId);
     const optimistic: Comment = {
       id: `pending-${Date.now()}`,
       author: user,
@@ -474,13 +555,7 @@ export function CommentPanel({
       replyToName: target?.replyToName,
     };
     setComments((current) =>
-      target
-        ? current.map((comment) =>
-            comment.id === target.parentId
-              ? { ...comment, replies: [...(comment.replies ?? []), optimistic] }
-              : comment,
-          )
-        : [optimistic, ...current],
+      target ? addReply(current, target.parentId, optimistic) : [optimistic, ...current],
     );
     setJustAddedId(optimistic.id);
     if (!target) listRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -533,11 +608,7 @@ export function CommentPanel({
 
     setComments((current) =>
       replyTo
-        ? current.map((comment) =>
-            comment.id === replyTo.parentId
-              ? { ...comment, replies: [...(comment.replies ?? []), entry] }
-              : comment,
-          )
+        ? addReply(current, replyTo.parentId, entry)
         : // A brand new top-level comment lands at the top of the list.
           [entry, ...current],
     );
@@ -548,6 +619,7 @@ export function CommentPanel({
   };
 
   const deleteOwnComment = async (id: string) => {
+    invalidateCommentPage(videoId);
     const previous = comments;
     setComments((current) => removeCommentById(current, id));
     onCommentDeleted();
@@ -569,35 +641,35 @@ export function CommentPanel({
     <section
       className={cn(
         "sticky top-0 z-10 flex h-full max-h-screen flex-col",
-        "bg-[var(--tt-page)] px-4 pb-5 pt-4",
+        "px-4 pb-5 pt-4",
         isDetail
           ? "w-full min-w-0"
-          : "min-w-72 max-w-96 shadow-[-1px_0_1px_var(--tt-divider)]",
+          : "min-w-64 max-w-96 bg-[var(--tt-page)] shadow-[-1px_0_1px_var(--tt-divider)]",
       )}
     >
       {/* `.DivCommentHeader` — flex, space-between, padding-bottom 16px. */}
-      <header className="flex flex-none items-center justify-between pb-4">
-        {/* `.DivCommentHeaderTextWrapper` — gap .25rem, 17px/700/25.5px */}
-        <div className="flex items-center gap-1">
-          <span className="text-[17px] font-bold leading-[25.5px] text-[var(--tt-text)]">
-            Comments
-          </span>
+      <header className="relative flex flex-none items-center justify-between pb-4">
+        {/* Count reads "<n> comments", centred over the row. */}
+        <div className="flex flex-1 items-center justify-center gap-1">
           {!commentsDisabled && (
-            <span className="text-[17px] font-bold leading-[25.5px] text-[var(--tt-text)]">
-              ({formatCount(commentCount)})
+            <span className="text-[14px] font-bold text-[var(--tt-text)]">
+              {formatCount(commentCount)}
             </span>
           )}
+          <span className="text-[14px] font-bold text-[var(--tt-text)]">
+            comments
+          </span>
         </div>
-        {/* The detail column has no panel of its own to dismiss — the page's
-            own close control sits over the player. */}
+        {/* Detail collapses from the tab row above this panel; the feed sidebar
+            owns its own close control here. */}
         {!isDetail && (
           <button
             type="button"
             onClick={onClose}
             aria-label="Close comments"
-            className="flex h-8 w-8 items-center justify-center rounded-[8px] text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-field)]"
+            className="absolute right-0 top-0 flex h-7 w-7 items-center justify-center rounded-full text-[var(--tt-icon)] transition-colors duration-200 bg-[var(--tt-field)] hover:bg-[var(--tt-shape-neutral-3)]"
           >
-            <CloseIcon className="h-[18px] w-[18px]" />
+            <CloseIcon className="h-[16px] w-[16px]" />
           </button>
         )}
       </header>
@@ -615,7 +687,7 @@ export function CommentPanel({
             <CommentsOff />
           ) : loading && commentCount > 0 ? (
             <CommentListSkeleton
-              count={Math.min(commentCount, COMMENT_PAGE_SIZE)}
+              count={Math.min(commentCount, COMMENT_FIRST_PAGE_SIZE)}
             />
           ) : (
             <NoCommentsYet />
@@ -632,13 +704,15 @@ export function CommentPanel({
             currentUserId={user?.userId}
             canModerate={Boolean(user) && user?.userId === videoOwnerId}
             onDelete={deleteOwnComment}
+            onRepliesLoaded={appendReplies}
           />
         ))}
 
         {hasMore && (
           <button
+            ref={sentinelRef}
             type="button"
-            onClick={loadMore}
+            onClick={() => void loadMore()}
             disabled={loadingMore}
             className="w-full py-2 text-center text-[14px] font-medium text-white/60 hover:underline disabled:opacity-40"
           >
@@ -736,19 +810,39 @@ function CommentsOff() {
  * comment total with the video, long before interaction-service returns the
  * comments themselves. Capped by the caller at one page, since that is all the
  * first fetch can return; the default covers callers holding no count yet.
+ *
+ * Mirrors {@link CommentItem}'s live layout so the list does not jump when the
+ * first page lands: 32 avatar, 8px row gap, 6px content gap, mb-6 between
+ * rows, and the username / body / (timestamp · Reply · like) stack.
  */
 export function CommentListSkeleton({ count = 5 }: { count?: number }) {
   return (
-    <div className="flex flex-col gap-4 py-2">
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="flex gap-3">
-          <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
-          <div className="flex flex-1 flex-col gap-2">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-3 w-full" />
+    <div className="flex flex-col">
+      {Array.from({ length: count }).map((_, i) => {
+        // Vary body width so stacked placeholders do not look like one stamp.
+        const bodyWidth = i % 3 === 0 ? "w-[92%]" : i % 3 === 1 ? "w-[78%]" : "w-[85%]";
+        return (
+          <div key={i} className="mb-6 flex flex-col gap-2">
+            <div className="flex flex-row items-center gap-2">
+              <Skeleton className="h-8 w-8 shrink-0 self-start rounded-full" />
+              <div className="flex flex-1 flex-col items-start gap-1.5">
+                <div className="flex w-full items-center justify-between">
+                  <Skeleton className="h-[17px] w-24" />
+                  <Skeleton className="h-5 w-3.5" />
+                </div>
+                <Skeleton className={cn("h-[23px]", bodyWidth)} />
+                <div className="flex w-full items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-5 w-8" />
+                    <Skeleton className="h-[18px] w-10" />
+                  </div>
+                  <Skeleton className="h-5 w-10" />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -793,6 +887,7 @@ function CommentItem({
   currentUserId,
   canModerate = false,
   onDelete,
+  onRepliesLoaded,
 }: {
   comment: Comment;
   /** Backend video id — used to persist a like against this comment. */
@@ -808,12 +903,21 @@ function CommentItem({
   /** The video's uploader, viewing their own video — may delete anyone's comment on it. */
   canModerate?: boolean;
   onDelete?: (id: string) => void;
+  /** Hands a fetched page of this comment's replies back to the panel's state. */
+  onRepliesLoaded?: (parentId: string, replies: Comment[]) => void;
 }) {
   const { user, openLogin } = useSession();
   const [liked, setLiked] = useState(comment.likedByMe ?? false);
   const [likeCount, setLikeCount] = useState(comment.likes);
+  // Keyed on the value, not on every render: the optimistic bump and the POST
+  // response both write local state without touching the prop, so this only
+  // fires when the tally genuinely moved somewhere else — a realtime frame.
+  useEffect(() => {
+    setLikeCount(comment.likes);
+  }, [comment.likes]);
   const [likePending, setLikePending] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   // A comment still waiting on its POST has no real id to like against yet.
   const canPersistLike = isBackend && /^\d+$/.test(comment.id);
@@ -853,6 +957,10 @@ function CommentItem({
   // the "⋯" stays decorative there, same as before this was wired up.
   const canDelete =
     Boolean(currentUserId) && (comment.author.userId === currentUserId || canModerate);
+  // Someone else's comment on a real video: report it instead. A mock comment
+  // or an optimistic row not yet saved has no id admin-service could act on.
+  const canReport = !canDelete && canPersistLike;
+  const menuHasItems = canDelete || canReport;
 
   /* Click anywhere else — including the next comment's "⋯" — closes the menu. */
   useEffect(() => {
@@ -867,8 +975,19 @@ function CommentItem({
   return (
     <div
       className={cn(
-        "flex flex-col gap-4",
+        "flex flex-col gap-2",
         !isReply && "mb-6",
+        /* Off-screen comments skip layout and paint entirely — the cheap half
+           of virtualising a long thread, with no library and no fixed row
+           height. `contain-intrinsic-size: auto` remembers each row's real
+           height once measured, so the scrollbar does not jump.
+
+           Not while the "⋯" menu is open: `content-visibility` also applies
+           paint containment, which would clip the popup where it overflows
+           this row. */
+        !isReply &&
+          !menuOpen &&
+          "[content-visibility:auto] [contain-intrinsic-size:auto_120px]",
         comment.id === justAddedId &&
           "animate-[tt-comment-in_320ms_ease-out] rounded-lg",
       )}
@@ -921,28 +1040,60 @@ function CommentItem({
             <div ref={menuRef} className="relative flex-none">
               <button
                 type="button"
-                onClick={canDelete ? () => setMenuOpen((open) => !open) : undefined}
+                onClick={menuHasItems ? () => setMenuOpen((open) => !open) : undefined}
                 aria-label="More options"
-                aria-expanded={canDelete ? menuOpen : undefined}
+                aria-expanded={menuHasItems ? menuOpen : undefined}
                 className="flex h-5 w-3.5 items-center justify-center text-white/60 hover:text-[var(--tt-text)]"
               >
                 <MoreDotsGlyph />
               </button>
 
-              {/* Only the viewer's own comment has anything to offer here. */}
-              {menuOpen && canDelete && (
-                <div className="absolute right-0 top-6 z-20 animate-[tt-comment-in_150ms_ease-out] overflow-hidden rounded-[8px] border border-[var(--tt-divider)] bg-black shadow-lg">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onDelete?.(comment.id);
-                    }}
-                    className="flex w-18 items-center justify-center px-3 py-2 text-[14px] font-medium text-[var(--tt-red)] transition-colors hover:bg-[var(--tt-shape-neutral-3)]"
-                  >
-                    Delete
-                  </button>
+              {/* The viewer's own comment (or one on their video) can be
+                  deleted; anyone else's can be reported. */}
+              {menuOpen && menuHasItems && (
+                <div className="absolute right-0 top-6 z-20 w-max animate-[tt-comment-in_150ms_ease-out] overflow-hidden rounded-[8px] border border-[var(--tt-divider)] bg-black shadow-lg">
+                  {canDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDelete?.(comment.id);
+                      }}
+                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:text-[var(--tt-red)]"
+                    >
+                      <Trash2 className="h-4 w-4 flex-none" strokeWidth={2} />
+                      Delete
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        if (!user) {
+                          openLogin();
+                          return;
+                        }
+                        setReportOpen(true);
+                      }}
+                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:bg-[var(--tt-shape-neutral-3)]"
+                    >
+                      <ReportIcon className="h-4 w-4 flex-none" />
+                      Report
+                    </button>
+                  )}
                 </div>
+              )}
+
+              {/* admin-service keys a COMMENT action by "videoId:commentId" —
+                  see `CommentTarget`; the comment id alone reaches nothing,
+                  Cassandra partitions comments by video. */}
+              {reportOpen && (
+                <ReportDialog
+                  targetType="COMMENT"
+                  targetId={`${videoId}:${comment.id}`}
+                  reasons={COMMENT_REPORT_REASONS}
+                  onClose={() => setReportOpen(false)}
+                />
               )}
             </div>
           </div>
@@ -999,14 +1150,16 @@ function CommentItem({
         </div>
       </div>
 
-      {!isReply && comment.replies && comment.replies.length > 0 && (
+      {!isReply && (comment.replyCount ?? comment.replies?.length ?? 0) > 0 && (
         <ReplyThread
-          replies={comment.replies}
+          replies={comment.replies ?? []}
+          replyCount={comment.replyCount ?? comment.replies?.length ?? 0}
           parentId={comment.id}
           videoId={videoId}
           isBackend={isBackend}
           onReply={onReply}
           justAddedId={justAddedId}
+          onRepliesLoaded={onRepliesLoaded}
         />
       )}
     </div>
@@ -1025,74 +1178,131 @@ function CommentItem({
  *     ├ button "View N replies" 14px / 500 / 18px, rgba(255,255,255,.6)
  *     └ chevron                 13×13, same colour
  *
- * Expanded, the chevron goes away and the same wrapper holds plain 14/500/21px
- * controls. The live site paginates there ("View 1 more" next to "Hide"); this
- * clone ships every reply in one go, so only "Hide" is rendered.
+ * Expanded, the wrapper becomes `justify-between`: "View N replies" keeps the
+ * left slot and "Hide" takes the right, matching the live site's pagination.
+ * Replies come down `REPLY_PAGE_SIZE` at a time, one request per click — a
+ * comment with 30 replies costs nothing until somebody opens it.
  */
 function ReplyThread({
   replies,
+  replyCount,
   parentId,
   videoId,
   isBackend,
   onReply,
   justAddedId,
+  onRepliesLoaded,
 }: {
+  /** The replies already loaded — fetched pages plus anything posted locally. */
   replies: Comment[];
+  /** What the server says the thread holds, which is what the button counts down. */
+  replyCount: number;
   parentId: string;
   videoId: string;
   isBackend: boolean;
   onReply?: (target: ReplyTarget) => void;
   justAddedId?: string | null;
+  onRepliesLoaded?: (parentId: string, replies: Comment[]) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  /** How many replies are on screen — 0 is the collapsed thread. */
+  const [shownCount, setShownCount] = useState(0);
   const [revealedFor, setRevealedFor] = useState<string | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  /** Mock videos have no thread endpoint: their replies are all in the prop already. */
+  const [exhausted, setExhausted] = useState(!isBackend);
+  const [loading, setLoading] = useState(false);
 
   // Posting a reply into a collapsed thread has to reveal it, or the comment
   // the user just wrote would appear to vanish. Adjusting state during render
   // (rather than in an effect) is React's sanctioned way to react to a changed
   // prop; `revealedFor` makes it fire once, so "Hide" still works afterwards.
+  // A new reply is appended last, so revealing the whole thread is what shows it.
   if (
     justAddedId &&
     justAddedId !== revealedFor &&
     replies.some((reply) => reply.id === justAddedId)
   ) {
     setRevealedFor(justAddedId);
-    setExpanded(true);
+    setShownCount(replies.length);
   }
+
+  const shown = replies.slice(0, shownCount);
+  // `replies` can outrun the server's tally — a reply posted locally is on
+  // screen before any listing counts it — so the larger of the two is the
+  // thread's real length.
+  const remaining = Math.max(0, Math.max(replyCount, replies.length) - shown.length);
+
+  const showMore = async () => {
+    const next = shownCount + REPLY_PAGE_SIZE;
+    setShownCount(next);
+    // Replies already in hand (posted locally, or a page fetched then hidden)
+    // are revealed for free; only a click that runs past them goes back out.
+    if (exhausted || loading || replies.length >= next) return;
+
+    setLoading(true);
+    try {
+      const page = await listReplies(videoId, parentId, cursor ?? undefined);
+      const entries = await toUiComments(page.items);
+      onRepliesLoaded?.(parentId, entries.map((entry) => entry.ui));
+      setCursor(page.nextCursor);
+      setExhausted(!page.hasMore);
+    } catch {
+      // Leave the button where it is — clicking again retries.
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="ml-[52px] flex flex-col gap-4">
-      {expanded &&
-        replies.map((reply) => (
-          <CommentItem
-            key={reply.id}
-            comment={reply}
-            videoId={videoId}
-            isBackend={isBackend}
-            isReply
-            parentId={parentId}
-            onReply={onReply}
-            justAddedId={justAddedId}
-          />
-        ))}
+      {shown.map((reply) => (
+        <CommentItem
+          key={reply.id}
+          comment={reply}
+          videoId={videoId}
+          isBackend={isBackend}
+          isReply
+          parentId={parentId}
+          onReply={onReply}
+          justAddedId={justAddedId}
+        />
+      ))}
 
-      <div className="-ml-1.5 flex flex-row items-center gap-2">
-        <div className="flex flex-row items-center gap-1.5">
+      <div className="-ml-1.5 flex flex-row items-center justify-between gap-2">
+        {remaining > 0 ? (
+          <div className="flex flex-row items-center gap-1.5">
+            <span className="w-6 border-t border-white/40" />
+
+            <button
+              type="button"
+              onClick={() => void showMore()}
+              disabled={loading}
+              aria-expanded={shownCount > 0}
+              aria-busy={loading}
+              className={cn(
+                "flex flex-row items-center gap-1.5 py-px font-medium text-white/60 hover:opacity-80 transition-opacity duration-200 ease-in-out",
+                shownCount > 0 ? "text-[14px] leading-[21px]" : "text-[14px] leading-[18px]",
+              )}
+            >
+              {`View ${remaining} ${remaining === 1 ? "reply" : "replies"}`}
+              <ChevronDownGlyph />
+            </button>
+          </div>
+        ) : (
+          // Keeps "Hide" in the right slot once every reply is shown.
+          <span />
+        )}
+
+        {shownCount > 0 && (
           <button
             type="button"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            className={cn(
-              "py-px font-medium text-white/60 hover:underline",
-              expanded ? "text-[14px] leading-[21px]" : "text-[14px] leading-[18px]",
-            )}
+            onClick={() => setShownCount(0)}
+            className="flex flex-row items-center gap-1.5 py-px text-[14px] font-medium leading-[21px] text-white/60 hover:opacity-80 transition-opacity duration-200 ease-in-out"
           >
-            {expanded
-              ? "Hide"
-              : `View ${replies.length} ${replies.length === 1 ? "reply" : "replies"}`}
+            Hide
+            <ChevronUpGlyph />
           </button>
-          {!expanded && <ChevronDownGlyph />}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -1109,6 +1319,19 @@ function ChevronDownGlyph() {
     >
       <path d="m24 27.76 13.17-13.17a1 1 0 0 1 1.42 0l2.82 2.82a1 1 0 0 1 0 1.42L25.06 35.18a1.5 1.5 0 0 1-2.12 0L6.59 18.83a1 1 0 0 1 0-1.42L9.4 14.6a1 1 0 0 1 1.42 0L24 27.76Z" />
     </svg>
+  );
+}
+
+function ChevronUpGlyph() {
+  return (
+      <svg
+          viewBox="0 0 48 48"
+          className="h-[13px] w-[13px] flex-none text-white/60"
+          fill="currentColor"
+          aria-hidden
+      >
+        <path d="m24 20.24 13.17 13.17a1 1 0 0 0 1.42 0l2.82-2.82a1 1 0 0 0 0-1.42L25.06 12.82a1.5 1.5 0 0 0-2.12 0L6.59 29.17a1 1 0 0 0 0 1.42l2.81 2.81a1 1 0 0 0 1.42 0L24 20.24Z" />
+      </svg>
   );
 }
 

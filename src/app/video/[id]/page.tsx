@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { BackendVideoDetail } from "@/components/video/BackendVideoDetail";
 import { VideoDetail } from "@/components/video/VideoDetail";
+import { COMMENT_PANEL_COOKIE } from "@/lib/comment-panel";
 import {
   getCommentsForVideo,
   getVideoById,
@@ -47,9 +49,12 @@ export async function generateMetadata({
  */
 export default async function VideoPage({ params }: Params) {
   const { id } = await params;
+  /* The comment panel opens unless the reader closed it last time, and this
+     runs on the server so the first paint is already right. */
+  const panelOpen = (await cookies()).get(COMMENT_PANEL_COOKIE)?.value !== "0";
 
   if (isBackendVideoId(id)) {
-    return <BackendVideoDetail videoId={id} />;
+    return <BackendVideoDetail videoId={id} initialPanelOpen={panelOpen} />;
   }
 
   const video = await getVideoById(id);
@@ -66,6 +71,7 @@ export default async function VideoPage({ params }: Params) {
       comments={comments}
       previousId={neighbours.previousId}
       nextId={neighbours.nextId}
+      initialPanelOpen={panelOpen}
     />
   );
 }

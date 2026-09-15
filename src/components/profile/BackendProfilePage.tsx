@@ -12,16 +12,23 @@ import {
   videoToProfileVideo,
 } from "@/lib/api/adapters";
 import { isApiError, messageFor } from "@/lib/api/errors";
-import { listLikedVideos, listSavedVideos } from "@/lib/api/interactions";
+import { listLikedVideos, listRepostedVideos, listSavedVideos } from "@/lib/api/interactions";
+import { getAccessToken } from "@/lib/api/tokens";
 import * as usersApi from "@/lib/api/users";
-import { getUserVideos, getUserVideoStats, getVideosByIds } from "@/lib/api/videos";
+import { getUserVideoStats, getUserVideos, getVideosByIds } from "@/lib/api/videos";
+import { useUserRealtime } from "@/hooks/useUserRealtime";
 import type { ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
 
 /** How many videos the grid asks for in one page. */
 const VIDEO_PAGE = 30;
 
-/** Tiles drawn while the video total is unknown — a failed stats call only. */
-const DEFAULT_GRID_SKELETON = 12;
+/**
+ * Skeleton tiles never exceed this — matches the count the real grid shows
+ * before it scrolls, so the placeholder never draws more than one screen's
+ * worth of cards. Also what's drawn while the video total is unknown (a
+ * failed stats call).
+ */
+const MAX_GRID_SKELETON = 10;
 
 /**
  * A profile page built from user-service and video-service.
@@ -106,7 +113,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       // `ProfileBody` shows the empty state instead of placeholder tiles.
       setPending({
         tab: "videos",
-        count: Math.min(stats?.videoCount ?? DEFAULT_GRID_SKELETON, VIDEO_PAGE),
+        count: Math.min(stats?.videoCount ?? MAX_GRID_SKELETON, MAX_GRID_SKELETON),
       });
 
       const videos = await videosLoading;
@@ -121,6 +128,37 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
   }, [userId, sessionSettled, session.user, viewerId]);
 
   /**
+   * Followers/following/total-likes only, no video refetch. Used after a
+   * follow toggle and by the focus/visibility listener below, both of which
+   * only ever need these three numbers current — not the whole grid.
+   */
+  const refreshStats = useCallback(async () => {
+    if (targetId === undefined) return;
+    try {
+      const [raw, stats] = await Promise.all([
+        usersApi.getProfile(targetId),
+        getUserVideoStats(targetId).catch(() => null),
+      ]);
+      setProfile((current) =>
+        current
+          ? {
+              ...current,
+              stats: {
+                ...current.stats,
+                followers: raw.followerCount,
+                following: raw.followingCount,
+                likes: stats?.totalLikes ?? current.stats.likes,
+              },
+            }
+          : current,
+      );
+    } catch {
+      // Best-effort background refresh — stale numbers stay on screen rather
+      // than an error replacing a page that otherwise loaded fine.
+    }
+  }, [targetId]);
+
+  /**
    * Which of the two interaction tabs have already been fetched. A ref, not
    * state: it only ever guards the fetch, and re-rendering on it would be a
    * render per tab opened for nothing.
@@ -128,28 +166,38 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
   const loadedTabs = useRef<Set<ProfileTab>>(new Set());
 
   /**
-   * Favorites and Liked, filled when the tab is opened.
+   * Favorites, Liked, and Reposts, filled when the tab is opened.
    *
-   * Owner only, and not a privacy choice made here: interaction-service serves
-   * `/users/me` and nothing else, so another account's list is not fetchable at
-   * all — which is what the tab's empty copy already says.
+   * Favorites and Liked are owner-only, and not a privacy choice made here:
+   * interaction-service serves those two for `/users/me` and nothing else, so
+   * another account's list is not fetchable at all — which is what the tab's
+   * empty copy already says. Reposts are public and load on any profile.
    *
    * ponytail: the first page only, 50 videos. Add cursor paging when a profile
    * grid needs to scroll past that.
    */
   const loadTab = useCallback(
     async (tab: ProfileTab) => {
+      if (tab !== "favorites" && tab !== "liked" && tab !== "reposts") return;
+
       const isOwnPage = userId === undefined || userId === viewerId;
-      if (!isOwnPage || !viewerId) return;
-      if (tab !== "favorites" && tab !== "liked") return;
+      // Reposts are public — everyone sees a profile's, the way they see its videos.
+      // Favorites and Liked stay the owner's own.
+      if (tab === "reposts" ? !targetId : !isOwnPage || !viewerId) return;
       if (loadedTabs.current.has(tab)) return;
       loadedTabs.current.add(tab);
 
       try {
-        const page = tab === "liked" ? await listLikedVideos() : await listSavedVideos();
+        const page =
+          tab === "liked"
+            ? await listLikedVideos()
+            : tab === "reposts"
+              ? await listRepostedVideos(targetId!)
+              : await listSavedVideos();
         // The ids arrive one request ahead of the videos, so the tab knows its
         // exact size while the heavy half is still loading — no guess needed.
-        setPending({ tab, count: page.videoIds.length });
+        // Capped so a 50-video list doesn't draw 50 skeleton tiles.
+        setPending({ tab, count: Math.min(page.videoIds.length, MAX_GRID_SKELETON) });
         // Ids the viewer may no longer see — a deleted video — are simply
         // absent from the reply, so the grid can be shorter than the list.
         const videos = await getVideosByIds(page.videoIds);
@@ -172,12 +220,58 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
         loadedTabs.current.delete(tab);
       }
     },
-    [userId, viewerId],
+    [userId, viewerId, targetId],
   );
 
   useEffect(() => {
     load();
   }, [load]);
+
+  /**
+   * Live follower/following/total-likes. `/topic/users.{id}` is not emitted by
+   * the backend yet — user-service needs to publish a frame on every
+   * follow/unfollow, and whatever aggregates likes needs to publish on every
+   * like/unlike of this user's videos, both shaped like `UserStatsFrame`. Once
+   * that ships this needs no FE change; until then no frame ever arrives and
+   * the focus/visibility listener below is the only thing that updates the
+   * numbers.
+   */
+  const wsToken = session.user ? getAccessToken() : null;
+  useUserRealtime(targetId ?? null, wsToken, (frame) => {
+    setProfile((current) =>
+      current
+        ? {
+            ...current,
+            stats: {
+              ...current.stats,
+              followers: frame.followerCount ?? current.stats.followers,
+              following: frame.followingCount ?? current.stats.following,
+              likes: frame.totalLikes ?? current.stats.likes,
+            },
+          }
+        : current,
+    );
+  });
+
+  /**
+   * Fallback for as long as the WS frame above isn't real: catches a follow
+   * made elsewhere, or from another tab, when the viewer actually leaves and
+   * returns to this one. Safe to keep once the WS lands too — a frame that
+   * already arrived just makes this a no-op refetch.
+   */
+  useEffect(() => {
+    if (targetId === undefined) return;
+    const onFocus = () => refreshStats();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshStats();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [targetId, refreshStats]);
 
   if (error) {
     return (
@@ -261,23 +355,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
        * following list again — three requests against a gateway that allows
        * twenty a second for every viewer sharing the Next proxy's IP.
        */
-      usersApi
-        .getProfile(targetId)
-        .then((raw) =>
-          setProfile((current) =>
-            current
-              ? {
-                  ...current,
-                  stats: {
-                    ...current.stats,
-                    followers: raw.followerCount,
-                    following: raw.followingCount,
-                  },
-                }
-              : current,
-          ),
-        )
-        .catch(() => undefined);
+      refreshStats();
     }
   };
 
