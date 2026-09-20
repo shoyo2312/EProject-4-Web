@@ -11,7 +11,7 @@ import {
 } from "@/hooks/use-notifications";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import type { NotificationResponse } from "@/lib/api/notifications";
-import type { UserProfileResponse } from "@/lib/api/types";
+import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
 import { getProfile } from "@/lib/api/users";
 import { formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -94,6 +94,29 @@ export function ActivityDrawer({
     }
     if (item.type === "SYSTEM") return;
     router.push(`/video/${item.referenceId}`);
+  };
+
+  /**
+   * The username itself is a second, narrower target than the row: it always
+   * goes to the actor's profile, even on a LIKE/COMMENT/SHARE row where the
+   * row's own click goes to the video instead. Reuses whatever `actors` has
+   * already resolved (see `use-notifications`) rather than a fresh lookup —
+   * for NEW_FOLLOWER that map is keyed by the same id `openNotification`
+   * looks up above, so this is normally free.
+   */
+  const openActor = async (item: NotificationResponse, actor: UserProfileResponse | undefined) => {
+    inbox.markRead(item.id);
+    if (actor?.username) {
+      router.push(`/@${actor.username}`);
+      return;
+    }
+    if (!item.actorId) return;
+    try {
+      const profile = await getProfile(item.actorId);
+      if (profile.username) router.push(`/@${profile.username}`);
+    } catch {
+      // Same as above: nowhere to go, notification stays read.
+    }
   };
 
   // Not extracted from the live site — a baseline affordance for a fixed
@@ -187,15 +210,20 @@ export function ActivityDrawer({
                 {group.title}
               </p>
               <ul>
-                {group.items.map((item) => (
-                  <li key={item.id} className="mb-4 last:mb-0">
-                    <NotificationItem
-                      item={item}
-                      actor={item.actorId ? inbox.actors.get(item.actorId) : undefined}
-                      onOpen={() => void openNotification(item)}
-                    />
-                  </li>
-                ))}
+                {group.items.map((item) => {
+                  const actor = item.actorId ? inbox.actors.get(item.actorId) : undefined;
+                  return (
+                    <li key={item.id} className="mb-4 last:mb-0">
+                      <NotificationItem
+                        item={item}
+                        actor={actor}
+                        video={item.referenceId ? inbox.videos.get(item.referenceId) : undefined}
+                        onOpen={() => void openNotification(item)}
+                        onOpenActor={() => void openActor(item, actor)}
+                      />
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}
@@ -270,12 +298,17 @@ function describe(item: NotificationResponse): string {
 function NotificationItem({
   item,
   actor,
+  video,
   onOpen,
+  onOpenActor,
 }: {
   item: NotificationResponse;
   /** Undefined while still resolving, or absent for SYSTEM (no actor). */
   actor: UserProfileResponse | undefined;
+  /** Undefined while still resolving, absent for a non-video type, or one with no thumbnail. */
+  video: VideoResponse | undefined;
   onOpen: () => void;
+  onOpenActor: () => void;
 }) {
   const heading = actor ? (actor.username ?? "Someone") : item.title;
 
@@ -309,12 +342,46 @@ function NotificationItem({
 
       <div className="min-w-0 flex-1 pe-2 ps-3">
         <p className="truncate text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
-          {heading}
+          {actor ? (
+            // Its own click target, narrower than the row: stopPropagation so
+            // it doesn't also fire `onOpen` (the video/nothing the row goes to).
+            <span
+              role="link"
+              tabIndex={0}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenActor();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onOpenActor();
+                }
+              }}
+              className="hover:underline"
+            >
+              {heading}
+            </span>
+          ) : (
+            heading
+          )}
         </p>
         <p className="truncate text-[13px] leading-[17px] text-[var(--tt-text)]">
           {describe(item)} · {formatRelativeTime(item.createdAt)}
         </p>
       </div>
+
+      {video?.thumbnailUrl && (
+        <div className="h-12 w-9 flex-shrink-0 overflow-hidden rounded-md">
+          {/* eslint-disable-next-line @next/next/no-img-element -- CDN thumbnail, same reasoning as the avatar above */}
+          <img
+            src={video.thumbnailUrl}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        </div>
+      )}
 
       <div className="flex flex-shrink-0 items-center justify-center gap-2.5 ps-3">
         {!item.read && (

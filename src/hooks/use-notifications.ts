@@ -13,7 +13,8 @@ import {
 } from "@/lib/api/notifications";
 import { getAccessToken } from "@/lib/api/tokens";
 import { getProfiles, MAX_PROFILE_BATCH } from "@/lib/api/users";
-import type { UserProfileResponse } from "@/lib/api/types";
+import { getVideosByIds } from "@/lib/api/videos";
+import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
 import {
   useNotificationRealtime,
   type NotificationFrame,
@@ -97,6 +98,11 @@ export interface NotificationInbox {
   loaded: boolean;
   /** Actor avatar/username, keyed by `NotificationResponse.actorId`. Fills in as resolved. */
   actors: Map<string, UserProfileResponse>;
+  /**
+   * The referenced video, keyed by `NotificationResponse.referenceId`, for LIKE/COMMENT/SHARE
+   * only — NEW_FOLLOWER's `referenceId` is a userId, not a videoId, and SYSTEM has none.
+   */
+  videos: Map<string, VideoResponse>;
   markRead: (notificationId: string) => void;
   markAllRead: () => void;
 }
@@ -121,6 +127,9 @@ export function useNotifications(): NotificationInbox {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [actors, setActors] = useState<Map<string, UserProfileResponse>>(
+    () => new Map(),
+  );
+  const [videos, setVideos] = useState<Map<string, VideoResponse>>(
     () => new Map(),
   );
 
@@ -183,6 +192,46 @@ export function useNotifications(): NotificationInbox {
     };
   }, [unresolvedActorIds]);
 
+  // Same batching as actors above, keyed by referenceId instead of actorId —
+  // only LIKE/COMMENT/SHARE name a video at all.
+  const unresolvedVideoIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of items) {
+      if (
+        item.referenceId &&
+        (item.type === "LIKE" || item.type === "COMMENT" || item.type === "SHARE") &&
+        !videos.has(item.referenceId)
+      ) {
+        ids.add(item.referenceId);
+      }
+    }
+    return Array.from(ids);
+  }, [items, videos]);
+
+  useEffect(() => {
+    if (unresolvedVideoIds.length === 0) return;
+    let cancelled = false;
+    const chunks: string[][] = [];
+    for (let i = 0; i < unresolvedVideoIds.length; i += MAX_PROFILE_BATCH) {
+      chunks.push(unresolvedVideoIds.slice(i, i + MAX_PROFILE_BATCH));
+    }
+    Promise.all(chunks.map((ids) => getVideosByIds(ids)))
+      .then((results) => {
+        if (cancelled) return;
+        setVideos((current) => {
+          const next = new Map(current);
+          for (const video of results.flat()) next.set(video.id, video);
+          return next;
+        });
+      })
+      .catch(() => {
+        // A video that never resolves just leaves the row without a thumbnail.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [unresolvedVideoIds]);
+
   useNotificationRealtime(
     token,
     useCallback((frame: NotificationFrame) => {
@@ -230,6 +279,7 @@ export function useNotifications(): NotificationInbox {
     unreadCount: user ? unreadCount : 0,
     loaded,
     actors,
+    videos,
     markRead,
     markAllRead,
   };
