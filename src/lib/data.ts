@@ -1,6 +1,4 @@
 import {
-  ACTIVITY_FILTERS,
-  ACTIVITY_GROUPS,
   CURRENT_SESSION,
   CURRENT_USER,
   EXPLORE_CATEGORIES,
@@ -20,7 +18,6 @@ import {
   SUGGESTED_CREATORS,
 } from "@/lib/mock-feed";
 import type {
-  ActivityGroup,
   Author,
   Comment,
   ExploreItem,
@@ -193,9 +190,3 @@ export async function getFooterSections(): Promise<FooterSection[]> {
   return FOOTER_SECTIONS;
 }
 
-export async function getActivity(): Promise<{
-  filters: readonly string[];
-  groups: ActivityGroup[];
-}> {
-  return { filters: ACTIVITY_FILTERS, groups: ACTIVITY_GROUPS };
-}

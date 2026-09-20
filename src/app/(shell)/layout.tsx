@@ -1,5 +1,5 @@
 import { SideNav } from "@/components/layout/SideNav";
-import { getActivity, getFooterSections, getNavItems } from "@/lib/data";
+import { getFooterSections, getNavItems } from "@/lib/data";
 
 /**
  * The browsing shell: everything that sits beside the sidebar.
@@ -15,21 +15,16 @@ import { getActivity, getFooterSections, getNavItems } from "@/lib/data";
 export default async function ShellLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const [navItems, footerSections, activity] = await Promise.all([
+  const [navItems, footerSections] = await Promise.all([
     getNavItems(),
     getFooterSections(),
-    getActivity(),
   ]);
 
   return (
     <>
       {/* Placeholder reserves the sidebar's 240px; SideNav itself is fixed. */}
       <div className="z-[99] h-screen w-[var(--side-nav-width)] flex-none tt-1024:w-18">
-        <SideNav
-          navItems={navItems}
-          footerSections={footerSections}
-          activity={activity}
-        />
+        <SideNav navItems={navItems} footerSections={footerSections} />
       </div>
 
       {children}

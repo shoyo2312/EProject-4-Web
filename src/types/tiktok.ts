@@ -214,22 +214,6 @@ export interface UserProfile {
   posts: Record<ProfileTab, ProfileVideo[]>;
 }
 
-export interface ActivityNotification {
-  id: string;
-  /** `.PTitleText` — one line, ellipsised. */
-  title: string;
-  /** `.PSystemNotifDescText` — one line, ellipsised. */
-  description: string;
-  /** Renders the 6px red `TUXAlertBadgeDot` in the trailing container. */
-  unread?: boolean;
-}
-
-export interface ActivityGroup {
-  /** `.PTimeGroupTitle`, e.g. "Yesterday". */
-  title: string;
-  items: ActivityNotification[];
-}
-
 export type NavItemKind = "link" | "button";
 
 export interface NavItem {

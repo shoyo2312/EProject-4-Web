@@ -1,10 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 import { CloseIcon } from "@/components/icons";
+import {
+  NOTIFICATION_FILTERS,
+  groupByDay,
+  type NotificationInbox,
+} from "@/hooks/use-notifications";
+import type { NotificationResponse } from "@/lib/api/notifications";
+import { getProfile } from "@/lib/api/users";
 import { cn } from "@/lib/utils";
-import type { ActivityGroup, ActivityNotification } from "@/types/tiktok";
 
 /**
  * `.DivDrawerContainer` — extracted verbatim:
@@ -38,16 +45,53 @@ import type { ActivityGroup, ActivityNotification } from "@/types/tiktok";
  */
 export function ActivityDrawer({
   open,
-  filters,
-  groups,
+  inbox,
   onClose,
 }: {
   open: boolean;
-  filters: readonly string[];
-  groups: ActivityGroup[];
+  inbox: NotificationInbox;
   onClose: () => void;
 }) {
-  const [filter, setFilter] = useState<string>(filters[0]);
+  const router = useRouter();
+  const [filter, setFilter] = useState<string>(NOTIFICATION_FILTERS[0].label);
+
+  const groups = useMemo(() => {
+    const selected = NOTIFICATION_FILTERS.find((chip) => chip.label === filter);
+    const types = selected?.types ?? null;
+    const visible = types
+      ? inbox.items.filter((item) =>
+          (types as readonly string[]).includes(item.type),
+        )
+      : inbox.items;
+    return groupByDay(visible);
+  }, [inbox.items, filter]);
+
+  /**
+   * Follow the notification to whatever it is about, and mark it read on the
+   * way — opening it is the read, the same as the live site.
+   *
+   * A NEW_FOLLOWER carries the follower's userId, and profile routes are keyed
+   * by handle, so that one costs a lookup. It happens on click rather than up
+   * front: most notifications in the drawer are never opened, and hydrating
+   * every follower would be a request per row for nothing.
+   */
+  const openNotification = async (item: NotificationResponse) => {
+    inbox.markRead(item.id);
+    if (!item.referenceId) return;
+
+    if (item.type === "NEW_FOLLOWER") {
+      try {
+        const profile = await getProfile(item.referenceId);
+        if (profile.username) router.push(`/@${profile.username}`);
+      } catch {
+        // Blocked either way, or the account is gone — there is nowhere to go,
+        // and the notification stays read.
+      }
+      return;
+    }
+    if (item.type === "SYSTEM") return;
+    router.push(`/video/${item.referenceId}`);
+  };
 
   // Not extracted from the live site — a baseline affordance for a fixed
   // overlay that would otherwise only be dismissable by re-clicking the nav.
@@ -94,18 +138,32 @@ export function ActivityDrawer({
         {/* `.DivInboxHeaderContainer` — flex column, gap 16, flex 0 0 auto */}
         <div className="flex flex-none flex-col gap-4 px-2">
           {/* `.H2InboxTitle` — NowaDisplayFont 20px/25px/600 */}
-          <h2 className="flex text-[20px] font-semibold leading-[25px] text-[var(--tt-text)]">
-            Notifications
-          </h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="flex text-[20px] font-semibold leading-[25px] text-[var(--tt-text)]">
+              Notifications
+            </h2>
+            {/* Not on the live drawer, which marks read per row only. Kept
+                because the inbox here is unpaginated: with nothing to open,
+                an old unread row would hold the badge up forever. */}
+            {inbox.unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={inbox.markAllRead}
+                className="me-9 shrink-0 cursor-pointer text-[13px] font-semibold leading-[17px] text-[var(--tt-text-tertiary,rgb(255_255_255_/_0.5))] transition-colors hover:text-[var(--tt-text)]"
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
 
           {/* `.DivGroupContainer` — flex wrap, gap 12px 8px */}
           <div className="flex flex-wrap gap-x-2 gap-y-3">
-            {filters.map((label) => (
+            {NOTIFICATION_FILTERS.map((chip) => (
               <FilterChip
-                key={label}
-                label={label}
-                selected={filter === label}
-                onSelect={() => setFilter(label)}
+                key={chip.label}
+                label={chip.label}
+                selected={filter === chip.label}
+                onSelect={() => setFilter(chip.label)}
               />
             ))}
           </div>
@@ -114,6 +172,11 @@ export function ActivityDrawer({
         {/* `.DivInboxContentContainer` — flex 1 1 auto, overflow auto, with an
             8px negative end margin so the scrollbar sits outside the padding. */}
         <div className="no-scrollbar -me-2 flex-1 overflow-auto pe-2">
+          {groups.length === 0 && inbox.loaded && (
+            <p className="px-2 py-6 text-[14px] leading-[18px] text-[rgb(255_255_255_/_0.5)]">
+              No notifications yet.
+            </p>
+          )}
           {groups.map((group) => (
             <div key={group.title}>
               {/* `.PTimeGroupTitle` — 14px/600/18px, padding 0 8px 4px */}
@@ -123,7 +186,10 @@ export function ActivityDrawer({
               <ul>
                 {group.items.map((item) => (
                   <li key={item.id} className="mb-4 last:mb-0">
-                    <NotificationItem item={item} />
+                    <NotificationItem
+                      item={item}
+                      onOpen={() => void openNotification(item)}
+                    />
                   </li>
                 ))}
               </ul>
@@ -177,9 +243,26 @@ function FilterChip({
  *   `.DivSystemNotifTrailingContainer` padding-left 12px, gap 10px, flex-shrink 0
  *   `TUXAlertBadgeDot`                 6px, #fe2c55, radius 999px
  */
-function NotificationItem({ item }: { item: ActivityNotification }) {
+function NotificationItem({
+  item,
+  onOpen,
+}: {
+  item: NotificationResponse;
+  onOpen: () => void;
+}) {
   return (
-    <div className="flex h-[72px] cursor-pointer flex-row items-center px-2 transition-colors hover:bg-[rgb(37,37,37)]">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      className="flex h-[72px] cursor-pointer flex-row items-center px-2 transition-colors hover:bg-[rgb(37,37,37)]"
+    >
       <div className="flex h-12 w-12 min-w-12 items-center justify-center rounded-3xl bg-[rgb(50,54,75)]">
         <BellGlyph />
       </div>
@@ -189,12 +272,12 @@ function NotificationItem({ item }: { item: ActivityNotification }) {
           {item.title}
         </p>
         <p className="truncate text-[13px] leading-[17px] text-[var(--tt-text)]">
-          {item.description}
+          {item.body}
         </p>
       </div>
 
       <div className="flex flex-shrink-0 items-center justify-center gap-2.5 ps-3">
-        {item.unread && (
+        {!item.read && (
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--tt-red)]" />
         )}
       </div>

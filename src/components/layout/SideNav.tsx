@@ -21,9 +21,10 @@ import {
 } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { useNotifications } from "@/hooks/use-notifications";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import { cn } from "@/lib/utils";
-import type { ActivityGroup, FooterSection, NavItem } from "@/types/tiktok";
+import type { FooterSection, NavItem } from "@/types/tiktok";
 
 const ICONS: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
   "For You": ForYouIcon,
@@ -62,12 +63,13 @@ const ICONS: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
 export function SideNav({
   navItems,
   footerSections,
-  activity,
 }: {
   navItems: NavItem[];
   footerSections: FooterSection[];
-  activity: { filters: readonly string[]; groups: ActivityGroup[] };
 }) {
+  // One inbox for both readers: the rail's badge and the drawer's list are the
+  // same unread set, and fetching it twice would let the two disagree.
+  const inbox = useNotifications();
   const [activityOpen, setActivityOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   // Both drawers sit in the same slot beside the rail, so opening one closes
@@ -105,6 +107,11 @@ export function SideNav({
         return { ...item, href: `/@${user.username}` };
       }
       if (item.label === "Upload") return { ...item, href: "/upload" };
+      // The static badge in the nav data was a placeholder; this is the real
+      // count. Zero drops the badge entirely rather than painting a "0".
+      if (item.label === "Activity") {
+        return { ...item, badgeCount: inbox.unreadCount || undefined };
+      }
       return item;
     });
 
@@ -258,8 +265,7 @@ export function SideNav({
 
       <ActivityDrawer
         open={activityOpen}
-        filters={activity.filters}
-        groups={activity.groups}
+        inbox={inbox}
         onClose={() => setActivityOpen(false)}
       />
 

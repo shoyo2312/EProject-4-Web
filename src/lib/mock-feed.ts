@@ -1,5 +1,4 @@
 import type {
-  ActivityGroup,
   Author,
   Comment,
   ExploreItem,
@@ -395,70 +394,6 @@ export const FEED_COMMENTS: Record<string, Comment[]> = {
     },
   ],
 };
-
-/**
- * Activity drawer filter chips — verbatim labels and order from the live
- * `.DivGroupContainer`. These are UI chrome, not user content.
- */
-export const ACTIVITY_FILTERS = [
-  "All activity",
-  "Likes",
-  "Comments",
-  "Mentions and tags",
-  "Followers",
-] as const;
-
-/**
- * Notification groups. The group heading style ("Yesterday") is verbatim; the
- * notifications themselves are written for this clone. The live drawer showed
- * the account owner's real notifications — personal data that must not be
- * vendored, same reasoning as `FEED_COMMENTS`.
- */
-export const ACTIVITY_GROUPS: ActivityGroup[] = [
-  {
-    title: "Yesterday",
-    items: [
-      {
-        id: "n1",
-        title: "Your video is doing well",
-        description: "golden hour from the 40th floor passed 300K views",
-        unread: true,
-      },
-      {
-        id: "n2",
-        title: "nightowl.jpg commented",
-        description: "the way the lights come on one by one is unreal",
-        unread: true,
-      },
-      {
-        id: "n3",
-        title: "New follower",
-        description: "marabuilds started following you",
-        unread: true,
-      },
-    ],
-  },
-  {
-    title: "This week",
-    items: [
-      {
-        id: "n4",
-        title: "tempoflux mentioned you",
-        description: "tagged you in a comment",
-      },
-      {
-        id: "n5",
-        title: "Weekly summary",
-        description: "Your videos reached 1.2M people this week",
-      },
-      {
-        id: "n6",
-        title: "okaykev liked your video",
-        description: "72-hour cold ferment. worth every minute",
-      },
-    ],
-  },
-];
 
 /**
  * Share sheet, first row (`.DivActionContainer` × N inside a horizontal
