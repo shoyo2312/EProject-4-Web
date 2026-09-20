@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import {
@@ -12,6 +12,8 @@ import {
   type NotificationType,
 } from "@/lib/api/notifications";
 import { getAccessToken } from "@/lib/api/tokens";
+import { getProfiles, MAX_PROFILE_BATCH } from "@/lib/api/users";
+import type { UserProfileResponse } from "@/lib/api/types";
 import {
   useNotificationRealtime,
   type NotificationFrame,
@@ -78,6 +80,7 @@ function startOfDay(date: Date): Date {
 function fromFrame(frame: NotificationFrame): NotificationResponse {
   return {
     id: frame.notificationId,
+    actorId: frame.actorId === null ? null : String(frame.actorId),
     type: frame.type,
     title: frame.title,
     body: frame.body,
@@ -92,6 +95,8 @@ export interface NotificationInbox {
   unreadCount: number;
   /** False until the first inbox fetch settles — the empty state waits on it. */
   loaded: boolean;
+  /** Actor avatar/username, keyed by `NotificationResponse.actorId`. Fills in as resolved. */
+  actors: Map<string, UserProfileResponse>;
   markRead: (notificationId: string) => void;
   markAllRead: () => void;
 }
@@ -115,6 +120,9 @@ export function useNotifications(): NotificationInbox {
   const [items, setItems] = useState<NotificationResponse[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [actors, setActors] = useState<Map<string, UserProfileResponse>>(
+    () => new Map(),
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -138,6 +146,42 @@ export function useNotifications(): NotificationInbox {
       cancelled = true;
     };
   }, [user]);
+
+  // Batch-resolve whichever actors the current list names that a prior batch
+  // has not already answered. Runs after every items change rather than only
+  // on load, so a realtime frame's actor gets an avatar too.
+  const unresolvedActorIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of items) {
+      if (item.actorId && !actors.has(item.actorId)) ids.add(item.actorId);
+    }
+    return Array.from(ids);
+  }, [items, actors]);
+
+  useEffect(() => {
+    if (unresolvedActorIds.length === 0) return;
+    let cancelled = false;
+    const chunks: string[][] = [];
+    for (let i = 0; i < unresolvedActorIds.length; i += MAX_PROFILE_BATCH) {
+      chunks.push(unresolvedActorIds.slice(i, i + MAX_PROFILE_BATCH));
+    }
+    Promise.all(chunks.map((chunk) => getProfiles(chunk)))
+      .then((results) => {
+        if (cancelled) return;
+        setActors((current) => {
+          const next = new Map(current);
+          for (const profile of results.flat()) next.set(profile.userId, profile);
+          return next;
+        });
+      })
+      .catch(() => {
+        // A profile that never resolves just keeps the fallback avatar/glyph;
+        // nothing here needs a retry loop.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [unresolvedActorIds]);
 
   useNotificationRealtime(
     token,
@@ -185,6 +229,7 @@ export function useNotifications(): NotificationInbox {
     items: user ? items : [],
     unreadCount: user ? unreadCount : 0,
     loaded,
+    actors,
     markRead,
     markAllRead,
   };

@@ -18,6 +18,8 @@ export type NotificationType =
 
 export interface NotificationResponse {
   id: string;
+  /** Who did the thing (liked/commented/shared/followed). Null for SYSTEM. */
+  actorId: string | null;
   type: NotificationType;
   title: string;
   body: string;

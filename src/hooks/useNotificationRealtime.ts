@@ -15,6 +15,7 @@ import type { NotificationType } from "@/lib/api/notifications";
 export interface NotificationFrame {
   notificationId: string;
   recipientId: number;
+  actorId: number | null;
   type: NotificationType;
   title: string;
   body: string;

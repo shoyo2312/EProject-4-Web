@@ -9,7 +9,9 @@ import {
   groupByDay,
   type NotificationInbox,
 } from "@/hooks/use-notifications";
+import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import type { NotificationResponse } from "@/lib/api/notifications";
+import type { UserProfileResponse } from "@/lib/api/types";
 import { getProfile } from "@/lib/api/users";
 import { cn } from "@/lib/utils";
 
@@ -188,6 +190,7 @@ export function ActivityDrawer({
                   <li key={item.id} className="mb-4 last:mb-0">
                     <NotificationItem
                       item={item}
+                      actor={item.actorId ? inbox.actors.get(item.actorId) : undefined}
                       onOpen={() => void openNotification(item)}
                     />
                   </li>
@@ -243,13 +246,38 @@ function FilterChip({
  *   `.DivSystemNotifTrailingContainer` padding-left 12px, gap 10px, flex-shrink 0
  *   `TUXAlertBadgeDot`                 6px, #fe2c55, radius 999px
  */
+/**
+ * Verb line for an item with an actor. Only COMMENT carries extra content —
+ * `body` is the comment's own text (see notification-service), truncated by
+ * the same one-line `truncate` class every other line here already uses.
+ */
+function describe(item: NotificationResponse): string {
+  switch (item.type) {
+    case "LIKE":
+      return "liked your video";
+    case "SHARE":
+      return "shared your video";
+    case "NEW_FOLLOWER":
+      return "started following you";
+    case "COMMENT":
+      return `commented: ${item.body}`;
+    case "SYSTEM":
+      return item.body;
+  }
+}
+
 function NotificationItem({
   item,
+  actor,
   onOpen,
 }: {
   item: NotificationResponse;
+  /** Undefined while still resolving, or absent for SYSTEM (no actor). */
+  actor: UserProfileResponse | undefined;
   onOpen: () => void;
 }) {
+  const heading = actor ? (actor.username ?? "Someone") : item.title;
+
   return (
     <div
       role="button"
@@ -264,15 +292,26 @@ function NotificationItem({
       className="flex h-[72px] cursor-pointer flex-row items-center px-2 transition-colors hover:bg-[rgb(37,37,37)]"
     >
       <div className="flex h-12 w-12 min-w-12 items-center justify-center rounded-3xl bg-[rgb(50,54,75)]">
-        <BellGlyph />
+        {item.actorId ? (
+          // eslint-disable-next-line @next/next/no-img-element -- the avatar can be any CDN URL the account set; next/image would need each host allow-listed
+          <img
+            src={actor?.avatarUrl ?? DEFAULT_AVATAR}
+            alt=""
+            width={48}
+            height={48}
+            className="h-12 w-12 rounded-3xl object-cover"
+          />
+        ) : (
+          <BellGlyph />
+        )}
       </div>
 
       <div className="min-w-0 flex-1 pe-2 ps-3">
         <p className="truncate text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
-          {item.title}
+          {heading}
         </p>
         <p className="truncate text-[13px] leading-[17px] text-[var(--tt-text)]">
-          {item.body}
+          {describe(item)}
         </p>
       </div>
 
