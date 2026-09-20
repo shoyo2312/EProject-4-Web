@@ -13,6 +13,7 @@ import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import type { NotificationResponse } from "@/lib/api/notifications";
 import type { UserProfileResponse } from "@/lib/api/types";
 import { getProfile } from "@/lib/api/users";
+import { formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -311,7 +312,7 @@ function NotificationItem({
           {heading}
         </p>
         <p className="truncate text-[13px] leading-[17px] text-[var(--tt-text)]">
-          {describe(item)}
+          {describe(item)} · {formatRelativeTime(item.createdAt)}
         </p>
       </div>
 
