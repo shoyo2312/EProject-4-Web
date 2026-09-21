@@ -137,6 +137,7 @@ export function ShareSheet({
         new URL(`/video/${videoId}`, window.location.origin).href,
       );
       toast.success("Link copied.");
+      onClose();
     } catch {
       toast.warning("Couldn’t copy the link.");
     }
@@ -149,12 +150,14 @@ export function ShareSheet({
     }
     if (isMockVideo) {
       toast.success("Reposted.");
+      onClose();
       return;
     }
     try {
       await repostVideo(videoId);
       setRepostedByMe(videoId, user.userId, true);
       toast.success("Reposted.");
+      onClose();
     } catch (cause) {
       if (isApiError(cause) && cause.is("REPOST_RATE_LIMITED")) {
         toast.warning("You’re reposting too fast — try again later.");
