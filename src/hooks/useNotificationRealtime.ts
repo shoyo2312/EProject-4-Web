@@ -14,8 +14,13 @@ import type { NotificationType } from "@/lib/api/notifications";
  */
 export interface NotificationFrame {
   notificationId: string;
-  recipientId: number;
-  actorId: number | null;
+  /**
+   * Ids arrive as strings, like every other frame chat-service sends: a Snowflake relayed as a
+   * JSON number is rounded by `JSON.parse` (see `lib/api/json`), and an actor id off by its last
+   * digits resolves to nobody — which showed up as a notification with no name and no avatar.
+   */
+  recipientId: string;
+  actorId: string | null;
   type: NotificationType;
   title: string;
   body: string;

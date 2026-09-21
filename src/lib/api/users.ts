@@ -28,6 +28,20 @@ export function getProfile(userId: string): Promise<UserProfileResponse> {
 }
 
 /**
+ * `GET /api/v1/users/by-username/{username}` — the same profile addressed by handle,
+ * for a `/@name` URL. Case-insensitive; 404s exactly as `getProfile` does, which
+ * again means "not there, or you two blocked each other" and nothing finer.
+ */
+export function getProfileByUsername(
+  username: string,
+): Promise<UserProfileResponse> {
+  return apiFetch<UserProfileResponse>(
+    `/users/by-username/${encodeURIComponent(username)}`,
+    { auth: "required" },
+  );
+}
+
+/**
  * Cap on one `getProfiles` call, mirroring user-service's `MAX_BATCH_IDS`.
  * More than this is a `TooManyProfileIdsException`, so callers chunk.
  */

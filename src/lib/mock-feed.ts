@@ -90,7 +90,6 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Explore", kind: "link", href: "/explore" },
   { label: "Following", kind: "link", href: "/following" },
   { label: "Friends", kind: "link", href: "/friends", authOnly: true },
-  { label: "LIVE", kind: "link", href: "/live" },
   { label: "Messages", kind: "button", authOnly: true },
   // The badge count on the live site was the account owner's real unread count.
   // It is deliberately replaced with an arbitrary number — it is personal data,

@@ -63,10 +63,18 @@ const settled = new Map<string, CommentPage>();
  * The panel is keyed by video id, so scrolling the feed unmounts and remounts
  * it; without this every pass over the same video re-fetched its comments and
  * flashed a skeleton. A failed fetch drops its entry so the next open retries.
+ *
+ * `refresh` refetches anyway, for an open that has to see other people's
+ * comments rather than only this tab's — nothing expires a cached page on its
+ * own, and only mutations this tab witnessed drop it. The settled copy is left
+ * in place until the new one lands, so `peekCommentPage` still paints.
  */
-export function loadFirstCommentPage(videoId: string): Promise<CommentPage> {
+export function loadFirstCommentPage(
+  videoId: string,
+  refresh = false,
+): Promise<CommentPage> {
   const cached = pages.get(videoId);
-  if (cached) return cached;
+  if (cached && !refresh) return cached;
 
   const pending = listComments(videoId, undefined, COMMENT_FIRST_PAGE_SIZE)
     .then(async (page): Promise<CommentPage> => {

@@ -12,7 +12,6 @@ import {
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import type { NotificationResponse } from "@/lib/api/notifications";
 import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
-import { getProfile } from "@/lib/api/users";
 import { formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -70,53 +69,46 @@ export function ActivityDrawer({
   }, [inbox.items, filter]);
 
   /**
+   * Every route the drawer hands off to closes it on the way out: it is a fixed
+   * overlay pinned beside the nav, so left open it sits on top of the profile
+   * or the video the click just asked for.
+   */
+  const navigate = (path: string) => {
+    onClose();
+    router.push(path);
+  };
+
+  /**
    * Follow the notification to whatever it is about, and mark it read on the
    * way — opening it is the read, the same as the live site.
-   *
-   * A NEW_FOLLOWER carries the follower's userId, and profile routes are keyed
-   * by handle, so that one costs a lookup. It happens on click rather than up
-   * front: most notifications in the drawer are never opened, and hydrating
-   * every follower would be a request per row for nothing.
    */
-  const openNotification = async (item: NotificationResponse) => {
+  const openNotification = (item: NotificationResponse) => {
     inbox.markRead(item.id);
     if (!item.referenceId) return;
 
+    // A NEW_FOLLOWER's referenceId is the follower's userId, and `/@{id}` is a
+    // profile URL in its own right (see ProfileRouter) — no lookup needed to
+    // turn it into a handle first.
     if (item.type === "NEW_FOLLOWER") {
-      try {
-        const profile = await getProfile(item.referenceId);
-        if (profile.username) router.push(`/@${profile.username}`);
-      } catch {
-        // Blocked either way, or the account is gone — there is nowhere to go,
-        // and the notification stays read.
-      }
+      navigate(`/@${item.referenceId}`);
       return;
     }
     if (item.type === "SYSTEM") return;
-    router.push(`/video/${item.referenceId}`);
+    navigate(`/video/${item.referenceId}`);
   };
 
   /**
    * The username itself is a second, narrower target than the row: it always
    * goes to the actor's profile, even on a LIKE/COMMENT/SHARE row where the
-   * row's own click goes to the video instead. Reuses whatever `actors` has
-   * already resolved (see `use-notifications`) rather than a fresh lookup —
-   * for NEW_FOLLOWER that map is keyed by the same id `openNotification`
-   * looks up above, so this is normally free.
+   * row's own click goes to the video instead. Uses the handle when `actors`
+   * has already resolved one — it is the nicer URL — and the id otherwise,
+   * which the profile route answers just the same.
    */
-  const openActor = async (item: NotificationResponse, actor: UserProfileResponse | undefined) => {
+  const openActor = (item: NotificationResponse, actor: UserProfileResponse | undefined) => {
     inbox.markRead(item.id);
-    if (actor?.username) {
-      router.push(`/@${actor.username}`);
-      return;
-    }
-    if (!item.actorId) return;
-    try {
-      const profile = await getProfile(item.actorId);
-      if (profile.username) router.push(`/@${profile.username}`);
-    } catch {
-      // Same as above: nowhere to go, notification stays read.
-    }
+    const handle = actor?.username ?? item.actorId;
+    if (!handle) return;
+    navigate(`/@${handle}`);
   };
 
   // Not extracted from the live site — a baseline affordance for a fixed
@@ -218,8 +210,8 @@ export function ActivityDrawer({
                         item={item}
                         actor={actor}
                         video={item.referenceId ? inbox.videos.get(item.referenceId) : undefined}
-                        onOpen={() => void openNotification(item)}
-                        onOpenActor={() => void openActor(item, actor)}
+                        onOpen={() => openNotification(item)}
+                        onOpenActor={() => openActor(item, actor)}
                       />
                     </li>
                   );
@@ -310,6 +302,13 @@ function NotificationItem({
   onOpen: () => void;
   onOpenActor: () => void;
 }) {
+  /**
+   * The actor is the heading — a row about a person shows that person, never the service's own
+   * "Bình luận mới" wording. `item.title` is only the heading for SYSTEM, which has no actor.
+   * While the profile is still in flight the name is a skeleton rather than that fallback: the
+   * batch lands in a moment and a placeholder that reads like real content is worse than a bar.
+   */
+  const pendingActor = Boolean(item.actorId) && !actor;
   const heading = actor ? (actor.username ?? "Someone") : item.title;
 
   return (
@@ -342,7 +341,9 @@ function NotificationItem({
 
       <div className="min-w-0 flex-1 pe-2 ps-3">
         <p className="truncate text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
-          {actor ? (
+          {pendingActor ? (
+            <span className="inline-block h-[14px] w-24 animate-pulse rounded bg-[rgb(255_255_255_/_0.12)] align-middle" />
+          ) : actor ? (
             // Its own click target, narrower than the row: stopPropagation so
             // it doesn't also fire `onOpen` (the video/nothing the row goes to).
             <span
@@ -373,7 +374,7 @@ function NotificationItem({
       </div>
 
       {video?.thumbnailUrl && (
-        <div className="h-12 w-9 flex-shrink-0 overflow-hidden rounded-md">
+        <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-sm">
           {/* eslint-disable-next-line @next/next/no-img-element -- CDN thumbnail, same reasoning as the avatar above */}
           <img
             src={video.thumbnailUrl}

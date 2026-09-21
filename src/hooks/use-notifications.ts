@@ -77,11 +77,24 @@ function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+/** Stands in for an actor user-service will not hand over — see the batch effect below. */
+function blankProfile(userId: string): UserProfileResponse {
+  return {
+    userId,
+    username: null,
+    displayName: null,
+    bio: null,
+    avatarUrl: null,
+    followerCount: 0,
+    followingCount: 0,
+  };
+}
+
 /** A relayed frame, in the shape the inbox list holds. Always unread. */
 function fromFrame(frame: NotificationFrame): NotificationResponse {
   return {
     id: frame.notificationId,
-    actorId: frame.actorId === null ? null : String(frame.actorId),
+    actorId: frame.actorId,
     type: frame.type,
     title: frame.title,
     body: frame.body,
@@ -180,6 +193,12 @@ export function useNotifications(): NotificationInbox {
         setActors((current) => {
           const next = new Map(current);
           for (const profile of results.flat()) next.set(profile.userId, profile);
+          // An id the batch answered nothing for is gone or blocked either way, so it is
+          // recorded as a blank profile rather than left out: an absent entry reads as "still
+          // loading" to the drawer, which would spin forever and ask again on every change.
+          for (const id of unresolvedActorIds) {
+            if (!next.has(id)) next.set(id, blankProfile(id));
+          }
           return next;
         });
       })

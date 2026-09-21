@@ -5,7 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "@/components/session/SessionProvider";
 import { toFeedCards } from "@/lib/api/feed-cards";
 import { getPersonalizedFeed } from "@/lib/api/recommendations";
-import { getFeed, getVideosByIds } from "@/lib/api/videos";
+import { getStompClient, onStompConnect } from "@/lib/realtime/stompClient";
+import { getAccessToken } from "@/lib/api/tokens";
+import { getFeed, getVideo, getVideosByIds } from "@/lib/api/videos";
 import type { VideoResponse } from "@/lib/api/types";
 import type { FeedVideo } from "@/types/tiktok";
 
@@ -186,6 +188,62 @@ export function useVideoFeed(): VideoFeedState {
       inFlight.current = false;
     };
   }, [load, sessionLoading]);
+
+  /**
+   * A video published while the feed is open, appended live.
+   *
+   * Appended rather than prepended on purpose: the list is a scroll-snap
+   * container, and inserting above the card the viewer is on moves the video
+   * out from under them mid-watch. At the end it is simply the next one down.
+   *
+   * chat-service broadcasts only the id (`/topic/feed`, on an APPROVED
+   * moderation verdict); hydrating it here runs the normal read path, so a
+   * PRIVATE video the owner happens to be subscribed for is filtered out by the
+   * status/visibility check rather than by trusting the frame. Signed-out
+   * viewers get no socket at all — the handshake needs a token — so for them
+   * the feed stays as it was.
+   */
+  useEffect(() => {
+    const token = getAccessToken();
+    if (!token) return;
+
+    const client = getStompClient(token);
+    let subscription: { unsubscribe: () => void } | null = null;
+    let cancelled = false;
+
+    const append = async (videoId: string) => {
+      if (seenIds.current.has(videoId)) return;
+      const video = await getVideo(videoId).catch(() => null);
+      if (cancelled || !video) return;
+      if (video.status !== "PUBLISHED" || video.visibility !== "PUBLIC") return;
+
+      const cards = await toCards([video]);
+      if (cancelled || cards.length === 0) return;
+      setVideos((current) => [...current, ...cards]);
+    };
+
+    const subscribe = () => {
+      if (!client.connected || subscription) return;
+      subscription = client.subscribe("/topic/feed", (message) => {
+        const frame = JSON.parse(message.body) as { videoId?: string };
+        if (frame.videoId) void append(frame.videoId);
+      });
+    };
+
+    subscribe();
+    // A reconnect drops every subscription, so re-subscribe instead of assuming
+    // this one survived — same contract as `useVideoRealtime`.
+    const unsubscribeConnect = onStompConnect(() => {
+      subscription = null;
+      subscribe();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribeConnect();
+      subscription?.unsubscribe();
+    };
+  }, [toCards]);
 
   const loadMore = useCallback(() => {
     if (!hasMore || inFlight.current) return;

@@ -373,10 +373,16 @@ export function CommentPanel({
       return;
     }
     let cancelled = false;
-    setLoading(true);
+    // The cached page seeds the paint; opening the panel always refetches.
+    // The cache lives for the whole tab and only drops on a mutation this tab
+    // saw, so a video whose comments were read while it had none — then opened
+    // again from a notification about a comment somebody else just left —
+    // otherwise kept painting the empty list until a full reload, under a
+    // header count that came fresh from video-service and said 1.
+    setLoading(!peekCommentPage(videoId));
     pendingRepliesRef.current = [];
 
-    loadFirstCommentPage(videoId)
+    loadFirstCommentPage(videoId, true)
       .then((page) => {
         if (cancelled) return;
         setComments(mergeComments([], page.entries, pendingRepliesRef.current));
