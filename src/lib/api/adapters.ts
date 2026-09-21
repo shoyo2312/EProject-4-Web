@@ -1,5 +1,5 @@
 import type { MeResponse, UserProfileResponse, VideoResponse } from "@/lib/api/types";
-import type { Author, FeedVideo, ProfileVideo, UserProfile } from "@/types/tiktok";
+import type { Author, ExploreItem, FeedVideo, ProfileVideo, UserProfile } from "@/types/tiktok";
 
 /**
  * Backend DTOs → the UI shapes in `types/tiktok.ts`. Every mismatch between
@@ -147,6 +147,28 @@ export function videoToProfileVideo(video: VideoResponse): ProfileVideo {
     views: video.viewCount,
     isPrivate: video.visibility === "PRIVATE",
     status: video.status,
+  };
+}
+
+/**
+ * A backend video for the Explore grid. `category` is never video-service's —
+ * it has no taxonomy — so it is whatever the caller filtered by: "All" for the
+ * plain feed, or the tapped tab's label when the tile came back from a search
+ * scoped to it.
+ */
+export function videoToExploreItem(
+  video: VideoResponse,
+  author: Author,
+  category: string,
+): ExploreItem {
+  return {
+    id: video.id,
+    category,
+    author,
+    caption: video.description || video.title,
+    posterUrl: video.thumbnailUrl ?? "",
+    videoUrl: video.hlsUrl ?? "",
+    views: video.viewCount,
   };
 }
 

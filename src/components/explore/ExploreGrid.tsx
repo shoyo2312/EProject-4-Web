@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 
 import { PlayIcon } from "@/components/icons";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useExploreFeed } from "@/hooks/use-explore-feed";
 import { formatCount } from "@/lib/format";
 import { markOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
@@ -21,16 +23,12 @@ import type { ExploreItem } from "@/types/tiktok";
  */
 export function ExploreGrid({
   categories,
-  items,
 }: {
   categories: readonly string[];
-  items: ExploreItem[];
 }) {
   const [active, setActive] = useState(categories[0] ?? "All");
   const listRef = useRef<HTMLDivElement>(null);
-
-  const visible =
-    active === "All" ? items : items.filter((item) => item.category === active);
+  const { items: visible, isLoading, error } = useExploreFeed(active);
 
   const scrollBy = (direction: 1 | -1) => {
     listRef.current?.scrollBy({ left: 240 * direction, behavior: "smooth" });
@@ -72,20 +70,42 @@ export function ExploreGrid({
         />
       </div>
 
+      {Boolean(error) && (
+        <p className="pb-6 text-center text-[13px] text-[var(--tt-red-active)]">
+          Can’t reach the API gateway on :8080.
+        </p>
+      )}
+
       {/* `.DivThreeColumnContainer` — 6 columns at full width, stepping down
           with the viewport. */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-        {visible.map((item) => (
-          <ExploreTile key={item.id} item={item} />
-        ))}
+        {isLoading
+          ? Array.from({ length: 12 }).map((_, i) => <ExploreTileSkeleton key={i} />)
+          : visible.map((item) => <ExploreTile key={item.id} item={item} />)}
       </div>
 
-      {visible.length === 0 && (
+      {!isLoading && visible.length === 0 && (
         <p className="py-24 text-center text-[15px] text-[var(--tt-text-muted)]">
           No videos in {active} yet.
         </p>
       )}
     </main>
+  );
+}
+
+function ExploreTileSkeleton() {
+  return (
+    <div className="flex flex-col gap-2">
+      <Skeleton className="aspect-[3/4] w-full rounded-[8px]" />
+      <div className="flex flex-col gap-1">
+        <Skeleton className="h-[18px] w-full" />
+        <Skeleton className="h-[18px] w-2/3" />
+      </div>
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-6 w-6 flex-none rounded-full" />
+        <Skeleton className="h-[18px] w-24" />
+      </div>
+    </div>
   );
 }
 
