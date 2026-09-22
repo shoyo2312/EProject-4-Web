@@ -169,6 +169,7 @@ export function videoToExploreItem(
     posterUrl: video.thumbnailUrl ?? "",
     videoUrl: video.hlsUrl ?? "",
     views: video.viewCount,
+    likes: video.likeCount,
   };
 }
 

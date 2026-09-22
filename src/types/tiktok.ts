@@ -144,6 +144,8 @@ export interface ExploreItem {
   /** Played muted on hover, the way the live grid previews a tile. */
   videoUrl: string;
   views: number;
+  /** What the tile overlays on the poster — the grid shows likes, not views. */
+  likes: number;
 }
 
 /**

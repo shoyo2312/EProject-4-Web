@@ -523,6 +523,8 @@ export const EXPLORE_ITEMS: ExploreItem[] = [
   category: category as string,
   caption: caption as string,
   views: views as number,
+  // Mock engagement rate, varied per tile so the grid doesn't read as one ratio.
+  likes: Math.round((views as number) * (0.06 + (index % 5) * 0.02)),
   author: EXPLORE_AUTHORS[index % EXPLORE_AUTHORS.length],
   posterUrl: `/images/posters/poster-${(index % 3) + 1}.jpg`,
   videoUrl: `/videos/video-${(index % 3) + 1}.mp4`,
@@ -548,10 +550,10 @@ export function exploreItemAsVideo(item: ExploreItem): FeedVideo {
     title: item.caption,
     description: "",
     music: source.music,
-    // Engagement is derived from the one number a tile does carry, at ratios in
+    // Engagement is derived from the numbers a tile does carry, at ratios in
     // the range the feed entries sit at, so the rail is not full of zeroes.
     stats: {
-      likes: Math.round(item.views * 0.12),
+      likes: item.likes,
       comments: Math.round(item.views * 0.004),
       bookmarks: Math.round(item.views * 0.02),
       shares: Math.round(item.views * 0.01),

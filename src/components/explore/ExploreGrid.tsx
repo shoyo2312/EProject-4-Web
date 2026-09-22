@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { PlayIcon } from "@/components/icons";
+import { HeartIcon, MutedIcon, VolumeIcon } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useExploreFeed } from "@/hooks/use-explore-feed";
 import { formatCount } from "@/lib/format";
@@ -29,9 +29,29 @@ export function ExploreGrid({
   const [active, setActive] = useState(categories[0] ?? "All");
   const listRef = useRef<HTMLDivElement>(null);
   const { items: visible, isLoading, error } = useExploreFeed(active);
+  // Sound is a page-level setting, not a per-tile one: exactly one tile plays at
+  // a time — whichever is hovered, falling back to the last one hovered while
+  // the sound was on — and it is audible whenever `soundOn`.
+  const [soundOn, setSoundOn] = useState(false);
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const playingId = hoveredId ?? pinnedId;
 
   const scrollBy = (direction: 1 | -1) => {
     listRef.current?.scrollBy({ left: 240 * direction, behavior: "smooth" });
+  };
+
+  const toggleSound = (id: string) => {
+    const next = !soundOn;
+    setSoundOn(next);
+    setPinnedId(next ? id : null);
+  };
+
+  const setHover = (id: string, hovering: boolean) => {
+    setHoveredId((current) => (hovering ? id : current === id ? null : current));
+    // With the sound on, the pointer moving on carries it: the tile just
+    // hovered is the one that keeps playing once the pointer leaves the grid.
+    if (hovering && soundOn) setPinnedId(id);
   };
 
   return (
@@ -49,7 +69,12 @@ export function ExploreGrid({
             <button
               key={category}
               type="button"
-              onClick={() => setActive(category)}
+              onClick={() => {
+                setActive(category);
+                setSoundOn(false);
+                setPinnedId(null);
+                setHoveredId(null);
+              }}
               aria-pressed={category === active}
               className={cn(
                 "h-[42px] flex-none rounded-[8px] px-4 text-[15px] font-medium whitespace-nowrap transition-colors",
@@ -81,7 +106,16 @@ export function ExploreGrid({
       <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
         {isLoading
           ? Array.from({ length: 12 }).map((_, i) => <ExploreTileSkeleton key={i} />)
-          : visible.map((item) => <ExploreTile key={item.id} item={item} />)}
+          : visible.map((item) => (
+              <ExploreTile
+                key={item.id}
+                item={item}
+                soundOn={soundOn}
+                playing={playingId === item.id}
+                onHoverChange={(hovering) => setHover(item.id, hovering)}
+                onToggleSound={() => toggleSound(item.id)}
+              />
+            ))}
       </div>
 
       {!isLoading && visible.length === 0 && (
@@ -97,10 +131,6 @@ function ExploreTileSkeleton() {
   return (
     <div className="flex flex-col gap-2">
       <Skeleton className="aspect-[3/4] w-full rounded-[8px]" />
-      <div className="flex flex-col gap-1">
-        <Skeleton className="h-[18px] w-full" />
-        <Skeleton className="h-[18px] w-2/3" />
-      </div>
       <div className="flex items-center gap-2">
         <Skeleton className="h-6 w-6 flex-none rounded-full" />
         <Skeleton className="h-[18px] w-24" />
@@ -110,15 +140,32 @@ function ExploreTileSkeleton() {
 }
 
 /**
- * `.DivItemContainerV2` — a 3:4 poster that previews muted on hover, with the
- * view count overlaid, and the author row underneath.
+ * `.DivItemContainerV2` — a 3:4 poster that previews on hover, with a sound
+ * toggle and the like count overlaid, and the author row underneath.
+ *
+ * Whether it plays is the grid's call — only one tile does at a time — so
+ * `playing` comes down as a prop rather than being derived from `hovered`.
  */
-function ExploreTile({ item }: { item: ExploreItem }) {
+function ExploreTile({
+  item,
+  soundOn,
+  playing,
+  onHoverChange,
+  onToggleSound,
+}: {
+  item: ExploreItem;
+  soundOn: boolean;
+  playing: boolean;
+  onHoverChange: (hovering: boolean) => void;
+  onToggleSound: () => void;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [hovered, setHovered] = useState(false);
 
-  const preview = (playing: boolean) => {
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    video.muted = !soundOn;
     if (playing) {
       // Autoplay can reject (e.g. reduced-power mode) — the poster stays up.
       void video.play().catch(() => {});
@@ -126,7 +173,7 @@ function ExploreTile({ item }: { item: ExploreItem }) {
       video.pause();
       video.currentTime = 0;
     }
-  };
+  }, [playing, soundOn]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -134,8 +181,14 @@ function ExploreTile({ item }: { item: ExploreItem }) {
         href={`/video/${item.id}`}
         className="relative block aspect-[3/4] overflow-hidden rounded-[8px] bg-[var(--tt-field)]"
         onClick={() => markOverlayOrigin("/explore")}
-        onMouseEnter={() => preview(true)}
-        onMouseLeave={() => preview(false)}
+        onMouseEnter={() => {
+          setHovered(true);
+          onHoverChange(true);
+        }}
+        onMouseLeave={() => {
+          setHovered(false);
+          onHoverChange(false);
+        }}
       >
         <video
           ref={videoRef}
@@ -148,17 +201,39 @@ function ExploreTile({ item }: { item: ExploreItem }) {
           className="h-full w-full object-cover"
         />
 
-        {/* View count sits on a bottom gradient so it stays legible on any
-            poster frame. */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1 bg-gradient-to-t from-black/60 to-transparent px-2 pt-6 pb-2 text-[14px] font-medium text-white">
-          <PlayIcon className="h-4 w-4" />
-          {formatCount(item.views)}
+        {/* Like count and sound toggle sit on a bottom gradient so they stay
+            legible on any poster frame. */}
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2 pt-6 pb-2 text-[14px] font-medium text-white">
+          <span className="pointer-events-none flex items-center gap-1">
+            <HeartIcon className="h-4 w-4" />
+            {formatCount(item.likes)}
+          </span>
+
+          <button
+            type="button"
+            aria-label={soundOn ? "Turn sound off" : "Turn sound on"}
+            aria-pressed={soundOn}
+            onClick={(event) => {
+              // The toggle lives inside the tile's permalink.
+              event.preventDefault();
+              event.stopPropagation();
+              onToggleSound();
+            }}
+            className={cn(
+              "flex h-7 w-7 items-center justify-center rounded-full bg-black/40 transition-opacity hover:bg-black/60",
+              hovered || playing
+                ? "opacity-100"
+                : "pointer-events-none opacity-0",
+            )}
+          >
+            {soundOn ? (
+              <VolumeIcon className="h-4 w-4" />
+            ) : (
+              <MutedIcon className="h-4 w-4" />
+            )}
+          </button>
         </div>
       </Link>
-
-      <p className="line-clamp-2 text-[14px] leading-[20px] text-[var(--tt-text)]">
-        {item.caption}
-      </p>
 
       <Link
         href={`/@${item.author.username}`}
