@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useLikeDebounce } from "../useLikeDebounce";
+import { useLikeDebounce } from "@/hooks/use-like-debounce";
 
 describe("useLikeDebounce", () => {
   beforeEach(() => vi.useFakeTimers());

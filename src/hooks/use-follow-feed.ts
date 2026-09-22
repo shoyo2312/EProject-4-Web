@@ -28,6 +28,12 @@ export interface FollowFeedState {
    * one is a state the viewer can fix.
    */
   isEmptyGraph: boolean;
+  /**
+   * The accounts this feed was drawn from — everyone followed, or the mutuals.
+   * Empty until resolved, and while signed out. The suggestion grid excludes
+   * them rather than walking the follow graph a second time.
+   */
+  followedIds: readonly string[];
 }
 
 const PAGE_SIZE = 20;
@@ -59,6 +65,7 @@ export function useFollowFeed(source: FollowFeedSource = "following"): FollowFee
   const [error, setError] = useState<unknown>(null);
   const [hasMore, setHasMore] = useState(true);
   const [isEmptyGraph, setEmptyGraph] = useState(false);
+  const [resolvedIds, setResolvedIds] = useState<readonly string[]>([]);
 
   const inFlight = useRef(false);
   const seenIds = useRef<Set<string>>(new Set());
@@ -82,6 +89,7 @@ export function useFollowFeed(source: FollowFeedSource = "following"): FollowFee
               : await getFollowingIds(viewerId);
           resolvedFor.current = source;
           setEmptyGraph(followedIds.current.length === 0);
+          setResolvedIds(followedIds.current);
         }
 
         const page = await getFollowingFeed(
@@ -139,5 +147,13 @@ export function useFollowFeed(source: FollowFeedSource = "following"): FollowFee
     load();
   }, [hasMore, load]);
 
-  return { videos, isLoading, error, hasMore, loadMore, isEmptyGraph };
+  return {
+    videos,
+    isLoading,
+    error,
+    hasMore,
+    loadMore,
+    isEmptyGraph,
+    followedIds: resolvedIds,
+  };
 }

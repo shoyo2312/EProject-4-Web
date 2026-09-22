@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useEscapeKey } from "@/hooks/use-escape-key";
 import { CloseIcon } from "@/components/icons";
 import { useFollow } from "@/hooks/use-follow";
+import { useSuggestedCreators } from "@/hooks/use-suggested-creators";
 import {
   authorFromProfile,
   DEFAULT_AVATAR,
@@ -14,7 +16,6 @@ import { messageFor } from "@/lib/api/errors";
 import { isLastPage } from "@/lib/api/types";
 import type { PageResponse, UserProfileResponse } from "@/lib/api/types";
 import * as usersApi from "@/lib/api/users";
-import { SUGGESTED_CREATORS } from "@/lib/mock-feed";
 import { cn } from "@/lib/utils";
 import type { Author } from "@/types/tiktok";
 
@@ -53,13 +54,7 @@ export function FollowListModal({
 }) {
   const [tab, setTab] = useState<FollowTab>(initialTab);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   return (
     <div className="fixed inset-0 z-[3001] flex items-center justify-center">
@@ -300,13 +295,17 @@ async function fetchAllPages(
 
 /**
  * There is no user-suggestion endpoint on the backend — recommendation-service
- * only ranks the video feed. This reuses the same invented creators as the
- * `/following` empty state so the tab has something to show.
+ * only ranks the video feed. Same derivation as the `/following` empty state:
+ * the creators posting to the public feed right now.
  */
 function SuggestedList() {
+  const { creators, isLoading } = useSuggestedCreators();
+
+  if (isLoading) return <UserRowSkeletonList count={6} />;
+
   return (
     <div className="py-2">
-      {SUGGESTED_CREATORS.map((creator) => (
+      {creators.map((creator) => (
         <UserRow
           key={creator.id}
           author={creator.author}

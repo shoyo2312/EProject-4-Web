@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
+import { useEscapeKey } from "@/hooks/use-escape-key";
 import { CloseIcon } from "@/components/icons";
 import {
   NOTIFICATION_FILTERS,
@@ -113,14 +114,7 @@ export function ActivityDrawer({
 
   // Not extracted from the live site — a baseline affordance for a fixed
   // overlay that would otherwise only be dismissable by re-clicking the nav.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  useEscapeKey(onClose, open);
 
   return (
     <div

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useEscapeKey } from "@/hooks/use-escape-key";
 import { CloseIcon, EditPencilIcon } from "@/components/icons";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import { ACCEPTED_AVATAR_TYPES, MAX_AVATAR_BYTES } from "@/lib/api/users";
@@ -100,13 +101,7 @@ export function EditProfileModal({
     return () => urls.forEach((url) => URL.revokeObjectURL(url));
   }, []);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const dirty =
     draft.username !== profile.author.username ||

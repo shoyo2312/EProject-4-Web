@@ -24,21 +24,47 @@ export function searchParamsFor(term: string): { q?: string; hashtag?: string } 
 }
 
 /**
+ * What search-service actually sends: a raw Spring `Page`, with the metadata
+ * flat beside `content` rather than under `page` as user- and video-service
+ * shape theirs. Normalised below so the UI sees one `PageResponse`.
+ */
+interface FlatSpringPage<T> {
+  content: T[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+function toPageResponse<T>(raw: FlatSpringPage<T>): PageResponse<T> {
+  return {
+    content: raw.content,
+    page: {
+      number: raw.number,
+      size: raw.size,
+      totalElements: raw.totalElements,
+      totalPages: raw.totalPages,
+    },
+  };
+}
+
+/**
  * `GET /api/v1/search/videos?q=|hashtag=` — offset paged, newest-scoring first.
  *
  * Offsets rather than a cursor, because that is what the endpoint offers; the
  * feed's argument against them does not bite here, since a result set does not
  * grow at the head while somebody reads it.
  */
-export function searchVideos(
+export async function searchVideos(
   term: string,
   page = 0,
   size = 24,
   signal?: AbortSignal,
 ): Promise<PageResponse<VideoSearchResponse>> {
-  return apiFetch<PageResponse<VideoSearchResponse>>("/search/videos", {
+  const raw = await apiFetch<FlatSpringPage<VideoSearchResponse>>("/search/videos", {
     auth: "optional",
     query: { ...searchParamsFor(term), page, size },
     signal,
   });
+  return toPageResponse(raw);
 }

@@ -15,7 +15,6 @@ import {
   profileVideoAsVideo,
   SETTINGS_SECTIONS,
   SIGNUP_OPTIONS,
-  SUGGESTED_CREATORS,
 } from "@/lib/mock-feed";
 import type {
   Author,
@@ -27,7 +26,6 @@ import type {
   NavItem,
   ProfileTab,
   SettingsSection,
-  SuggestedCreator,
   UserProfile,
 } from "@/types/tiktok";
 
@@ -175,11 +173,6 @@ export async function getProfile(handle: string): Promise<UserProfile | null> {
 /** The eight sections of `/setting`, in the order the live nav lists them. */
 export async function getSettingsSections(): Promise<SettingsSection[]> {
   return SETTINGS_SECTIONS;
-}
-
-/** Cards for `/following` — who the live grid offers a viewer to follow. */
-export async function getSuggestedCreators(): Promise<SuggestedCreator[]> {
-  return SUGGESTED_CREATORS;
 }
 
 export async function getNavItems(): Promise<NavItem[]> {

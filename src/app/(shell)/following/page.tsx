@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
 import { FollowFeed } from "@/components/following/FollowFeed";
-import { getSuggestedCreators } from "@/lib/data";
 
 export const metadata: Metadata = {
   // Verbatim from the live document title.
@@ -15,13 +14,9 @@ export const metadata: Metadata = {
  * bar and page chrome come from `app/layout.tsx`; this route only owns the
  * content column.
  *
- * Stays a server component so the mock module never reaches the client bundle:
- * it loads the creator suggestions and hands them down as the empty and error
- * state, and `FollowFeed` does the fetching — the session, and therefore the
- * token the follow listing needs, only exists in the browser.
+ * Nothing is fetched here: both the feed and the creator suggestions it falls
+ * back to need a token, and the session only exists in the browser.
  */
-export default async function FollowingPage() {
-  const creators = await getSuggestedCreators();
-
-  return <FollowFeed creators={creators} />;
+export default function FollowingPage() {
+  return <FollowFeed />;
 }

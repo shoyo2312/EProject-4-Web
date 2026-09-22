@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withLikeCount, type VideoFrame } from "@/hooks/useVideoRealtime";
+import { withLikeCount, type VideoFrame } from "@/hooks/use-video-realtime";
 
 const frame = (likeCount: number): VideoFrame => ({
   type: "counts",

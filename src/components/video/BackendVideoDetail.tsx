@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { CommentListSkeleton } from "@/components/feed/CommentPanel";
+import { CommentListSkeleton } from "@/components/feed/comments/CommentStates";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {

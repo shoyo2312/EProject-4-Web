@@ -13,6 +13,7 @@ import {
   pollUntilReady,
   uploadToStorage,
 } from "@/lib/api/videos";
+import { formatBytes } from "@/lib/format";
 import { uploadSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
 import { toast } from "@/components/ui/toast";
@@ -543,11 +544,6 @@ function Preview({
       </button>
     </div>
   );
-}
-
-function formatBytes(bytes: number): string {
-  const mb = bytes / (1024 * 1024);
-  return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
 }
 
 /** Reads a video file's length via a detached media element. Rejects if it has none. */

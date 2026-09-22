@@ -33,6 +33,10 @@ A reusable template for reverse-engineering any website into a clean, modern Nex
 - Tailwind utility classes, no inline styles
 - 2-space indentation
 - Responsive: mobile-first
+- Hook files are kebab-case (`src/hooks/use-foo.ts`); tests live in a sibling `__tests__/`
+- Pure logic (list merging, parsing, formatting) goes in `src/lib/` with a unit test, not inside a component
+- Popover/menu dismissal uses `useDismiss` (click-outside + Escape); modal/drawer Escape uses `useEscapeKey`; portals gate on `useMounted`
+- When a component file outgrows ~500 lines, move its private sub-components into a sibling folder named after it (`feed/comments/`, `video/detail/`) and keep the public component at its original path
 
 ## Design Principles
 - **Pixel-perfect emulation** — match the target's spacing, colors, typography exactly
@@ -66,3 +70,4 @@ scripts/            # Asset download scripts
 - After editing `.claude/skills/clone-website/SKILL.md`, run `node scripts/sync-skills.mjs` to regenerate the skill for all platforms.
 
 @docs/research/INSPECTION_GUIDE.md
+@FRONTEND_RULES.md

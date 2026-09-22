@@ -38,3 +38,9 @@ export function formatRelativeTime(iso: string): string {
   if (weeks < 4) return `${Math.floor(weeks)}w ago`;
   return `${Math.floor(days / 30)}mo ago`;
 }
+
+/** File size for the upload preview — MB below a gigabyte, GB from there. */
+export function formatBytes(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
+}

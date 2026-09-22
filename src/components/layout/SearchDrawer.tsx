@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useEscapeKey } from "@/hooks/use-escape-key";
 import { ClockIcon, CloseIcon, DotIcon, SearchIcon, TrendingIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
@@ -116,14 +117,7 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
     return () => clearTimeout(timer);
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  useEscapeKey(onClose, open);
 
   useEffect(() => {
     // user-service has no public read, so there is nothing to ask for signed out.

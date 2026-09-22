@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
 import { VerifiedBadgeIcon } from "@/components/icons";
-import { useSession } from "@/components/session/SessionProvider";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useFollow } from "@/hooks/use-follow";
+import { useSuggestedCreators } from "@/hooks/use-suggested-creators";
 import { displayHandle } from "@/lib/api/adapters";
 import { cn } from "@/lib/utils";
 import type { SuggestedCreator } from "@/types/tiktok";
@@ -17,6 +19,9 @@ import type { SuggestedCreator } from "@/types/tiktok";
  * state the live site was measured in — the whole route is this grid of
  * creators to follow. That measured state is what this component reproduces.
  *
+ * The cards are real accounts from the public feed (`useSuggestedCreators`),
+ * minus the viewer and everyone they already follow.
+ *
  * Measured on the live page (1440 / 1280 / 1024 / 820 / 700px):
  *   wrapper   736px wide, centred in the content column, capped at its width
  *             so it goes full-bleed below ~810px; 20px of padding above the
@@ -27,17 +32,31 @@ import type { SuggestedCreator } from "@/types/tiktok";
  *              are a fixed width, so the count falls out of the wrap
  */
 export function SuggestedCreators({
-  creators,
+  exclude = [],
 }: {
-  creators: SuggestedCreator[];
+  exclude?: readonly string[];
 }) {
+  const { creators, isLoading, error } = useSuggestedCreators(exclude);
+
   return (
     <main className="h-screen flex-1 overflow-y-auto">
       <div className="mx-auto flex w-[736px] max-w-full flex-wrap content-start gap-[18px] pt-5 pb-[18px]">
-        {creators.map((creator) => (
-          <CreatorCard key={creator.id} creator={creator} />
-        ))}
+        {isLoading
+          ? Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-[302px] w-[226px] rounded-[8px]" />
+            ))
+          : creators.map((creator) => (
+              <CreatorCard key={creator.id} creator={creator} />
+            ))}
       </div>
+
+      {!isLoading && creators.length === 0 && (
+        <p className="px-4 py-24 text-center text-[15px] text-[var(--tt-text-muted)]">
+          {error
+            ? "Can’t reach the API gateway on :8080."
+            : "No creators to suggest yet."}
+        </p>
+      )}
     </main>
   );
 }
@@ -59,10 +78,7 @@ export function SuggestedCreators({
  */
 function CreatorCard({ creator }: { creator: SuggestedCreator }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [following, setFollowing] = useState(creator.isFollowing);
-  // Verified live signed out: Follow on these cards opens the login modal and
-  // the card's own link does not fire.
-  const { requireSignIn } = useSession();
+  const { following, toggle } = useFollow(creator.author.userId, creator.isFollowing);
 
   const preview = (playing: boolean) => {
     const video = videoRef.current;
@@ -85,20 +101,23 @@ function CreatorCard({ creator }: { creator: SuggestedCreator }) {
     >
       {/* The live card holds a poster and, once hovered, a muted preview on top
           of it. One `<video>` with a `poster` does both — and, like the live
-          preview, it plays through once rather than looping. */}
-      <video
-        ref={videoRef}
-        src={creator.videoUrl}
-        poster={creator.posterUrl}
-        muted
-        playsInline
-        preload="none"
-        className="absolute inset-0 h-full w-full object-cover"
-      />
+          preview, it plays through once rather than looping. A backend video
+          still transcoding has neither, so the card stays on its flat cover. */}
+      {Boolean(creator.videoUrl || creator.posterUrl) && (
+        <video
+          ref={videoRef}
+          src={creator.videoUrl || undefined}
+          poster={creator.posterUrl || undefined}
+          muted
+          playsInline
+          preload="none"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      )}
 
       {/* `.DivInfoContainer` */}
       <div className="absolute inset-x-0 top-[102px] flex h-[200px] flex-col items-center justify-end px-3 pt-[30px] pb-5 text-center">
-        {/* eslint-disable-next-line @next/next/no-img-element -- local static asset, no optimisation needed */}
+        {/* eslint-disable-next-line @next/next/no-img-element -- avatar URL comes from user-service, not the image pipeline */}
         <img
           src={creator.author.avatarUrl}
           alt=""
@@ -124,8 +143,7 @@ function CreatorCard({ creator }: { creator: SuggestedCreator }) {
           type="button"
           onClick={(event) => {
             event.preventDefault();
-            if (!requireSignIn()) return;
-            setFollowing((previous) => !previous);
+            toggle();
           }}
           aria-pressed={following}
           className={cn(

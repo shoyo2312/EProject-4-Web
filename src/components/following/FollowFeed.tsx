@@ -3,8 +3,8 @@
 import { Feed } from "@/components/feed/Feed";
 import { FeedSkeleton } from "@/components/feed/LiveFeed";
 import { SuggestedCreators } from "@/components/following/SuggestedCreators";
+import { useSession } from "@/components/session/SessionProvider";
 import { useFollowFeed, type FollowFeedSource } from "@/hooks/use-follow-feed";
-import type { SuggestedCreator } from "@/types/tiktok";
 
 /**
  * `/following` and `/friends`, both backed by `GET /videos/feed/following`.
@@ -18,19 +18,22 @@ import type { SuggestedCreator } from "@/types/tiktok";
  * or people who have not posted — gets the creator grid, which is the state the
  * live pages were measured in.
  *
- * The grid is also the error state. It is real page content rather than a mock
- * feed passed off as real, so unlike For You there is nothing to hide here when
- * the gateway is unreachable: the banner says what happened and the suggestions
+ * The grid is also the error state. It is real page content — real accounts
+ * from the public feed — so unlike For You there is nothing to hide here when
+ * the following feed fails: the banner says what happened and the suggestions
  * below it are still worth showing.
  */
 export function FollowFeed({
-  creators,
   source = "following",
 }: {
-  creators: SuggestedCreator[];
   source?: FollowFeedSource;
 }) {
-  const { videos, isLoading, error, loadMore } = useFollowFeed(source);
+  const { user } = useSession();
+  const { videos, isLoading, error, loadMore, followedIds } =
+    useFollowFeed(source);
+
+  // Nobody suggests you follow yourself, or somebody you already follow.
+  const exclude = user ? [user.userId, ...followedIds] : followedIds;
 
   if (isLoading) {
     return <FeedSkeleton />;
@@ -42,13 +45,13 @@ export function FollowFeed({
         <div className="absolute inset-x-0 top-0 z-20 bg-[var(--tt-red-active)]/90 px-4 py-2 text-center text-[13px] leading-5 text-white">
           Can’t reach the API gateway on :8080 — showing creators to follow.
         </div>
-        <SuggestedCreators creators={creators} />
+        <SuggestedCreators exclude={exclude} />
       </div>
     );
   }
 
   if (videos.length === 0) {
-    return <SuggestedCreators creators={creators} />;
+    return <SuggestedCreators exclude={exclude} />;
   }
 
   return (

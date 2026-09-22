@@ -18,7 +18,7 @@ import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
 import {
   useNotificationRealtime,
   type NotificationFrame,
-} from "@/hooks/useNotificationRealtime";
+} from "@/hooks/use-notification-realtime";
 
 /**
  * Filter chips, mapped to the types notification-service actually emits. The

@@ -16,7 +16,7 @@ import { listLikedVideos, listRepostedVideos, listSavedVideos } from "@/lib/api/
 import { getAccessToken } from "@/lib/api/tokens";
 import * as usersApi from "@/lib/api/users";
 import { getUserVideoStats, getUserVideos, getVideosByIds } from "@/lib/api/videos";
-import { useUserRealtime } from "@/hooks/useUserRealtime";
+import { useUserRealtime } from "@/hooks/use-user-realtime";
 import type { ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
 
 /** How many videos the grid asks for in one page. */

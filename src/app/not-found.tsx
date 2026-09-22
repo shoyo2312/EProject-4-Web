@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 /**
@@ -27,7 +28,7 @@ export default function NotFound() {
         style={{ fontSize: "clamp(120px, 15.6vw, 300px)", lineHeight: "0.81" }}
       >
         <span>4</span>
-        <img
+        <Image
           src="/images/notfound/smiley.png"
           alt=""
           width={244}

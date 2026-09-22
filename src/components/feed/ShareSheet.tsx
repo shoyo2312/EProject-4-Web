@@ -13,6 +13,7 @@ import {
   Send,
 } from "lucide-react";
 
+import { useEscapeKey } from "@/hooks/use-escape-key";
 import { CloseIcon } from "@/components/icons";
 import { toast } from "@/components/ui/toast";
 import { useSession } from "@/components/session/SessionProvider";
@@ -78,13 +79,7 @@ export function ShareSheet({
   const [friends, setFriends] = useState<Author[]>(SHARE_FRIENDS);
   const [results, setResults] = useState<Author[] | null>(null);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   /* Real accounts once signed in — the mock trio (see SHARE_FRIENDS) stands
      in for a guest, who has no following list to show. */

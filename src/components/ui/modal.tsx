@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useMounted } from "@/hooks/use-mounted";
 import { cn } from "@/lib/utils";
 
 /** Centered modal shell, matching the house style (see `EditProfileModal`). */
@@ -19,20 +20,13 @@ export function Modal({
   className?: string;
   children: React.ReactNode;
 }) {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   /* Rendered into <body>: callers mount this deep inside rows that carry
      `content-visibility: auto` (paint containment), which makes the row a
      containing block for `position: fixed` and centres the sheet in the row
      instead of the viewport. */
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useMounted();
   if (!mounted) return null;
 
   return createPortal(
