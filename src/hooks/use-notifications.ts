@@ -28,7 +28,7 @@ import {
  */
 export const NOTIFICATION_FILTERS = [
   { label: "All activity", types: null },
-  { label: "Likes", types: ["LIKE"] },
+  { label: "Likes", types: ["LIKE", "COMMENT_LIKE"] },
   { label: "Comments", types: ["COMMENT"] },
   { label: "Followers", types: ["NEW_FOLLOWER"] },
 ] as const satisfies readonly {
@@ -113,8 +113,8 @@ export interface NotificationInbox {
   /** Actor avatar/username, keyed by `NotificationResponse.actorId`. Fills in as resolved. */
   actors: Map<string, UserProfileResponse>;
   /**
-   * The referenced video, keyed by `NotificationResponse.referenceId`, for LIKE/COMMENT/SHARE
-   * only — NEW_FOLLOWER's `referenceId` is a userId, not a videoId, and SYSTEM has none.
+   * The referenced video, keyed by `NotificationResponse.referenceId`, for every type
+   * except NEW_FOLLOWER (its `referenceId` is a userId) and SYSTEM (it has none).
    */
   videos: Map<string, VideoResponse>;
   markRead: (notificationId: string) => void;
@@ -213,13 +213,14 @@ export function useNotifications(): NotificationInbox {
   }, [unresolvedActorIds]);
 
   // Same batching as actors above, keyed by referenceId instead of actorId —
-  // only LIKE/COMMENT/SHARE name a video at all.
+  // NEW_FOLLOWER and SYSTEM are the only types that do not name a video.
   const unresolvedVideoIds = useMemo(() => {
     const ids = new Set<string>();
     for (const item of items) {
       if (
         item.referenceId &&
-        (item.type === "LIKE" || item.type === "COMMENT" || item.type === "SHARE") &&
+        item.type !== "NEW_FOLLOWER" &&
+        item.type !== "SYSTEM" &&
         !videos.has(item.referenceId)
       ) {
         ids.add(item.referenceId);

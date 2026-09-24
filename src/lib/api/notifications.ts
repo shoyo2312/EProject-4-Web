@@ -12,6 +12,7 @@ import { apiFetch } from "@/lib/api/client";
 export type NotificationType =
   | "LIKE"
   | "COMMENT"
+  | "COMMENT_LIKE"
   | "SHARE"
   | "NEW_FOLLOWER"
   | "SYSTEM";
@@ -25,7 +26,7 @@ export interface NotificationResponse {
   body: string;
   /**
    * What the notification points at, type-dependent: a videoId for
-   * LIKE/COMMENT/SHARE, the follower's userId for NEW_FOLLOWER, null for
+   * LIKE/COMMENT/COMMENT_LIKE/SHARE, the follower's userId for NEW_FOLLOWER, null for
    * SYSTEM. Opaque to the service, so the client decides what it means.
    */
   referenceId: string | null;

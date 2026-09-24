@@ -270,6 +270,8 @@ function describe(item: NotificationResponse): string {
   switch (item.type) {
     case "LIKE":
       return "liked your video";
+    case "COMMENT_LIKE":
+      return "liked your comment";
     case "SHARE":
       return "shared your video";
     case "NEW_FOLLOWER":
