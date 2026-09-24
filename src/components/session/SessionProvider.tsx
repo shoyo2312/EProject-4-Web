@@ -205,7 +205,9 @@ export function SessionProvider({
     const tick = () => {
       attempts += 1;
       loadMe().catch(() => undefined);
-      if (attempts < 3) timer = window.setTimeout(tick, 1_500);
+      // ~11s total: auth-service's outbox only flushes every 5s, so the
+      // registration event can take that long just to reach Kafka.
+      if (attempts < 8) timer = window.setTimeout(tick, 1_500);
     };
 
     timer = window.setTimeout(tick, 800);
