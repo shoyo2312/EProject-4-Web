@@ -145,9 +145,12 @@ import type { Comment } from "@/types/tiktok";
   // the "⋯" stays decorative there, same as before this was wired up.
   const canDelete =
     Boolean(currentUserId) && (comment.author.userId === currentUserId || canModerate);
-  // Someone else's comment on a real video: report it instead. A mock comment
-  // or an optimistic row not yet saved has no id admin-service could act on.
-  const canReport = !canDelete && canPersistLike;
+  // Reporting stands beside Delete rather than replacing it: an owner who
+  // clears a comment off their video still wants it in front of a moderator,
+  // and the comment's own author is the one who notices when their account has
+  // been posting things they did not write. A mock comment, or an optimistic
+  // row not yet saved, has no id admin-service could act on.
+  const canReport = canPersistLike;
   const menuHasItems = canDelete || canReport;
 
   /* Click anywhere else — including the next comment's "⋯" — closes the menu. */
@@ -223,31 +226,25 @@ import type { Comment } from "@/types/tiktok";
                 type="button"
                 onClick={menuHasItems ? () => setMenuOpen((open) => !open) : undefined}
                 aria-label="More options"
+                aria-haspopup={menuHasItems ? "menu" : undefined}
                 aria-expanded={menuHasItems ? menuOpen : undefined}
                 className="flex h-5 w-3.5 items-center justify-center text-white/60 hover:text-[var(--tt-text)]"
               >
                 <MoreDotsGlyph />
               </button>
 
-              {/* The viewer's own comment (or one on their video) can be
-                  deleted; anyone else's can be reported. */}
+              {/* Report is offered to everyone the comment is actionable for;
+                  Delete only to its author and the video's owner, and last, so
+                  the destructive item is never the one under a stray click. */}
               {menuOpen && menuHasItems && (
-                <div className="absolute right-0 top-6 z-20 w-max animate-[tt-comment-in_150ms_ease-out] overflow-hidden rounded-[8px] border border-[var(--tt-divider)] bg-black shadow-lg">
-                  {canDelete ? (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-6 z-20 w-max animate-[tt-comment-in_150ms_ease-out] overflow-hidden rounded-[8px] border border-[var(--tt-divider)] bg-black shadow-lg"
+                >
+                  {canReport && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onDelete?.(comment.id);
-                      }}
-                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:text-[var(--tt-red)]"
-                    >
-                      <Trash2 className="h-4 w-4 flex-none" strokeWidth={2} />
-                      Delete
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
+                      role="menuitem"
                       onClick={() => {
                         setMenuOpen(false);
                         if (!user) {
@@ -256,10 +253,24 @@ import type { Comment } from "@/types/tiktok";
                         }
                         setReportOpen(true);
                       }}
-                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:bg-[var(--tt-shape-neutral-3)]"
+                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:bg-white/10"
                     >
                       <ReportIcon className="h-4 w-4 flex-none" />
                       Report
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDelete?.(comment.id);
+                      }}
+                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:bg-white/10 hover:text-[var(--tt-red)]"
+                    >
+                      <Trash2 className="h-4 w-4 flex-none" strokeWidth={2} />
+                      Delete
                     </button>
                   )}
                 </div>
