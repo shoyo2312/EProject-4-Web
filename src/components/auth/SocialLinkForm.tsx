@@ -7,7 +7,13 @@ import type { SocialLinkChallenge } from "@/components/auth/use-social-sign-in";
 
 /**
  * The step between "signed in with Facebook" and "signed in", shown when that
- * Facebook account's address already belongs to an account here.
+ * Facebook account's address already belongs to an account here — or when the
+ * Facebook account was linked before that account's address was proven, and
+ * whoever now owns the mailbox has to vouch for the link.
+ *
+ * The code goes to the account's address, which in the second case need not be
+ * Facebook's (Facebook may not share one at all), so the copy says "the address
+ * on your account", never the provider's.
  *
  * Deliberately says nothing about the account it would merge into — not its
  * username, not the address itself. Whoever owns the account already knows
@@ -49,9 +55,8 @@ export function SocialLinkForm({
       <AuthTitle>Confirm it&rsquo;s you</AuthTitle>
 
       <p className="mt-2 mb-5 text-[14px] leading-5 text-[var(--tt-text-secondary)]">
-        That {provider} account uses an email address that already has an
-        account here. We emailed a 6-digit code to it — enter it to log in and
-        connect {provider} to that account.
+        We emailed a 6-digit code to the address on your account here. Enter it
+        to log in with {provider}.
       </p>
 
       <input

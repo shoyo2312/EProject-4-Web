@@ -65,6 +65,8 @@ const MESSAGES: Record<string, string> = {
    */
   SOCIAL_LINK_VERIFICATION_REQUIRED:
     "Enter the code we emailed to confirm this address is yours.",
+  /** Admin accounts: the console's second factor has no social equivalent. */
+  SOCIAL_SIGN_IN_NOT_ALLOWED: "This account signs in with its password.",
 
   // user-service
   CANNOT_FOLLOW_SELF: "You cannot follow yourself.",
