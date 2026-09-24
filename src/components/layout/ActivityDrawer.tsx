@@ -306,19 +306,31 @@ function NotificationItem({
    */
   const pendingActor = Boolean(item.actorId) && !actor;
   const heading = actor ? (actor.username ?? "Someone") : item.title;
+  // SYSTEM has nowhere to navigate to — its detail is the admin's full reason,
+  // which the one-line clamp cuts off, so the row expands in place instead.
+  const expandable = item.type === "SYSTEM";
+  const [expanded, setExpanded] = useState(false);
+  const open = () => {
+    onOpen();
+    if (expandable) setExpanded((value) => !value);
+  };
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={onOpen}
+      aria-expanded={expandable ? expanded : undefined}
+      onClick={open}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onOpen();
+          open();
         }
       }}
-      className="flex h-[72px] cursor-pointer flex-row items-center px-2 transition-colors hover:bg-[rgb(37,37,37)]"
+      className={cn(
+        "flex cursor-pointer flex-row items-center px-2 transition-colors hover:bg-[rgb(37,37,37)]",
+        expanded ? "min-h-[72px] py-3" : "h-[72px]",
+      )}
     >
       <div className="flex h-12 w-12 min-w-12 items-center justify-center rounded-3xl bg-[rgb(50,54,75)]">
         {item.actorId ? (
@@ -336,7 +348,12 @@ function NotificationItem({
       </div>
 
       <div className="min-w-0 flex-1 pe-2 ps-3">
-        <p className="truncate text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
+        <p
+          className={cn(
+            "text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]",
+            expanded ? "break-words" : "truncate",
+          )}
+        >
           {pendingActor ? (
             <span className="inline-block h-[14px] w-24 animate-pulse rounded bg-[rgb(255_255_255_/_0.12)] align-middle" />
           ) : actor ? (
@@ -364,9 +381,20 @@ function NotificationItem({
             heading
           )}
         </p>
-        <p className="truncate text-[13px] leading-[17px] text-[var(--tt-text)]">
-          {describe(item)} · {formatRelativeTime(item.createdAt)}
-        </p>
+        {expanded ? (
+          <>
+            <p className="mt-1 whitespace-pre-line break-words text-[13px] leading-[17px] text-[var(--tt-text)]">
+              {describe(item)}
+            </p>
+            <p className="mt-1 text-[12px] leading-[16px] text-[rgb(255_255_255_/_0.5)]">
+              {new Date(item.createdAt).toLocaleString()}
+            </p>
+          </>
+        ) : (
+          <p className="truncate text-[13px] leading-[17px] text-[var(--tt-text)]">
+            {describe(item)} · {formatRelativeTime(item.createdAt)}
+          </p>
+        )}
       </div>
 
       {video?.thumbnailUrl && (
