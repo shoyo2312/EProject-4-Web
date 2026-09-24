@@ -194,7 +194,7 @@ export function AtIcon(props: IconProps) {
   );
 }
 
-/** The play glyph next to the view count on each Explore tile. */
+/** The play glyph beside a view count, and the play state of the control bar. */
 export function PlayIcon(props: IconProps) {
   return (
     <Icon {...props}>

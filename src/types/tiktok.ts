@@ -131,7 +131,7 @@ export interface Comment {
 
 /**
  * One tile in the Explore grid (`.DivItemContainerV2`). It is a poster with a
- * view count overlaid, plus an author row underneath — not a full `FeedVideo`,
+ * like count overlaid, plus an author row underneath — not a full `FeedVideo`,
  * so it carries only what that card renders.
  */
 export interface ExploreItem {
@@ -141,7 +141,7 @@ export interface ExploreItem {
   author: Author;
   caption: string;
   posterUrl: string;
-  /** Played muted on hover, the way the live grid previews a tile. */
+  /** Previewed on hover, muted unless the tile's sound toggle is on. */
   videoUrl: string;
   views: number;
   /** What the tile overlays on the poster — the grid shows likes, not views. */
