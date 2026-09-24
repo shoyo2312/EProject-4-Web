@@ -91,6 +91,20 @@ const MESSAGES: Record<string, string> = {
   UPLOAD_FAILED: "The file couldn’t be uploaded. Try again.",
   VIDEO_NOT_FOUND: "This video is unavailable.",
 
+  // interaction-service. Two different 403s on the same button: the owner
+  // closed this video's thread, or their account setting excludes this viewer.
+  // Saying "turned off" for the second would tell a friends-only viewer that a
+  // thread they can see is shut to everyone.
+  COMMENTS_DISABLED: "Comments are turned off for this video.",
+  COMMENTS_NOT_ALLOWED: "This account doesn’t accept comments from you.",
+
+  // chat-service. MESSAGING_BLOCKED and MESSAGING_NOT_ALLOWED read alike on
+  // purpose — a standing audience setting must not be distinguishable from a
+  // block, or the copy becomes a way to detect one.
+  MESSAGING_BLOCKED: "You cannot message this account.",
+  MESSAGING_NOT_ALLOWED: "This account doesn’t accept messages from you.",
+  DM_SETTINGS_UNAVAILABLE: "Messaging is unavailable right now. Try again shortly.",
+
   // search-service. The box stops at SEARCH_MAX_LENGTH; this is for a long
   // term arriving another way, such as a hand-edited /search?q= link.
   QUERY_TOO_LONG: "That search is too long. Try fewer words.",
