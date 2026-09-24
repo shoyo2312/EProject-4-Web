@@ -10,6 +10,12 @@ import type { PageResponse, VideoSearchResponse } from "@/lib/api/types";
  */
 
 /**
+ * search-service refuses a longer `q` or `hashtag` with 400 `QUERY_TOO_LONG`,
+ * so the box stops there instead of letting a paste turn into an error.
+ */
+export const SEARCH_MAX_LENGTH = 200;
+
+/**
  * What the server should be asked for a term the viewer typed.
  *
  * A leading `#` is the whole difference between the two parameters the endpoint

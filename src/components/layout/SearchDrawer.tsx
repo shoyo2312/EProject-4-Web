@@ -8,6 +8,7 @@ import { useEscapeKey } from "@/hooks/use-escape-key";
 import { ClockIcon, CloseIcon, DotIcon, SearchIcon, TrendingIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
+import { SEARCH_MAX_LENGTH } from "@/lib/api/search";
 import { searchUsers } from "@/lib/api/users";
 import type { UserProfileResponse } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
@@ -241,6 +242,7 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
             type="text"
             placeholder="Search"
             aria-label="Search"
+            maxLength={SEARCH_MAX_LENGTH}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className="mx-2 w-full bg-transparent text-[14px] leading-[21px] text-[var(--tt-text)] placeholder:text-[var(--tt-placeholder)] focus:outline-none"

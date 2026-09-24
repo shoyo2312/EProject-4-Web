@@ -89,6 +89,10 @@ const MESSAGES: Record<string, string> = {
   UPLOAD_FAILED: "The file couldn’t be uploaded. Try again.",
   VIDEO_NOT_FOUND: "This video is unavailable.",
 
+  // search-service. The box stops at SEARCH_MAX_LENGTH; this is for a long
+  // term arriving another way, such as a hand-edited /search?q= link.
+  QUERY_TOO_LONG: "That search is too long. Try fewer words.",
+
   // shared
   CONCURRENT_MODIFICATION: "Something changed at the same time. Try again.",
   INTERNAL_ERROR: "Something went wrong. Please try again.",
