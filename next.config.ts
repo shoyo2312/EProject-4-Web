@@ -83,6 +83,32 @@ const nextConfig: NextConfig = {
    * Note for load testing: the gateway rate-limits 20 req/s per **IP**, and
    * behind this proxy every viewer shares the Next server's IP.
    */
+  /**
+   * The client hints auth-service's security log needs. A browser sends them only after it has
+   * seen `Accept-CH` from the origin it is talking to, which is this app — the gateway is reached
+   * through the rewrite below and never directly, so asking from there would reach nobody.
+   *
+   *  - `Sec-CH-UA-Model` is the only way the web will name a device. The user agent stopped
+   *    carrying it: Chrome freezes the Android model to the literal "K". Chromium answers this
+   *    with "" on every desktop platform by specification, so it names Android phones and nothing
+   *    else — Apple hardware is not exposed by any browser, by any means.
+   *  - `Sec-CH-UA-Platform-Version` is the real OS version; the agent's is frozen at 10.15 on
+   *    every Mac ever made.
+   *
+   * Safari and Firefox implement no client hints, so those sign-ins keep falling back to the
+   * agent. The rewrite forwards these headers itself, being a proxy rather than a fresh request.
+   */
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Accept-CH", value: "Sec-CH-UA-Model, Sec-CH-UA-Platform-Version" },
+        ],
+      },
+    ];
+  },
+
   async rewrites() {
     return [
       {
