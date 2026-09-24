@@ -77,17 +77,35 @@ with the muted, unindented headings noted above.
   sidebar and top bar instead of the live page's bespoke header. Rebuilding that header would
   mean a second global chrome for one route, and the settings card itself — the part this page
   is actually about — is reproduced at full fidelity beside it.
+- **The Ads section is dropped, not reproduced.** Seven rows and a nav entry, gone from
+  `SETTINGS_SECTIONS` entirely rather than rendered inert — there is no ads subsystem anywhere in
+  the backend, so every one of them would be permanently dead. The live section's measurements stay
+  documented above as research; only our build omits it. Two things went with it: the
+  `SettingsGroup.muted` flag, which existed solely for the Ads headings' 500-weight unindented
+  style and had no other source of truth, and `AdsIcon` — both recoverable from git history if
+  advertising is ever built.
 - **One row-title style**, 16/400 `rgba(255,255,255,.9)`, rather than carrying the TUX
-  generation's 16/600 for three of the eleven rows. The muted Ads headings *are* carried,
-  because those read as a deliberate grouping rather than as drift.
+  generation's 16/600, which the live page uses for three of its rows.
 - **One switch size**, the 44 × 24 majority.
-- The Ads rows have a leading 20px glyph on the live page. Those glyphs were not extracted, so
-  the rows render without them.
 - `Business verification`'s nav glyph is redrawn on the 48 grid; the live one is a 3.2KB
   multi-part mark on a 20 viewBox. Every other nav glyph is the live path.
-- Switches toggle and hold their state for the session. Every other row is inert: they open
-  flows (a region picker, a comments-audience sheet, a keyword filter editor) that this clone
-  has no screens for.
+- **Three rows are live; the rest are inert.** There is no settings or preferences concept
+  anywhere in the backend — no table, no endpoint, on any of the fifteen services — so a row is
+  only wired when it needs nothing the backend does not already have:
+  - *Privacy → Blocked accounts* opens a list backed by `GET /users/me/blocked` and
+    `DELETE /users/{id}/block`, both of which already existed.
+  - *Push notifications → Allow in browser* asks for the browser's Notification permission and
+    gates the desktop notification raised for a frame arriving on the STOMP socket. It registers
+    nothing with a push service: real pushes to a closed tab need FCM web credentials and a
+    `platform` field `DeviceToken` does not carry.
+  - *Accessibility → Increase color contrast* writes `.high-contrast` on `<html>`, which shifts
+    the alpha-blended tokens in `globals.css`. Browser-local, exactly as the row's own copy says.
+
+  Each is keyed by `SettingsRow.action`, so the layout stays data and only behaviour branches.
+- Every other row is inert, and deliberately so: the remaining switches hold their position for
+  the session and are forgotten on reload, and the link rows open flows (a region picker, a
+  comments-audience sheet, a keyword filter editor) that this clone has no screens for. A control
+  that appears to save something it cannot is worse than one that visibly does nothing.
 
 ## Gotchas
 

@@ -3,9 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { BlockedAccountsModal } from "@/components/settings/BlockedAccountsModal";
+import { useBrowserNotifications } from "@/hooks/use-browser-notifications";
+import { useLocalSettings } from "@/hooks/use-local-settings";
+import { setHighContrast } from "@/lib/settings/local-settings";
+import { toast } from "@/components/ui/toast";
 import {
   AccessibilityIcon,
-  AdsIcon,
   ArrowLeftIcon,
   BusinessVerificationIcon,
   CaretDownIcon,
@@ -25,12 +29,14 @@ import type {
   SettingsSection,
 } from "@/types/tiktok";
 
-const ICONS: Record<SettingsIconName, typeof AdsIcon> = {
+/** A switch row, narrowed — the three below each own one. */
+type SwitchSettingsRow = Extract<SettingsRow, { kind: "switch" }>;
+
+const ICONS: Record<SettingsIconName, typeof ManageAccountIcon> = {
   "manage-account": ManageAccountIcon,
   privacy: PrivacyLockIcon,
   "push-notifications": PushNotificationsIcon,
   "business-verification": BusinessVerificationIcon,
-  ads: AdsIcon,
   "screen-time": ScreenTimeIcon,
   "content-preferences": ContentPreferencesIcon,
   accessibility: AccessibilityIcon,
@@ -189,14 +195,7 @@ function Group({ group }: { group: SettingsGroup }) {
   return (
     <div className="mb-4">
       {group.heading && (
-        <h2
-          className={cn(
-            "text-[18px] leading-6",
-            group.muted
-              ? "font-medium text-[rgb(255_255_255/0.6)]"
-              : "mx-4 font-semibold text-[var(--tt-text)]",
-          )}
-        >
+        <h2 className="mx-4 text-[18px] leading-6 font-semibold text-[var(--tt-text)]">
           {group.heading}
         </h2>
       )}
@@ -219,15 +218,38 @@ const ROW_CLASS =
   "flex w-full items-center gap-4 border-b border-[var(--tt-divider)] px-4 py-3 text-left last:border-b-0";
 
 /**
- * One row: title over an optional description, with the accessory that says
- * what the row does. `switch` is the only kind that changes anything — the
- * others are the entry points to flows this clone has no screens for, so they
- * are rendered exactly and left inert.
+ * One row, dispatched on `row.action`.
+ *
+ * A row without an action is still rendered exactly and left inert: it is the
+ * entry point to a flow whose state no backend service stores yet, and a
+ * control that pretends to save something is worse than one that visibly does
+ * nothing. The three that *are* wired need a hook each, so each is its own
+ * component rather than a branch inside one.
  */
 function Row({ row }: { row: SettingsRow }) {
-  const [on, setOn] = useState(row.kind === "switch" && row.on);
+  if (row.kind === "switch") {
+    switch (row.action) {
+      case "high-contrast":
+        return <HighContrastRow row={row} />;
+      case "browser-notifications":
+        return <BrowserNotificationsRow row={row} />;
+      default:
+        return <SessionSwitchRow row={row} />;
+    }
+  }
 
-  const body = (
+  if (row.action === "blocked-accounts") return <BlockedAccountsRow row={row} />;
+
+  return (
+    <button type="button" className={cn(ROW_CLASS, "hover:bg-white/[0.03]")}>
+      <RowBody row={row} />
+      <Accessory row={row} />
+    </button>
+  );
+}
+
+function RowBody({ row, note }: { row: SettingsRow; note?: string }) {
+  return (
     <div className="min-w-0 flex-1">
       <p className="text-[16px] leading-[21px] text-[var(--tt-text)]">
         {row.title}
@@ -237,25 +259,103 @@ function Row({ row }: { row: SettingsRow }) {
           {row.description}
         </p>
       )}
+      {note && (
+        <p className="mt-1 max-w-[583px] text-[12px] leading-[15.6px] text-[var(--tt-red-active)]">
+          {note}
+        </p>
+      )}
     </div>
   );
+}
 
-  // On the live page the switch is the only hit area in its row; every other
-  // kind makes the whole row clickable.
-  if (row.kind === "switch") {
-    return (
-      <div className={ROW_CLASS}>
-        {body}
-        <Switch on={on} label={row.title} onToggle={() => setOn((w) => !w)} />
-      </div>
-    );
-  }
+/**
+ * The unwired switches — private account, business verification, the two ads
+ * ones, weekly screen time. They hold their position for the session and are
+ * forgotten on reload, which is the honest rendering of a control with nowhere
+ * to save to.
+ */
+function SessionSwitchRow({ row }: { row: SwitchSettingsRow }) {
+  const [on, setOn] = useState(row.on);
 
   return (
-    <button type="button" className={cn(ROW_CLASS, "hover:bg-white/[0.03]")}>
-      {body}
-      <Accessory row={row} />
-    </button>
+    <div className={ROW_CLASS}>
+      <RowBody row={row} />
+      <Switch on={on} label={row.title} onToggle={() => setOn((w) => !w)} />
+    </div>
+  );
+}
+
+/** Accessibility → "Increase color contrast". Browser-local, by its own copy. */
+function HighContrastRow({ row }: { row: SwitchSettingsRow }) {
+  const { highContrast } = useLocalSettings();
+
+  return (
+    <div className={ROW_CLASS}>
+      <RowBody row={row} />
+      <Switch
+        on={highContrast}
+        label={row.title}
+        onToggle={() => setHighContrast(!highContrast)}
+      />
+    </div>
+  );
+}
+
+/**
+ * Push notifications → "Allow in browser".
+ *
+ * Nothing is registered with a push service: this gates the desktop
+ * notification `useNotifications` raises for a frame already arriving over the
+ * STOMP socket. Real pushes to a closed tab need FCM web credentials and a
+ * `platform` field notification-service's `DeviceToken` does not have yet.
+ */
+function BrowserNotificationsRow({ row }: { row: SwitchSettingsRow }) {
+  const { on, blocked, unsupported, toggle } = useBrowserNotifications();
+
+  const onToggle = () => {
+    void toggle().then((problem) => {
+      if (problem) toast.error(problem);
+    });
+  };
+
+  return (
+    <div className={ROW_CLASS}>
+      <RowBody
+        row={row}
+        note={
+          unsupported
+            ? "This browser cannot show desktop notifications."
+            : blocked
+              ? "Blocked in your browser settings."
+              : undefined
+        }
+      />
+      <Switch
+        on={on}
+        label={row.title}
+        onToggle={onToggle}
+        disabled={unsupported}
+      />
+    </div>
+  );
+}
+
+/** Privacy → "Blocked accounts". The dialog portals itself out of this row. */
+function BlockedAccountsRow({ row }: { row: SettingsRow }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cn(ROW_CLASS, "hover:bg-white/[0.03]")}
+      >
+        <RowBody row={row} />
+        <Accessory row={row} />
+      </button>
+      {open && <BlockedAccountsModal onClose={() => setOpen(false)} />}
+    </>
   );
 }
 
@@ -292,10 +392,13 @@ function Switch({
   on,
   label,
   onToggle,
+  disabled,
 }: {
   on: boolean;
   label: string;
   onToggle: () => void;
+  /** For a control the browser will never let through — see the row above. */
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -304,9 +407,11 @@ function Switch({
       aria-checked={on}
       aria-label={label}
       onClick={onToggle}
+      disabled={disabled}
       className={cn(
         "flex h-6 w-11 flex-none items-center rounded-full p-0.5 transition-colors",
         on ? "bg-[#0be09b]" : "bg-white/[0.12]",
+        disabled && "opacity-50",
       )}
     >
       <span

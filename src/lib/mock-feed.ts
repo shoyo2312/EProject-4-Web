@@ -1039,7 +1039,11 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             title: "Direct messages",
             description: "Who can send you messages",
           },
-          { kind: "link", title: "Blocked accounts" },
+          {
+            kind: "link",
+            title: "Blocked accounts",
+            action: "blocked-accounts",
+          },
         ],
       },
       {
@@ -1068,6 +1072,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             description:
               "Stay on top of notifications for likes, comments, the latest videos, and more on desktop. You can turn them off anytime.",
             on: false,
+            action: "browser-notifications",
           },
         ],
       },
@@ -1099,68 +1104,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             description:
               "Verify your business to access marketing tools and exclusive features that better connect you with viewers.",
             on: false,
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: "ads",
-    label: "Ads",
-    icon: "ads",
-    groups: [
-      {
-        heading: "Manage the ads you see",
-        muted: true,
-        rows: [
-          {
-            kind: "link",
-            title: "Manage ad topics",
-            description: "Change factors used to tailor the ads you see.",
-          },
-          {
-            kind: "link",
-            title: "Mute advertisers",
-            description:
-              "Mute ads from specific advertisers who showed you ads recently on Nowa.",
-          },
-          {
-            kind: "link",
-            title: "Edit personal details",
-            description:
-              "Select the gender which may be used to tailor the ads you see.",
-          },
-        ],
-      },
-      {
-        heading: "Manage your off-Nowa data",
-        muted: true,
-        rows: [
-          {
-            kind: "switch",
-            title: "Targeted ads outside of Nowa",
-            description:
-              "With this setting, Nowa may show you ads on other websites and apps using information collected about you, both on and off Nowa. This setting controls the ads our advertising partners ask us to show you off Nowa. All your ad privacy choices on Nowa will continue to inform the ads we show you.",
-            on: true,
-          },
-          {
-            kind: "switch",
-            title: "Using Off-Nowa activity for ad targeting",
-            description:
-              "With this setting, the ads you see on Nowa can be more tailored to your interests based on data that advertising partners share with us about your activity on their apps and websites. You will always see ads on Nowa based on what you do on Nowa or other data described in our privacy policy.",
-            on: true,
-          },
-          {
-            kind: "link",
-            title: "Disconnect advertisers",
-            description:
-              "Stop tailoring ads with your off-Nowa data from an advertiser.",
-          },
-          {
-            kind: "link",
-            title: "Clear off-Nowa data",
-            description:
-              "Clear the off-Nowa data that advertisers have shared about you.",
           },
         ],
       },
@@ -1235,6 +1178,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             description:
               "This will only increase color contrast when visiting nowa.com on your computer.",
             on: false,
+            action: "high-contrast",
           },
         ],
       },

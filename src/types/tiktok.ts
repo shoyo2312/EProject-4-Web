@@ -275,17 +275,33 @@ export type SettingsIconName =
   | "privacy"
   | "push-notifications"
   | "business-verification"
-  | "ads"
   | "screen-time"
   | "content-preferences"
   | "accessibility";
+
+/**
+ * What a settings row actually does. Absent on the rows that are still inert —
+ * the ones whose flows need account state no backend service stores yet.
+ *
+ * The layout stays local data (`SETTINGS_SECTIONS`) while behaviour hangs off
+ * this key, so a row gaining an action is one word here and a branch in `Row`,
+ * not a new shape for the whole panel.
+ */
+export type SettingsAction =
+  | "blocked-accounts"
+  | "browser-notifications"
+  | "high-contrast";
 
 /**
  * The five row shapes the live settings panel uses. `link` and `value` both
  * end in a chevron; `value` also shows the current choice before it. `expand`
  * is a row that opens in place (caret), `external` leaves TikTok.
  */
-export type SettingsRow = { title: string; description?: string } & (
+export type SettingsRow = {
+  title: string;
+  description?: string;
+  action?: SettingsAction;
+} & (
   | { kind: "link" }
   | { kind: "value"; value: string }
   | { kind: "switch"; on: boolean }
@@ -297,13 +313,6 @@ export interface SettingsGroup {
   heading?: string;
   /** Text under the heading, e.g. "Your preferences will be synced…". */
   description?: string;
-  /**
-   * The Ads section renders its headings at 500 weight in `rgba(255,255,255,.6)`
-   * and flush with the panel edge, where every other section uses 600 at .9 and
-   * indents by 16. It is a second design generation on the same page, not a
-   * mistake, so it is carried as a flag.
-   */
-  muted?: boolean;
   rows: SettingsRow[];
 }
 

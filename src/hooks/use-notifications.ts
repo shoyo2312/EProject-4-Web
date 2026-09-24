@@ -15,6 +15,7 @@ import { getAccessToken } from "@/lib/api/tokens";
 import { getProfiles, MAX_PROFILE_BATCH } from "@/lib/api/users";
 import { getVideosByIds } from "@/lib/api/videos";
 import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
+import { showBrowserNotification } from "@/lib/settings/browser-notifications";
 import {
   useNotificationRealtime,
   type NotificationFrame,
@@ -262,6 +263,19 @@ export function useNotifications(): NotificationInbox {
           : [fromFrame(frame), ...current],
       );
       setUnreadCount((count) => count + 1);
+
+      // Gated inside — on the viewer's switch, the browser permission and
+      // whether this tab is even hidden. Called for every frame rather than
+      // only the ones the list kept: whether this id is already in `items` can
+      // only be answered inside the updater above, and a flag set there is
+      // still false on this line (see `markRead`). The duplicate is harmless —
+      // the notification carries the id as its `tag`, so a second one for the
+      // same entry replaces the first instead of alerting twice.
+      showBrowserNotification({
+        id: frame.notificationId,
+        title: frame.title,
+        body: frame.body,
+      });
     }, []),
   );
 

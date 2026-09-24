@@ -5,6 +5,7 @@ import "./globals.css";
 import { TopBar } from "@/components/layout/TopBar";
 import { PlayerSettingsProvider } from "@/components/player/PlayerSettingsProvider";
 import { SessionProvider } from "@/components/session/SessionProvider";
+import { HighContrastSync } from "@/components/settings/HighContrastSync";
 import { Toaster } from "@/components/ui/toast";
 import { getLoginOptions } from "@/lib/data";
 
@@ -50,6 +51,10 @@ export default async function RootLayout({
     <html lang="en" className={`${tiktokFont.variable} h-full antialiased`}>
       <body className="min-h-full">
         <SessionProvider loginOptions={loginOptions}>
+          {/* Renders nothing; writes the accessibility class on <html>, which
+              every route reads through the design tokens. */}
+          <HighContrastSync />
+
           {/* Sound is a viewer preference shared by the feed and /video/[id],
               so it lives above the route that happens to be mounted. */}
           <PlayerSettingsProvider>
