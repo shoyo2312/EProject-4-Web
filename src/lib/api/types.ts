@@ -373,6 +373,17 @@ export interface CommentPageResponse {
   hasMore: boolean;
 }
 
+/**
+ * `GET /interactions/videos/{videoId}/comment-permission` — why the caller may
+ * not comment, or null when they may. The same rule that refuses the post, so
+ * hiding the composer on it never disagrees with the 403 it replaces.
+ */
+export type CommentRestriction = "COMMENTS_DISABLED" | "NO_ONE" | "FRIENDS_ONLY";
+
+export interface CommentPermissionResponse {
+  restriction: CommentRestriction | null;
+}
+
 /* --- search-service ------------------------------------------------------ */
 
 /**

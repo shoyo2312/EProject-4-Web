@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api/client";
 import type {
   CommentLikeResponse,
   CommentPageResponse,
+  CommentPermissionResponse,
   CommentResponse,
   LikeStatusResponse,
   RepostContextResponse,
@@ -205,6 +206,16 @@ export function addComment(
     body: parentId ? { content, parentId } : { content },
     auth: "required",
   });
+}
+
+/** `GET /interactions/videos/{videoId}/comment-permission` — may the viewer comment here. */
+export function getCommentPermission(
+  videoId: string,
+): Promise<CommentPermissionResponse> {
+  return apiFetch<CommentPermissionResponse>(
+    `/interactions/videos/${videoId}/comment-permission`,
+    { auth: "required" },
+  );
 }
 
 /** `DELETE /interactions/videos/{videoId}/comments/{commentId}` — owner only. */

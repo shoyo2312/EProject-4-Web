@@ -6,7 +6,8 @@ import { CommentComposer } from "@/components/feed/comments/CommentComposer";
 import { CommentItem } from "@/components/feed/comments/CommentItem";
 import {
   CommentListSkeleton,
-  CommentsOff,
+  CommentLockNotice,
+  CommentsLocked,
   NoCommentsYet,
 } from "@/components/feed/comments/CommentStates";
 import type {
@@ -17,6 +18,7 @@ import { CloseIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
 import { useCommentRealtime } from "@/hooks/use-comment-realtime";
+import { useCommentRestriction } from "@/hooks/use-comment-restriction";
 import { isBackendHandle } from "@/lib/api/adapters";
 import { getAccessToken } from "@/lib/api/tokens";
 import { resolveAuthor } from "@/lib/api/authors";
@@ -33,6 +35,7 @@ import {
   peekCommentPage,
   toUiComments,
 } from "@/lib/comment-cache";
+import { commentLockMessage } from "@/lib/comments/restriction";
 import {
   type PendingReply,
   addReply,
@@ -114,6 +117,16 @@ export function CommentPanel({
   const isDetail = variant === "detail";
   const isBackend = isBackendHandle(videoId);
   const { user } = useSession();
+  // The video carries its own switch; the owner's account-level audience has
+  // to be asked for. The owner is exempt from that audience, so is not asked.
+  const restriction = useCommentRestriction(
+    videoId,
+    isBackend && !commentsDisabled && user?.userId !== videoOwnerId
+      ? (user?.userId ?? null)
+      : null,
+  );
+  /** Set when the viewer may read this thread but not add to it. */
+  const lockMessage = commentLockMessage(commentsDisabled, restriction);
   // Same pattern as `Feed.tsx`'s `wsToken`: read during render so a token
   // change (login, or a rotation that happens to land on a re-render) is a
   // dependency `useCommentRealtime` can react to — reading it
@@ -450,12 +463,12 @@ export function CommentPanel({
             and show the empty state at once, rather than flashing placeholder
             rows that resolve to nothing. */}
         {comments.length === 0 &&
-          (commentsDisabled ? (
-            <CommentsOff />
-          ) : loading && commentCount > 0 ? (
+          (loading && commentCount > 0 && !commentsDisabled ? (
             <CommentListSkeleton
               count={Math.min(commentCount, COMMENT_FIRST_PAGE_SIZE)}
             />
+          ) : lockMessage ? (
+            <CommentsLocked message={lockMessage} />
           ) : (
             <NoCommentsYet />
           ))}
@@ -466,7 +479,7 @@ export function CommentPanel({
             comment={comment}
             videoId={videoId}
             isBackend={isBackend}
-            onReply={startReply}
+            onReply={lockMessage ? undefined : startReply}
             justAddedId={justAddedId}
             currentUserId={user?.userId}
             canModerate={Boolean(user) && user?.userId === videoOwnerId}
@@ -488,13 +501,16 @@ export function CommentPanel({
         )}
       </div>
 
-      {!commentsDisabled && (
+      {/* An empty locked thread already says why in the middle of the list. */}
+      {!lockMessage ? (
         <CommentComposer
           ref={composerRef}
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(null)}
           onPost={post}
         />
+      ) : (
+        comments.length > 0 && <CommentLockNotice message={lockMessage} />
       )}
     </section>
   );

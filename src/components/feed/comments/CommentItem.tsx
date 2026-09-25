@@ -300,25 +300,28 @@ import type { Comment } from "@/types/tiktok";
               <span className="text-[13px] leading-[19.5px] text-[var(--tt-placeholder)]">
                 {comment.timestamp}
               </span>
-              <button
-                type="button"
-                onClick={() =>
-                  onReply?.({
-                    parentId: parentId ?? comment.id,
-                    username: comment.author.username,
-                    replyToCommentId: comment.id,
-                    replyToName: isReply ? comment.author.nickname : undefined,
-                  })
-                }
-                className={cn(
-                  "text-white/60 hover:underline",
-                  isReply
-                    ? "text-[13px] font-semibold leading-[16.9px]"
-                    : "text-[14px] font-medium leading-[18.2px]",
-                )}
-              >
-                Reply
-              </button>
+              {/* Absent when the viewer may not comment — a reply is a comment. */}
+              {onReply && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onReply({
+                      parentId: parentId ?? comment.id,
+                      username: comment.author.username,
+                      replyToCommentId: comment.id,
+                      replyToName: isReply ? comment.author.nickname : undefined,
+                    })
+                  }
+                  className={cn(
+                    "text-white/60 hover:underline",
+                    isReply
+                      ? "text-[13px] font-semibold leading-[16.9px]"
+                      : "text-[14px] font-medium leading-[18.2px]",
+                  )}
+                >
+                  Reply
+                </button>
+              )}
             </div>
 
             <button
