@@ -290,7 +290,12 @@ export type SettingsIconName =
 export type SettingsAction =
   | "blocked-accounts"
   | "browser-notifications"
-  | "high-contrast";
+  | "high-contrast"
+  | "comment-audience"
+  | "dm-audience"
+  | "screen-time-limit"
+  | "sleep-hours"
+  | "weekly-screen-time";
 
 /**
  * The five row shapes the live settings panel uses. `link` and `value` both

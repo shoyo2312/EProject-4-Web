@@ -112,6 +112,24 @@ export interface FollowResponse {
   followingId: string;
 }
 
+/** Who may comment on, or message, an account. `FRIENDS` is mutual followers. */
+export type SettingsAudience = "EVERYONE" | "FRIENDS" | "NO_ONE";
+
+/**
+ * `GET /api/v1/users/me/settings` — never 404: an account that never changed a
+ * setting reads the defaults. Null on the screen-time fields means off.
+ */
+export interface UserSettingsResponse {
+  commentAudience: SettingsAudience;
+  dmAudience: SettingsAudience;
+  /** 10–1440 when set. */
+  screenTimeLimitMinutes: number | null;
+  /** "HH:mm" wall-clock with no timezone. Both ends set, or both null. */
+  sleepHoursStart: string | null;
+  sleepHoursEnd: string | null;
+  weeklyScreenTimeDigest: boolean;
+}
+
 /* --- api-gateway aggregate ----------------------------------------------- */
 
 /**

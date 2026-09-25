@@ -89,9 +89,14 @@ with the muted, unindented headings noted above.
 - **One switch size**, the 44 × 24 majority.
 - `Business verification`'s nav glyph is redrawn on the 48 grid; the live one is a 3.2KB
   multi-part mark on a 20 viewBox. Every other nav glyph is the live path.
-- **Three rows are live; the rest are inert.** There is no settings or preferences concept
-  anywhere in the backend — no table, no endpoint, on any of the fifteen services — so a row is
-  only wired when it needs nothing the backend does not already have:
+- **Eight rows are live; the rest are inert.** A row is only wired when the backend has
+  somewhere to keep its answer:
+  - *Privacy → Comments* and *Direct messages*, and *Screen time → Daily screen time*,
+    *Sleep hours* and *Weekly screen time updates* read and write user-service's
+    `GET/PATCH /users/me/settings` (`useAccountSettings`, one read for the page). The two
+    audiences are enforced server-side; the screen-time fields are stored only — nothing,
+    client or server, acts on them yet. The pickers are the app's own dialogs, not
+    measured off the live site.
   - *Privacy → Blocked accounts* opens a list backed by `GET /users/me/blocked` and
     `DELETE /users/{id}/block`, both of which already existed.
   - *Push notifications → Allow in browser* asks for the browser's Notification permission and
@@ -104,7 +109,7 @@ with the muted, unindented headings noted above.
   Each is keyed by `SettingsRow.action`, so the layout stays data and only behaviour branches.
 - Every other row is inert, and deliberately so: the remaining switches hold their position for
   the session and are forgotten on reload, and the link rows open flows (a region picker, a
-  comments-audience sheet, a keyword filter editor) that this clone has no screens for. A control
+  keyword filter editor, account deletion) that this clone has no screens for. A control
   that appears to save something it cannot is worse than one that visibly does nothing.
 
 ## Gotchas

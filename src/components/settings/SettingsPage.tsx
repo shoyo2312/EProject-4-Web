@@ -4,6 +4,22 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BlockedAccountsModal } from "@/components/settings/BlockedAccountsModal";
+import {
+  AudienceRow,
+  ScreenTimeLimitRow,
+  SleepHoursRow,
+  WeeklyDigestRow,
+} from "@/components/settings/rows/AccountRows";
+import {
+  Accessory,
+  ROW_CLASS,
+  RowBody,
+  Switch,
+} from "@/components/settings/rows/parts";
+import {
+  type AccountSettings,
+  useAccountSettings,
+} from "@/hooks/use-account-settings";
 import { useBrowserNotifications } from "@/hooks/use-browser-notifications";
 import { useLocalSettings } from "@/hooks/use-local-settings";
 import { setHighContrast } from "@/lib/settings/local-settings";
@@ -12,10 +28,7 @@ import {
   AccessibilityIcon,
   ArrowLeftIcon,
   BusinessVerificationIcon,
-  CaretDownIcon,
-  ChevronRightIcon,
   ContentPreferencesIcon,
-  ExternalLinkIcon,
   ManageAccountIcon,
   PrivacyLockIcon,
   PushNotificationsIcon,
@@ -60,6 +73,7 @@ const ICONS: Record<SettingsIconName, typeof ManageAccountIcon> = {
  */
 export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
   const router = useRouter();
+  const account = useAccountSettings();
   const panelRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const [active, setActive] = useState(sections[0]?.id ?? "");
@@ -181,7 +195,11 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
               </h1>
 
               {section.groups.map((group, groupIndex) => (
-                <Group key={group.heading ?? groupIndex} group={group} />
+                <Group
+                  key={group.heading ?? groupIndex}
+                  group={group}
+                  account={account}
+                />
               ))}
             </section>
           ))}
@@ -191,7 +209,13 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
   );
 }
 
-function Group({ group }: { group: SettingsGroup }) {
+function Group({
+  group,
+  account,
+}: {
+  group: SettingsGroup;
+  account: AccountSettings;
+}) {
   return (
     <div className="mb-4">
       {group.heading && (
@@ -207,15 +231,12 @@ function Group({ group }: { group: SettingsGroup }) {
 
       <div className="mt-3">
         {group.rows.map((row) => (
-          <Row key={row.title} row={row} />
+          <Row key={row.title} row={row} account={account} />
         ))}
       </div>
     </div>
   );
 }
-
-const ROW_CLASS =
-  "flex w-full items-center gap-4 border-b border-[var(--tt-divider)] px-4 py-3 text-left last:border-b-0";
 
 /**
  * One row, dispatched on `row.action`.
@@ -223,22 +244,35 @@ const ROW_CLASS =
  * A row without an action is still rendered exactly and left inert: it is the
  * entry point to a flow whose state no backend service stores yet, and a
  * control that pretends to save something is worse than one that visibly does
- * nothing. The three that *are* wired need a hook each, so each is its own
- * component rather than a branch inside one.
+ * nothing. The wired ones need a hook each, so each is its own component
+ * rather than a branch inside one.
  */
-function Row({ row }: { row: SettingsRow }) {
+function Row({ row, account }: { row: SettingsRow; account: AccountSettings }) {
   if (row.kind === "switch") {
     switch (row.action) {
       case "high-contrast":
         return <HighContrastRow row={row} />;
       case "browser-notifications":
         return <BrowserNotificationsRow row={row} />;
+      case "weekly-screen-time":
+        return <WeeklyDigestRow row={row} account={account} />;
       default:
         return <SessionSwitchRow row={row} />;
     }
   }
 
-  if (row.action === "blocked-accounts") return <BlockedAccountsRow row={row} />;
+  switch (row.action) {
+    case "blocked-accounts":
+      return <BlockedAccountsRow row={row} />;
+    case "comment-audience":
+      return <AudienceRow row={row} account={account} field="commentAudience" />;
+    case "dm-audience":
+      return <AudienceRow row={row} account={account} field="dmAudience" />;
+    case "screen-time-limit":
+      return <ScreenTimeLimitRow row={row} account={account} />;
+    case "sleep-hours":
+      return <SleepHoursRow row={row} account={account} />;
+  }
 
   return (
     <button type="button" className={cn(ROW_CLASS, "hover:bg-white/[0.03]")}>
@@ -248,31 +282,10 @@ function Row({ row }: { row: SettingsRow }) {
   );
 }
 
-function RowBody({ row, note }: { row: SettingsRow; note?: string }) {
-  return (
-    <div className="min-w-0 flex-1">
-      <p className="text-[16px] leading-[21px] text-[var(--tt-text)]">
-        {row.title}
-      </p>
-      {row.description && (
-        <p className="mt-1 max-w-[583px] text-[12px] leading-[15.6px] text-[rgb(255_255_255/0.6)]">
-          {row.description}
-        </p>
-      )}
-      {note && (
-        <p className="mt-1 max-w-[583px] text-[12px] leading-[15.6px] text-[var(--tt-red-active)]">
-          {note}
-        </p>
-      )}
-    </div>
-  );
-}
-
 /**
- * The unwired switches — private account, business verification, the two ads
- * ones, weekly screen time. They hold their position for the session and are
- * forgotten on reload, which is the honest rendering of a control with nowhere
- * to save to.
+ * The unwired switches — private account and business verification. They hold
+ * their position for the session and are forgotten on reload, which is the
+ * honest rendering of a control with nowhere to save to.
  */
 function SessionSwitchRow({ row }: { row: SwitchSettingsRow }) {
   const [on, setOn] = useState(row.on);
@@ -356,70 +369,5 @@ function BlockedAccountsRow({ row }: { row: SettingsRow }) {
       </button>
       {open && <BlockedAccountsModal onClose={() => setOpen(false)} />}
     </>
-  );
-}
-
-function Accessory({ row }: { row: SettingsRow }) {
-  if (row.kind === "expand") {
-    return (
-      <CaretDownIcon className="h-4 w-4 flex-none text-[rgb(255_255_255/0.6)]" />
-    );
-  }
-
-  if (row.kind === "external") {
-    return (
-      <ExternalLinkIcon className="h-4 w-4 flex-none text-[var(--tt-red)]" />
-    );
-  }
-
-  return (
-    <div className="flex flex-none items-center gap-2">
-      {row.kind === "value" && (
-        <span className="text-[16px] leading-[20.8px] text-[rgb(255_255_255/0.6)]">
-          {row.value}
-        </span>
-      )}
-      <ChevronRightIcon className="h-4 w-4 text-[rgb(255_255_255/0.6)]" />
-    </div>
-  );
-}
-
-/**
- * `.DivSwitchWrapper` — 44 × 24 track, 20px knob inset 2px, `#0BE09B` when on.
- * Green, not the brand red: `/setting` is the only page in the app using it.
- */
-function Switch({
-  on,
-  label,
-  onToggle,
-  disabled,
-}: {
-  on: boolean;
-  label: string;
-  onToggle: () => void;
-  /** For a control the browser will never let through — see the row above. */
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      onClick={onToggle}
-      disabled={disabled}
-      className={cn(
-        "flex h-6 w-11 flex-none items-center rounded-full p-0.5 transition-colors",
-        on ? "bg-[#0be09b]" : "bg-white/[0.12]",
-        disabled && "opacity-50",
-      )}
-    >
-      <span
-        className={cn(
-          "h-5 w-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.15)] transition-transform",
-          on && "translate-x-5",
-        )}
-      />
-    </button>
   );
 }

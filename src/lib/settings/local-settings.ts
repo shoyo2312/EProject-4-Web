@@ -6,11 +6,10 @@ const STORAGE_KEY = "tt:settings";
 /**
  * The `/setting` rows this app can honour with no backend behind them.
  *
- * Every other row on that page needs storage no service has yet — there is no
- * settings or preferences concept anywhere in the backend. These two do not:
- * the live page's own copy scopes contrast to "your computer", and desktop
- * notifications are a browser permission, not account state. So `localStorage`
- * is where they belong, not an endpoint that is missing.
+ * The account-level rows save to user-service (`useAccountSettings`). These two
+ * are not account state: the live page's own copy scopes contrast to "your
+ * computer", and desktop notifications are a browser permission. So
+ * `localStorage` is where they belong, not an endpoint that is missing.
  */
 export interface LocalSettings {
   highContrast: boolean;

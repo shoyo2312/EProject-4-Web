@@ -1,12 +1,13 @@
 "use client";
 
 import { apiFetch } from "@/lib/api/client";
-import { isApiError } from "@/lib/api/errors";
+import { isApiError, isRetryable } from "@/lib/api/errors";
 import { isLastPage } from "@/lib/api/types";
 import type {
   FollowResponse,
   PageResponse,
   UserProfileResponse,
+  UserSettingsResponse,
 } from "@/lib/api/types";
 
 /**
@@ -273,6 +274,42 @@ export function getBlocked(
     auth: "required",
     query: { page, size },
   });
+}
+
+export function getMySettings(): Promise<UserSettingsResponse> {
+  return apiFetch<UserSettingsResponse>("/users/me/settings", {
+    auth: "required",
+  });
+}
+
+/**
+ * `PATCH /api/v1/users/me/settings` — only the keys the body carries change,
+ * and the answer is the whole settings object as it now stands.
+ *
+ * Not `PATCH /users/me`'s rules: `""` clears nothing here, and `null` is how
+ * the three screen-time fields are switched off. The type keeps `null` away
+ * from the three fields the server refuses it on.
+ *
+ * Replayed once on `CONCURRENT_MODIFICATION`, as the contract asks: two
+ * devices, or two first writes racing the row's insert. The body is the
+ * viewer's own intent, so it is sent again as is rather than re-derived.
+ */
+export async function updateMySettings(
+  patch: Partial<UserSettingsResponse>,
+): Promise<UserSettingsResponse> {
+  const send = () =>
+    apiFetch<UserSettingsResponse>("/users/me/settings", {
+      method: "PATCH",
+      body: patch,
+      auth: "required",
+    });
+
+  try {
+    return await send();
+  } catch (cause) {
+    if (isRetryable(cause)) return send();
+    throw cause;
+  }
 }
 
 export function getMuted(

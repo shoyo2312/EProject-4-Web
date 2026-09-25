@@ -1033,11 +1033,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             title: "Comments",
             description: "Who can comment on your posts",
             value: "Everyone",
+            action: "comment-audience",
           },
           {
             kind: "link",
             title: "Direct messages",
             description: "Who can send you messages",
+            action: "dm-audience",
           },
           {
             kind: "link",
@@ -1121,18 +1123,21 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             title: "Daily screen time",
             description: "Get notified if you reach your time on Nowa.",
             value: "Off",
+            action: "screen-time-limit",
           },
           {
             kind: "value",
             title: "Sleep hours",
             description: "Get reminded when you’re in your sleep hours.",
             value: "Off",
+            action: "sleep-hours",
           },
           {
             kind: "switch",
             title: "Weekly screen time updates",
             description: "Stay updated on your time from your Inbox.",
             on: true,
+            action: "weekly-screen-time",
           },
           {
             kind: "expand",
