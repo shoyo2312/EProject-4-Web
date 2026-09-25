@@ -106,7 +106,7 @@ export function videoToFeedVideo(
     },
     stats: {
       likes: video.likeCount,
-      // Null when the owner turned comments off — `commentsDisabled` is what the UI reads then.
+      // Null when comments are off — `commentsDisabled` is what the UI reads then.
       comments: video.commentCount ?? 0,
       // See the module doc: bookmarks have no source at all; shares does,
       // but not as a count on this DTO — the UI tracks it from a 0 baseline.
@@ -129,7 +129,10 @@ export function videoToFeedVideo(
     isFollowing: options.isFollowing ?? false,
     hasTranslation: false,
     visibility: video.visibility,
-    commentsDisabled: video.commentsDisabled,
+    // Either switch closes the video the same way; only the owner's own toggle
+    // needs to tell them apart.
+    commentsDisabled: video.commentsDisabled || video.accountCommentsOff,
+    commentsSwitchOff: video.commentsDisabled,
   };
 }
 

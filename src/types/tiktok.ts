@@ -95,10 +95,16 @@ export interface FeedVideo {
    */
   visibility?: "PUBLIC" | "FRIENDS" | "PRIVATE";
   /**
-   * The owner turned comments off. Carried only for backend videos; when true
+   * Comments are off on this video — its own switch, or an owner whose account
+   * accepts comments from no one. Carried only for backend videos; when true
    * the comment panel shows the "commenting is off" state and no count renders.
    */
   commentsDisabled?: boolean;
+  /**
+   * The video's own "Allow comments" switch alone, for the owner's toggle to
+   * seed from — `commentsDisabled` also folds in the account setting.
+   */
+  commentsSwitchOff?: boolean;
 }
 
 export interface Comment {

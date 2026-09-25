@@ -117,8 +117,9 @@ export function CommentPanel({
   const isDetail = variant === "detail";
   const isBackend = isBackendHandle(videoId);
   const { user } = useSession();
-  // The video carries its own switch; the owner's account-level audience has
-  // to be asked for. The owner is exempt from that audience, so is not asked.
+  // The video carries both switches — its own and an account open to no one.
+  // Friends-only depends on who is asking, so it is asked for; the owner is
+  // exempt from it, so is not asked.
   const restriction = useCommentRestriction(
     videoId,
     isBackend && !commentsDisabled && user?.userId !== videoOwnerId

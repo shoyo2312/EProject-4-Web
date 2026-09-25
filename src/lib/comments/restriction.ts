@@ -6,8 +6,8 @@ const COMMENTS_OFF = "This creator has turned off commenting";
  * What stands in for the comment box, or null when the viewer may comment.
  *
  * An account that accepts comments from no one reads exactly like the video's
- * own switch being off — to everyone but the owner, it is. Friends-only says
- * so about the viewer instead, since the thread is still open to others.
+ * own switch being off — for everyone, the owner included, it is. Friends-only
+ * says so about the viewer instead, since the thread is still open to others.
  */
 export function commentLockMessage(
   commentsDisabled: boolean,

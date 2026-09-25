@@ -175,7 +175,7 @@ function VideoActionsControl({
     <OwnerControls
       videoId={video.id}
       initialVisibility={video.visibility}
-      initialCommentsDisabled={video.commentsDisabled}
+      initialCommentsDisabled={video.commentsSwitchOff}
       onDeleted={onDeleted}
     />
   ) : (

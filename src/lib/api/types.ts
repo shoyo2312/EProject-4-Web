@@ -201,10 +201,22 @@ export interface VideoResponse {
   visibility: VideoVisibility;
   viewCount: number;
   likeCount: number;
-  /** Null when `commentsDisabled` — a video with comments off exposes no comment total. */
+  /**
+   * Null when `commentsDisabled` or `accountCommentsOff` — a video with comments
+   * off exposes no comment total.
+   */
   commentCount: number | null;
-  /** The owner turned comments off; interaction-service then rejects new comments. */
+  /**
+   * The video's own switch: the owner turned comments off for this video.
+   * interaction-service then rejects new comments.
+   */
   commentsDisabled: boolean;
+  /**
+   * The owner's account accepts comments from no one, which closes every video
+   * they own — to everyone, the owner included — whatever the video's own
+   * switch says.
+   */
+  accountCommentsOff: boolean;
   /** Why the transcode failed; present only when `status === "FAILED"`. */
   failureReason?: string | null;
   /**
