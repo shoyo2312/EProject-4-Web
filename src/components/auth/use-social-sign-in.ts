@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 import { useSession } from "@/components/session/SessionProvider";
+import { toast } from "@/components/ui/toast";
 import { isApiError, messageFor } from "@/lib/api/errors";
 import {
   getProviderToken,
@@ -14,9 +14,6 @@ import {
   type SocialProvider,
 } from "@/lib/auth/social";
 import type { LoginOption } from "@/types/tiktok";
-
-/** Where a social login lands when the account has no email address yet. */
-const ADD_EMAIL_HREF = "/signup/add-email";
 
 /**
  * A login that stopped halfway: the provider account is new to us, but its
@@ -33,43 +30,32 @@ export interface SocialLinkChallenge {
 }
 
 /**
- * What every option list does when a row is clicked, in one place: the three
- * lists (login page, signup page, login modal) are laid out differently but
- * behave identically, and the behaviour is the fiddly part.
+ * What a row of the modal's option list does when clicked, kept apart from the
+ * list itself: the login and signup lists behave identically, and the
+ * behaviour is the fiddly part.
  *
  * A row with a `provider` runs that provider's SDK and signs in; every other
  * row still falls through to `onFallback`, which is the email flow.
  */
 export function useSocialSignIn({
   onFallback,
-  redirectTo,
+  onEmailMissing,
 }: {
   /** Rows with no provider behind them — QR, phone/email, LINE, Kakao, Apple. */
   onFallback: (option: LoginOption) => void;
   /**
-   * Where a successful social login lands. Omitted inside the modal, which
-   * just closes and leaves the viewer where they were.
+   * Signed in, but the account has no address — the provider gave none. The
+   * session leaves the modal open for this, so it can ask for one.
    */
-  redirectTo?: string;
+  onEmailMissing: () => void;
 }) {
   const { signInWithProvider, confirmSocialLink } = useSession();
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<SocialProvider | null>(null);
   const [challenge, setChallenge] = useState<SocialLinkChallenge | null>(null);
 
   // Loaded up front so the click handler can open the provider's popup without
   // waiting on a script — a popup that arrives late is a blocked popup.
   useEffect(() => preloadSocialSdks(), []);
-
-  /** One landing rule for both halves of the flow. */
-  const land = useCallback(
-    (requiresEmail: boolean) => {
-      if (requiresEmail) router.push(ADD_EMAIL_HREF);
-      else if (redirectTo) router.push(redirectTo);
-    },
-    [redirectTo, router],
-  );
 
   /**
    * Everything after a provider token is in hand, shared by the Facebook click
@@ -78,11 +64,10 @@ export function useSocialSignIn({
    */
   const completeSignIn = useCallback(
     async (provider: SocialProvider, token: string) => {
-      setError(null);
       setPending(provider);
       try {
         const { requiresEmail } = await signInWithProvider(provider, token);
-        land(requiresEmail);
+        if (requiresEmail) onEmailMissing();
       } catch (cause) {
         // Not an error: the account exists, and has to prove the mailbox is
         // theirs before the two are merged.
@@ -90,12 +75,12 @@ export function useSocialSignIn({
           setChallenge({ provider, token });
           return;
         }
-        setError(messageFor(cause));
+        toast.error(messageFor(cause));
       } finally {
         setPending(null);
       }
     },
-    [land, signInWithProvider],
+    [onEmailMissing, signInWithProvider],
   );
 
   const select = useCallback(
@@ -111,7 +96,6 @@ export function useSocialSignIn({
       if (option.provider === "google") return;
 
       const provider = option.provider;
-      setError(null);
       setPending(provider);
 
       let token: string;
@@ -122,7 +106,7 @@ export function useSocialSignIn({
       } catch (cause) {
         // Closing the provider's dialog is a decision, not a failure.
         if (!isSocialCancellation(cause)) {
-          setError(isSocialAuthError(cause) ? cause.message : messageFor(cause));
+          toast.error(isSocialAuthError(cause) ? cause.message : messageFor(cause));
         }
         setPending(null);
         return;
@@ -153,7 +137,6 @@ export function useSocialSignIn({
     async (otp: string) => {
       if (!challenge) return;
 
-      setError(null);
       setPending(challenge.provider);
       try {
         const { requiresEmail } = await confirmSocialLink(challenge.provider, {
@@ -161,20 +144,19 @@ export function useSocialSignIn({
           otp,
         });
         setChallenge(null);
-        land(requiresEmail);
+        if (requiresEmail) onEmailMissing();
       } catch (cause) {
-        setError(messageFor(cause));
+        toast.error(messageFor(cause));
       } finally {
         setPending(null);
       }
     },
-    [challenge, confirmSocialLink, land],
+    [challenge, confirmSocialLink, onEmailMissing],
   );
 
   const cancel = useCallback(() => {
     setChallenge(null);
-    setError(null);
   }, []);
 
-  return { select, mountGoogle, confirm, cancel, challenge, error, pending };
+  return { select, mountGoogle, confirm, cancel, challenge, pending };
 }

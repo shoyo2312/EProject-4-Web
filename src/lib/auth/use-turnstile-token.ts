@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 
 /**
  * A Cloudflare Turnstile token for a form that always requires one now — every
- * OTP-issuing call (register, addEmail, resendVerification, forgotPassword) is
+ * OTP-issuing call (startSignup, addEmail, resendVerification, forgotPassword) is
  * gated on the backend, not just suspicious ones (see auth-service
  * `TurnstileService.verify`).
  *

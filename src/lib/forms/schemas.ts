@@ -75,13 +75,6 @@ export const strongPasswordField = z
     }
   });
 
-/** Six digits. The field itself already strips everything else. */
-export const otpField = z
-  .string()
-  .trim()
-  .min(1, "Enter the 6-digit code.")
-  .regex(/^\d{6}$/, "The code is 6 digits.");
-
 /* --- login ---------------------------------------------------------------- */
 
 /**
@@ -102,8 +95,6 @@ export const loginSchema = z.object({
     ),
   password: z.string().min(1, "Enter your password."),
 });
-
-export type LoginValues = z.infer<typeof loginSchema>;
 
 /* --- signup --------------------------------------------------------------- */
 
@@ -130,45 +121,55 @@ export const MINIMUM_AGE = 18;
  * an error key with no value of its own — the form points it at the Month
  * select so focusing it lands somewhere sensible.
  */
-export const signupSchema = z
-  .object({
-    birthMonth: z.string(),
-    birthDay: z.string(),
-    birthYear: z.string(),
-    email: emailField,
-    username: usernameField,
-    password: strongPasswordField,
-  })
-  .superRefine((values, ctx) => {
-    const fail = (message: string) =>
-      ctx.addIssue({ code: "custom", path: ["birthday"], message });
+const birthdayFields = {
+  birthMonth: z.string(),
+  birthDay: z.string(),
+  birthYear: z.string(),
+};
 
-    if (!values.birthMonth || !values.birthDay || !values.birthYear) {
-      return fail("Select your birthday.");
-    }
+/**
+ * Signup asks one screen at a time — birthday and email, then the password,
+ * then the username — so each screen validates only what is on it.
+ */
+export const signupDetailsSchema = z
+  .object({ ...birthdayFields, email: emailField })
+  .superRefine(checkBirthday);
 
-    const month = MONTHS.indexOf(values.birthMonth as (typeof MONTHS)[number]);
-    const day = Number(values.birthDay);
-    const year = Number(values.birthYear);
-    const birthday = new Date(year, month, day);
+export const passwordSchema = z.object({ password: strongPasswordField });
 
-    // `new Date(2009, 1, 31)` silently becomes 3 March. Reading the parts back
-    // is the only way to catch a day the chosen month does not have.
-    if (
-      birthday.getFullYear() !== year ||
-      birthday.getMonth() !== month ||
-      birthday.getDate() !== day
-    ) {
-      return fail("That date doesn’t exist — check the day.");
-    }
+export const usernameSchema = z.object({ username: usernameField });
 
-    if (birthday > new Date()) return fail("That date is in the future.");
-    if (ageOn(birthday, new Date()) < MINIMUM_AGE) {
-      return fail(`You need to be at least ${MINIMUM_AGE} to sign up.`);
-    }
-  });
+function checkBirthday(
+  values: { birthMonth: string; birthDay: string; birthYear: string },
+  ctx: z.RefinementCtx,
+) {
+  const fail = (message: string) =>
+    ctx.addIssue({ code: "custom", path: ["birthday"], message });
 
-export type SignupValues = z.infer<typeof signupSchema>;
+  if (!values.birthMonth || !values.birthDay || !values.birthYear) {
+    return fail("Select your birthday.");
+  }
+
+  const month = MONTHS.indexOf(values.birthMonth as (typeof MONTHS)[number]);
+  const day = Number(values.birthDay);
+  const year = Number(values.birthYear);
+  const birthday = new Date(year, month, day);
+
+  // `new Date(2009, 1, 31)` silently becomes 3 March. Reading the parts back
+  // is the only way to catch a day the chosen month does not have.
+  if (
+    birthday.getFullYear() !== year ||
+    birthday.getMonth() !== month ||
+    birthday.getDate() !== day
+  ) {
+    return fail("That date doesn’t exist — check the day.");
+  }
+
+  if (birthday > new Date()) return fail("That date is in the future.");
+  if (ageOn(birthday, new Date()) < MINIMUM_AGE) {
+    return fail(`You need to be at least ${MINIMUM_AGE} to sign up.`);
+  }
+}
 
 /** Whole years elapsed — the month/day comparison is what makes it exact. */
 function ageOn(birthday: Date, today: Date): number {
@@ -182,21 +183,8 @@ function ageOn(birthday: Date, today: Date): number {
 
 /* --- the rest of the forms ------------------------------------------------ */
 
-export const verifyEmailSchema = z.object({
-  email: emailField,
-  otp: otpField,
-});
-
-export const forgotPasswordSchema = z.object({ email: emailField });
-
-/** `/signup/add-email` — the address a social account is claiming. */
-export const addEmailSchema = z.object({ email: emailField });
-
-/** The new password is being *set*, so the full strength rule applies. */
-export const resetPasswordSchema = z.object({
-  otp: otpField,
-  password: strongPasswordField,
-});
+/** An address on its own: where a reset code goes, or one a social account adds. */
+export const emailSchema = z.object({ email: emailField });
 
 /**
  * The file itself is not validated here: it is picked, not typed, so its type

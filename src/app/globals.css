@@ -278,6 +278,18 @@
   input[type="range"] {
     cursor: pointer;
   }
+  /*
+   * Chrome paints autofilled fields with its own `background-color` and
+   * `color` marked `!important` in the UA stylesheet, which author CSS cannot
+   * beat. Stalling the background transition keeps our fill, and
+   * `-webkit-text-fill-color` sits outside that rule so the text stays ours.
+   */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--tt-text);
+    transition: background-color 600000s 0s;
+  }
 }
 
 @layer utilities {

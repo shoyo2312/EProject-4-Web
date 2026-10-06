@@ -7,7 +7,7 @@ import { PlayerSettingsProvider } from "@/components/player/PlayerSettingsProvid
 import { SessionProvider } from "@/components/session/SessionProvider";
 import { HighContrastSync } from "@/components/settings/HighContrastSync";
 import { Toaster } from "@/components/ui/toast";
-import { getLoginOptions } from "@/lib/data";
+import { getLoginOptions, getSignupOptions } from "@/lib/data";
 
 // TikTok ships a proprietary self-hosted webfont ("TikTokFont") that cannot be
 // redistributed. Inter is the closest freely-licensable match by metrics.
@@ -45,12 +45,15 @@ export default async function RootLayout({
   // The viewer is NOT resolved here: the JWT pair lives in the browser, so the
   // server renders the signed-out shell and `SessionProvider` fills it in from
   // `GET /api/v1/me` on mount.
-  const loginOptions = await getLoginOptions();
+  const [loginOptions, signupOptions] = await Promise.all([
+    getLoginOptions(),
+    getSignupOptions(),
+  ]);
 
   return (
     <html lang="en" className={`${tiktokFont.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <SessionProvider loginOptions={loginOptions}>
+        <SessionProvider loginOptions={loginOptions} signupOptions={signupOptions}>
           {/* Renders nothing; writes the accessibility class on <html>, which
               every route reads through the design tokens. */}
           <HighContrastSync />

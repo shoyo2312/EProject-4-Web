@@ -11,8 +11,11 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
-import { LoginModal } from "@/components/session/LoginModal";
+import { AuthModal } from "@/components/session/AuthModal";
+import { LogoutConfirmModal } from "@/components/session/LogoutConfirmModal";
+import { MODAL_EXIT_MS } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
+import { usePresence } from "@/hooks/use-presence";
 import { authorFromMe } from "@/lib/api/adapters";
 import { clearAuthorCache } from "@/lib/api/authors";
 import { clearRepostContextCache } from "@/lib/repost-context";
@@ -29,7 +32,7 @@ import type { Author, LoginOption } from "@/types/tiktok";
 export interface SessionUser extends Author {
   userId: string;
   /** Null for a social account the provider gave no address for — see
-   *  `requiresEmail` and `/signup/add-email`. */
+   *  `requiresEmail` and the modal's add-email step. */
   email: string | null;
   bio: string;
   followerCount: number;
@@ -59,6 +62,15 @@ interface SessionValue {
   /** Real login. Throws `ApiError` so the form can branch on `code`. */
   signIn: (usernameOrEmail: string, password: string) => Promise<void>;
   /**
+   * Last step of the email-first signup: creates the account for the address
+   * the ticket proved and signs it in. Throws `ApiError` like `signIn`.
+   */
+  signUp: (input: {
+    signupToken: string;
+    username: string;
+    password: string;
+  }) => Promise<void>;
+  /**
    * Trades a token the provider's SDK already issued for a session of ours.
    * Signs up on first use — the backend has one endpoint for both.
    *
@@ -67,7 +79,7 @@ interface SessionValue {
    * message to show but a code to collect and hand to `confirmSocialLink`.
    *
    * `requiresEmail` means the account has no address at all — the provider
-   * gave none — and should be sent to the add-email screen.
+   * gave none. The modal stays open then, and asks for one next.
    */
   signInWithProvider: (
     provider: SocialProvider,
@@ -79,6 +91,8 @@ interface SessionValue {
     input: { token: string; otp: string },
   ) => Promise<{ requiresEmail: boolean }>;
   signOut: () => Promise<void>;
+  /** Asks "Are you sure you want to log out?" first, as the live menu does. */
+  confirmSignOut: () => void;
   /** Re-reads `/me`; call after anything that changes the profile server-side. */
   reload: () => Promise<void>;
   /**
@@ -125,15 +139,23 @@ function toSessionUser(me: MeResponse): SessionUser {
  */
 export function SessionProvider({
   loginOptions,
+  signupOptions,
   children,
 }: {
   loginOptions: LoginOption[];
+  signupOptions: LoginOption[];
   children: React.ReactNode;
 }) {
   const router = useRouter();
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setLoading] = useState(true);
   const [loginOpen, setLoginOpen] = useState(false);
+  // Every close plays the way out, including the one a sign-in makes.
+  const loginModal = usePresence(loginOpen, MODAL_EXIT_MS);
+  // Here rather than beside the menu that opens it, which unmounts with the
+  // session — this has to outlive the logout to finish closing.
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const logoutConfirm = usePresence(logoutConfirmOpen, MODAL_EXIT_MS);
 
   const openLogin = useCallback(() => setLoginOpen(true), []);
 
@@ -223,8 +245,11 @@ export function SessionProvider({
    * the server had already consumed, so every retry answered `INVALID_OTP` and
    * the flow could not be finished at all. The throw stops here instead; the
    * profile fills in on the next `/me`.
+   *
+   * `close` is false only for a social account with no address, which the
+   * modal goes on to ask for.
    */
-  const settleSignIn = useCallback(async () => {
+  const settleSignIn = useCallback(async (close = true) => {
     // Every author resolved while signed out is a placeholder — user-service
     // will not answer without a token — and those must not outlive the moment
     // a token exists.
@@ -238,7 +263,7 @@ export function SessionProvider({
       // ponytail: swallowed, because the next navigation or reload re-reads
       // `/me`. Retry here if a stale-looking header proves worth the machinery.
     }
-    setLoginOpen(false);
+    if (close) setLoginOpen(false);
   }, [loadMe]);
 
   const signIn = useCallback(
@@ -250,10 +275,19 @@ export function SessionProvider({
     [settleSignIn],
   );
 
+  const signUp = useCallback(
+    async (input: { signupToken: string; username: string; password: string }) => {
+      await authApi.completeSignup(input);
+      await settleSignIn();
+      toast.success("Welcome to Nowa!");
+    },
+    [settleSignIn],
+  );
+
   const signInWithProvider = useCallback(
     async (provider: SocialProvider, providerToken: string) => {
       const result = await authApi.socialLogin(provider, providerToken);
-      await settleSignIn();
+      await settleSignIn(!result.requiresEmail);
       if (!result.requiresEmail) toast.success("You’re logged in.");
       return { requiresEmail: result.requiresEmail };
     },
@@ -263,7 +297,7 @@ export function SessionProvider({
   const confirmSocialLink = useCallback(
     async (provider: SocialProvider, input: { token: string; otp: string }) => {
       const result = await authApi.confirmSocialLink(provider, input);
-      await settleSignIn();
+      await settleSignIn(!result.requiresEmail);
       return { requiresEmail: result.requiresEmail };
     },
     [settleSignIn],
@@ -325,9 +359,11 @@ export function SessionProvider({
       },
       openLogin,
       signIn,
+      signUp,
       signInWithProvider,
       confirmSocialLink,
       signOut,
+      confirmSignOut: () => setLogoutConfirmOpen(true),
       reload: async () => {
         try {
           await loadMe();
@@ -345,6 +381,7 @@ export function SessionProvider({
       isLoading,
       openLogin,
       signIn,
+      signUp,
       signInWithProvider,
       confirmSocialLink,
       signOut,
@@ -358,15 +395,22 @@ export function SessionProvider({
     <SessionContext.Provider value={value}>
       {children}
 
-      {loginOpen && (
-        <LoginModal
-          options={loginOptions}
+      {loginModal.mounted && (
+        <AuthModal
+          closing={loginModal.closing}
+          loginOptions={loginOptions}
+          signupOptions={signupOptions}
           onClose={() => setLoginOpen(false)}
-          // There is no in-modal password form on the live site either: every
-          // row leads to the full login flow.
-          onSignIn={() => {
-            setLoginOpen(false);
-            router.push("/login/phone-or-email/email");
+        />
+      )}
+
+      {logoutConfirm.mounted && (
+        <LogoutConfirmModal
+          closing={logoutConfirm.closing}
+          onCancel={() => setLogoutConfirmOpen(false)}
+          onConfirm={() => {
+            setLogoutConfirmOpen(false);
+            void signOut();
           }}
         />
       )}

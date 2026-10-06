@@ -4,29 +4,64 @@ import { apiFetch } from "@/lib/api/client";
 import { clearTokens, getRefreshToken, storeTokens } from "@/lib/api/tokens";
 import type {
   MeResponse,
+  SignupTicketResponse,
   SocialLoginResponse,
   TokenResponse,
-  UserAccount,
 } from "@/lib/api/types";
 import type { SocialProvider } from "@/lib/auth/social";
 
 /**
- * `POST /api/v1/auth/register` — 201, and the account is NOT usable yet.
+ * `POST /api/v1/auth/register/start` — the email-first signup the modal uses.
+ * Mails a code to an address that has no account yet; nothing is created.
+ * 409 `EMAIL_ALREADY_EXISTS` for a taken address. Calling it again resends,
+ * and the previous code stops working.
  *
  * `turnstileToken` is required — auth-service verifies it before doing
  * anything else, on every call, not just suspicious ones.
  */
-export function register(input: {
+export function startSignup(email: string, turnstileToken: string): Promise<void> {
+  return apiFetch<void>("/auth/register/start", {
+    method: "POST",
+    body: { email, turnstileToken },
+    auth: "none",
+  });
+}
+
+/**
+ * `POST /api/v1/auth/register/verify` — spends the code and answers the
+ * ticket `completeSignup` redeems (good for 30 minutes).
+ */
+export function verifySignup(email: string, otp: string): Promise<SignupTicketResponse> {
+  return apiFetch<SignupTicketResponse>("/auth/register/verify", {
+    method: "POST",
+    body: { email, otp },
+    auth: "none",
+  });
+}
+
+/**
+ * `POST /api/v1/auth/register/complete` — creates the account, already
+ * verified, and signs it in, so the pair is stored here like `login`'s.
+ * 409 `USERNAME_ALREADY_EXISTS` leaves the ticket usable; 400
+ * `SIGNUP_SESSION_EXPIRED` means start again from the email.
+ */
+export async function completeSignup(input: {
+  signupToken: string;
   username: string;
-  email: string;
   password: string;
-  turnstileToken: string;
-}): Promise<UserAccount> {
-  return apiFetch<UserAccount>("/auth/register", {
+}): Promise<TokenResponse> {
+  const tokens = await apiFetch<TokenResponse>("/auth/register/complete", {
     method: "POST",
     body: input,
     auth: "none",
   });
+
+  storeTokens({
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+  });
+
+  return tokens;
 }
 
 /**
@@ -205,11 +240,6 @@ export async function logout(): Promise<void> {
   } finally {
     clearTokens({ notify: false });
   }
-}
-
-/** `GET /api/v1/auth/me` — the account, without the social profile. */
-export function getAccount(): Promise<UserAccount> {
-  return apiFetch<UserAccount>("/auth/me", { auth: "required" });
 }
 
 /**

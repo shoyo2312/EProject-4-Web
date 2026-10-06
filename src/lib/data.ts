@@ -9,7 +9,6 @@ import {
   FOOTER_SECTIONS,
   generatedProfile,
   LOGIN_OPTIONS,
-  LOGIN_PAGE_OPTIONS,
   NAV_ITEMS,
   PROFILES,
   profileVideoAsVideo,
@@ -66,12 +65,7 @@ export async function getLoginOptions(): Promise<LoginOption[]> {
   return LOGIN_OPTIONS;
 }
 
-/** Rows of `/login`'s option list, which differ from the modal's. */
-export async function getLoginPageOptions(): Promise<LoginOption[]> {
-  return LOGIN_PAGE_OPTIONS;
-}
-
-/** Rows of `/signup`'s option list. */
+/** Rows of the signup modal's option list. */
 export async function getSignupOptions(): Promise<LoginOption[]> {
   return SIGNUP_OPTIONS;
 }

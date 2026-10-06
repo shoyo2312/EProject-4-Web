@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 
 import { removeTurnstile, renderTurnstile } from "@/lib/auth/turnstile";
+import { cn } from "@/lib/utils";
 
 /**
  * Mounted only after the backend answers `TURNSTILE_VERIFICATION_FAILED` —
@@ -11,8 +12,11 @@ import { removeTurnstile, renderTurnstile } from "@/lib/auth/turnstile";
  */
 export function TurnstileWidget({
   onVerify,
+  className,
 }: {
   onVerify: (token: string) => void;
+  /** Replaces the default vertical margin — the modal places it in a fixed gap. */
+  className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -43,5 +47,5 @@ export function TurnstileWidget({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={containerRef} className="my-4" />;
+  return <div ref={containerRef} className={cn("my-4", className)} />;
 }

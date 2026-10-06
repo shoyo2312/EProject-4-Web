@@ -15,7 +15,8 @@ import { toast } from "@/components/ui/toast";
  *     submit.
  *  2. **On submit, every field is checked at once** and each message renders
  *     under its own field — not one line at the bottom saying something is
- *     wrong somewhere above.
+ *     wrong somewhere above. (With `toastFieldErrors`, the first one is a
+ *     toast instead.)
  *  3. **The first bad field is focused**, in the order the fields appear on
  *     screen, so the caret is already where the fix has to be typed.
  *  4. **Typing into a field that is showing an error clears it as soon as the
@@ -53,18 +54,19 @@ export interface UseFormOptions<Values extends Record<string, unknown>> {
   initialValues: Values;
   onSubmit: (values: Values, helpers: SubmitHelpers) => void | Promise<void>;
   /**
-   * Whether an unhandled submit rejection also raises a toast. On by default.
-   * Forms whose form-level line is always in view (login, signup) pass `false`
-   * so the same error is not said twice.
+   * Report field errors as a toast instead of under the field: the first bad
+   * field in screen order on submit, and every `setFieldError`. The field is
+   * still marked invalid and focused. The auth modal uses this so a form only
+   * ever speaks through the toast.
    */
-  errorToast?: boolean;
+  toastFieldErrors?: boolean;
 }
 
 export function useForm<Values extends Record<string, unknown>>({
   schema,
   initialValues,
   onSubmit,
-  errorToast = true,
+  toastFieldErrors = false,
 }: UseFormOptions<Values>) {
   const [values, setValues] = useState<Values>(initialValues);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -142,8 +144,9 @@ export function useForm<Values extends Record<string, unknown>>({
     (name: string, message: string) => {
       setErrors((current) => ({ ...current, [name]: message }));
       focusField(name);
+      if (toastFieldErrors) toast.error(message);
     },
-    [focusField],
+    [focusField, toastFieldErrors],
   );
 
   const handleSubmit = useCallback(
@@ -159,6 +162,7 @@ export function useForm<Values extends Record<string, unknown>>({
       const firstBad = order.current.find((name) => found[name]);
       if (firstBad) {
         focusField(firstBad);
+        if (toastFieldErrors) toast.error(found[firstBad]);
         return;
       }
 
@@ -168,18 +172,17 @@ export function useForm<Values extends Record<string, unknown>>({
         await onSubmit(valuesRef.current, { setFieldError, setFormError });
       } catch (cause) {
         // A rejected submit that the caller did not want to handle itself. The
-        // copy is the app's, never the backend's `message` field. Shown inline
-        // (under the form) and, unless `errorToast` is off, as a toast too so it
-        // registers even when the form-level line is scrolled out of view.
+        // copy is the app's, never the backend's `message` field. Always a
+        // toast; `formError` is there for forms that also want it inline.
         const message = messageFor(cause);
         setFormError(message);
-        if (errorToast) toast.error(message);
+        toast.error(message);
       } finally {
         submittingRef.current = false;
         setSubmitting(false);
       }
     },
-    [errorToast, focusField, onSubmit, setFieldError, validate],
+    [focusField, onSubmit, setFieldError, toastFieldErrors, validate],
   );
 
   /**

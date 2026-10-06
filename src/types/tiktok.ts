@@ -239,7 +239,7 @@ export interface NavItem {
   authOnly?: boolean;
 }
 
-/** One row in an option list — the login modal, `/login` or `/signup`. */
+/** One row in the login or signup modal's option list. */
 export interface LoginOption {
   /** Verbatim label, e.g. "Continue with Facebook". */
   label: string;
@@ -257,12 +257,6 @@ export interface LoginOption {
    * back to the email flow.
    */
   provider?: "google" | "facebook";
-  /**
-   * Draws the cyan "Last login" flag over the row's top-right corner. The live
-   * page sets it from the viewer's own history; the clone hard-codes it on the
-   * phone/email row so the badge is visible at all.
-   */
-  lastLogin?: boolean;
 }
 
 export interface FooterSection {

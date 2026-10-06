@@ -48,6 +48,7 @@ const MESSAGES: Record<string, string> = {
   USERNAME_ALREADY_EXISTS: "That username is taken.",
   EMAIL_ALREADY_EXISTS: "An account already exists for that email.",
   INVALID_OTP: "That code is incorrect or has expired.",
+  SIGNUP_SESSION_EXPIRED: "Your sign-up timed out. Please start again.",
   TOO_MANY_OTP_REQUESTS:
     "Too many code attempts. Try again in about 15 minutes.",
   INVALID_SOCIAL_TOKEN: "That sign-in expired. Please try again.",

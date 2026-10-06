@@ -189,10 +189,11 @@ Những quy tắc `apiFetch` đã xử lý sẵn, đừng tự làm lại:
 
 ## 7. Xác thực & quản lý phiên đăng nhập
 
-- `src/components/session/SessionProvider.tsx` là nơi quản lý trạng thái người dùng đăng nhập cho toàn app (Context), bao gồm: load thông tin `me`, đăng nhập/đăng xuất, mở `LoginModal` khi cần.
+- `src/components/session/SessionProvider.tsx` là nơi quản lý trạng thái người dùng đăng nhập cho toàn app (Context), bao gồm: load thông tin `me`, đăng nhập/đăng xuất, mở `AuthModal` khi cần.
 - Hỗ trợ đăng nhập bằng email/password và social login (Google, Facebook) — logic social nằm ở `src/lib/auth/social.ts`.
 - Có Cloudflare Turnstile (captcha) khi đăng ký/đăng nhập — `src/lib/auth/turnstile.ts`, `src/components/auth/TurnstileWidget.tsx`.
-- Một tài khoản social đăng ký xong có thể **chưa có email ngay** (chờ `user-service` xử lý event từ Kafka, thường mất vài trăm ms) — có route riêng `signup/add-email` để bổ sung.
+- Đăng nhập và đăng ký đều nằm trong `AuthModal` (`src/components/session/AuthModal.tsx`, các bước con ở `session/auth-modal/`) — không có route `/login` hay `/signup`, URL không đổi khi chuyển bước.
+- Tài khoản social mà provider không đưa email (vd. Facebook bị bỏ quyền `email`) sẽ **không có email** — modal không đóng mà chuyển sang bước "Add your email" để bổ sung. Bước này bỏ qua được; lần đăng nhập social sau sẽ hỏi lại.
 
 ## 8. Realtime (WebSocket/STOMP)
 
@@ -214,7 +215,7 @@ Những quy tắc `apiFetch` đã xử lý sẵn, đừng tự làm lại:
 | Trang cá nhân | `/[username]` | `components/profile/ProfileRouter.tsx` → `BackendProfilePage.tsx`/`ProfilePage.tsx` |
 | Upload video | `/upload` | `components/upload/UploadPage.tsx` |
 | Cài đặt tài khoản | `/setting` | `components/settings/SettingsPage.tsx` |
-| Đăng nhập/Đăng ký | `(auth)/login`, `(auth)/signup` | `components/auth/*` |
+| Đăng nhập/Đăng ký | Modal trong layout (không có route riêng) | `components/session/AuthModal.tsx` + `session/auth-modal/`, `components/auth/*` |
 | Thông báo (activity) | Drawer trong layout | `components/layout/ActivityDrawer.tsx` + `use-notifications.ts`, `use-notification-realtime.ts` |
 | Bình luận | Panel trong feed/video | `components/feed/CommentPanel.tsx` + `components/feed/comments/` |
 | Báo cáo vi phạm | Dialog | `components/report/ReportDialog.tsx` |

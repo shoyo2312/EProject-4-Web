@@ -38,7 +38,7 @@ export const CURRENT_SESSION: Author | null = CURRENT_USER;
 
 /**
  * The login modal's option list, verbatim and in order from the live modal.
- * The four third-party rows carry their brand colour only; see `LoginModal`
+ * The four third-party rows carry their brand colour only; see `AuthModal`
  * for why their logos are not vendored.
  */
 export const LOGIN_OPTIONS: LoginOption[] = [
@@ -52,24 +52,8 @@ export const LOGIN_OPTIONS: LoginOption[] = [
 ];
 
 /**
- * `/login`'s option list. Same seven rows as the modal, but the page words the
- * email row differently ("Use email / username") and flags the row the viewer
- * last used — so it is a separate list, not a reference to the modal's.
- */
-export const LOGIN_PAGE_OPTIONS: LoginOption[] = [
-  // { label: "Use QR code", icon: "qr" },
-  { label: "Use email / username", icon: "person", lastLogin: true },
-  { label: "Continue with Facebook", icon: "brand", tint: "#1877F2", provider: "facebook" },
-  { label: "Continue with Google", icon: "brand", tint: "#FFFFFF", provider: "google" },
-  // { label: "Continue with LINE", icon: "brand", tint: "#06C755" },
-  // { label: "Continue with KakaoTalk", icon: "brand", tint: "#FEE500" },
-  // { label: "Continue with Apple", icon: "brand", tint: "#FFFFFF" },
-];
-
-/**
- * `/signup`'s option list, verbatim from the live page. It is not the login
- * list minus a row: there is no QR option, the email row is worded
- * differently, and no row carries a "Last login" flag.
+ * The signup modal's option list. It is not the login list minus a row: there
+ * is no QR option, and the email row is worded differently.
  */
 export const SIGNUP_OPTIONS: LoginOption[] = [
   { label: "Use email", icon: "person" },
