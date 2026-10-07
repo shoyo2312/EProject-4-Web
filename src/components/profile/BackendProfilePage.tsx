@@ -16,7 +16,6 @@ import * as authApi from "@/lib/api/auth";
 import { forgetAuthor } from "@/lib/api/authors";
 import { isApiError, messageFor } from "@/lib/api/errors";
 import { listLikedVideos, listRepostedVideos, listSavedVideos } from "@/lib/api/interactions";
-import { getAccessToken } from "@/lib/api/tokens";
 import type { AccountResponse } from "@/lib/api/types";
 import * as usersApi from "@/lib/api/users";
 import { getUserVideoStats, getUserVideos, getVideosByIds } from "@/lib/api/videos";
@@ -243,8 +242,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
    * the focus/visibility listener below is the only thing that updates the
    * numbers.
    */
-  const wsToken = session.user ? getAccessToken() : null;
-  useUserRealtime(targetId ?? null, wsToken, (frame) => {
+  useUserRealtime(targetId ?? null, session.user !== null, (frame) => {
     setProfile((current) =>
       current
         ? {

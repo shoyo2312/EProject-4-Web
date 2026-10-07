@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
-import type { StompSubscription } from "@stomp/stompjs";
-import { getStompClient, onStompConnect } from "@/lib/realtime/stompClient";
+
+import { parseFrame } from "@/hooks/use-stomp-topic";
+import { subscribeTopic } from "@/lib/realtime/stompClient";
 
 export type VideoFrame = {
   type: "counts" | "state";
@@ -22,10 +23,11 @@ export type VideoFrame = {
  */
 export function useVideoRealtime(
   videoIds: string[],
-  token: string | null,
+  enabled: boolean,
   onFrame: (frame: VideoFrame) => void,
 ) {
-  const subscriptions = useRef(new Map<string, StompSubscription>());
+  /** Video id → its unsubscribe. Reconnects are re-subscribed by `stompClient` itself. */
+  const subscriptions = useRef(new Map<string, () => void>());
   const handler = useRef(onFrame);
   // Refs are only ever written from an effect or handler, never during
   // render — this keeps the closures below current without re-subscribing
@@ -34,49 +36,38 @@ export function useVideoRealtime(
     handler.current = onFrame;
   });
 
+  // Teardown lives on its own effect, keyed on `enabled` only: on the diffing
+  // effect below it would drop and re-subscribe every video each time a page
+  // of the feed was appended.
   useEffect(() => {
-    if (!token) {
-      return;
-    }
-    const client = getStompClient(token);
     const live = subscriptions.current;
-
-    const sync = () => {
-      if (!client.connected) {
-        return;
-      }
-      for (const id of videoIds) {
-        if (!live.has(id)) {
-          live.set(
-            id,
-            client.subscribe(`/topic/videos.${id}`, (message) => {
-              handler.current(JSON.parse(message.body) as VideoFrame);
-            }),
-          );
-        }
-      }
-      for (const [id, subscription] of live) {
-        if (!videoIds.includes(id)) {
-          subscription.unsubscribe();
-          live.delete(id);
-        }
-      }
-    };
-
-    sync();
-    // A reconnect invalidates every subscription, so re-subscribe rather than assume they
-    // survived. `onStompConnect` composes with whatever else (e.g. the comment sheet) is also
-    // listening for a (re)connect on this shared client — see `stompClient.ts`.
-    const unsubscribeConnect = onStompConnect(sync);
-
     return () => {
-      unsubscribeConnect();
-      for (const [, subscription] of live) {
-        subscription.unsubscribe();
-      }
+      live.forEach((unsubscribe) => unsubscribe());
       live.clear();
     };
-  }, [videoIds, token]);
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const live = subscriptions.current;
+    const wanted = new Set(videoIds);
+
+    for (const id of wanted) {
+      if (live.has(id)) continue;
+      live.set(
+        id,
+        subscribeTopic(`/topic/videos.${id}`, (body) => {
+          const frame = parseFrame<VideoFrame>(body);
+          if (frame) handler.current(frame);
+        }),
+      );
+    }
+    for (const [id, unsubscribe] of live) {
+      if (wanted.has(id)) continue;
+      unsubscribe();
+      live.delete(id);
+    }
+  }, [videoIds, enabled]);
 }
 
 /**

@@ -11,7 +11,6 @@ import {
   type NotificationResponse,
   type NotificationType,
 } from "@/lib/api/notifications";
-import { getAccessToken } from "@/lib/api/tokens";
 import { getProfiles, MAX_PROFILE_BATCH } from "@/lib/api/users";
 import { getVideosByIds } from "@/lib/api/videos";
 import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
@@ -136,7 +135,6 @@ export interface NotificationInbox {
  */
 export function useNotifications(): NotificationInbox {
   const { user } = useSession();
-  const token = user ? getAccessToken() : null;
   const [items, setItems] = useState<NotificationResponse[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -254,7 +252,7 @@ export function useNotifications(): NotificationInbox {
   }, [unresolvedVideoIds]);
 
   useNotificationRealtime(
-    token,
+    user !== null,
     useCallback((frame: NotificationFrame) => {
       setItems((current) =>
         // A frame can arrive for an entry the REST list already carried, when a

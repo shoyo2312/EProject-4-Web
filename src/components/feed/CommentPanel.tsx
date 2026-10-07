@@ -20,7 +20,6 @@ import { toast } from "@/components/ui/toast";
 import { useCommentRealtime } from "@/hooks/use-comment-realtime";
 import { useCommentRestriction } from "@/hooks/use-comment-restriction";
 import { isBackendHandle } from "@/lib/api/adapters";
-import { getAccessToken } from "@/lib/api/tokens";
 import { resolveAuthor } from "@/lib/api/authors";
 import {
   COMMENT_FIRST_PAGE_SIZE,
@@ -128,12 +127,6 @@ export function CommentPanel({
   );
   /** Set when the viewer may read this thread but not add to it. */
   const lockMessage = commentLockMessage(commentsDisabled, restriction);
-  // Same pattern as `Feed.tsx`'s `wsToken`: read during render so a token
-  // change (login, or a rotation that happens to land on a re-render) is a
-  // dependency `useCommentRealtime` can react to — reading it
-  // only inside that effect would close over whatever `getStompClient` built
-  // at mount and never notice a later swap.
-  const token = user ? getAccessToken() : null;
   /**
    * The panel is keyed by video id, so every pass over a video in the feed
    * remounts it. Seeding from the cache — synchronously, during the first
@@ -257,7 +250,7 @@ export function CommentPanel({
     [videoId],
   );
 
-  useCommentRealtime(videoId, isBackend ? token : null, applyRealtimeFrame);
+  useCommentRealtime(videoId, isBackend && user !== null, applyRealtimeFrame);
 
   const loadMore = useCallback(async () => {
     if (!cursor || loadingMore) return;

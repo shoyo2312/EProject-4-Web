@@ -3,10 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
+import { useStompTopic } from "@/hooks/use-stomp-topic";
 import { toFeedCards } from "@/lib/api/feed-cards";
 import { getPersonalizedFeed } from "@/lib/api/recommendations";
-import { getStompClient, onStompConnect } from "@/lib/realtime/stompClient";
-import { getAccessToken } from "@/lib/api/tokens";
 import { getFeed, getVideo, getVideosByIds } from "@/lib/api/videos";
 import type { VideoResponse } from "@/lib/api/types";
 import type { FeedVideo } from "@/types/tiktok";
@@ -203,47 +202,23 @@ export function useVideoFeed(): VideoFeedState {
    * viewers get no socket at all — the handshake needs a token — so for them
    * the feed stays as it was.
    */
-  useEffect(() => {
-    const token = getAccessToken();
-    if (!token) return;
-
-    const client = getStompClient(token);
-    let subscription: { unsubscribe: () => void } | null = null;
-    let cancelled = false;
-
-    const append = async (videoId: string) => {
+  const appendPublished = useCallback(
+    async (videoId: string) => {
       if (seenIds.current.has(videoId)) return;
       const video = await getVideo(videoId).catch(() => null);
-      if (cancelled || !video) return;
+      if (!video) return;
       if (video.status !== "PUBLISHED" || video.visibility !== "PUBLIC") return;
 
       const cards = await toCards([video]);
-      if (cancelled || cards.length === 0) return;
+      if (cards.length === 0) return;
       setVideos((current) => [...current, ...cards]);
-    };
+    },
+    [toCards],
+  );
 
-    const subscribe = () => {
-      if (!client.connected || subscription) return;
-      subscription = client.subscribe("/topic/feed", (message) => {
-        const frame = JSON.parse(message.body) as { videoId?: string };
-        if (frame.videoId) void append(frame.videoId);
-      });
-    };
-
-    subscribe();
-    // A reconnect drops every subscription, so re-subscribe instead of assuming
-    // this one survived — same contract as `useVideoRealtime`.
-    const unsubscribeConnect = onStompConnect(() => {
-      subscription = null;
-      subscribe();
-    });
-
-    return () => {
-      cancelled = true;
-      unsubscribeConnect();
-      subscription?.unsubscribe();
-    };
-  }, [toCards]);
+  useStompTopic<{ videoId?: string }>(isSignedIn ? "/topic/feed" : null, (frame) => {
+    if (frame.videoId) void appendPublished(frame.videoId);
+  });
 
   const loadMore = useCallback(() => {
     if (!hasMore || inFlight.current) return;

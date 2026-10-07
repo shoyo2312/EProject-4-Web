@@ -20,6 +20,7 @@ import { authorFromMe } from "@/lib/api/adapters";
 import { clearAuthorCache } from "@/lib/api/authors";
 import { clearRepostContextCache } from "@/lib/repost-context";
 import { clearCommentCache } from "@/lib/comment-cache";
+import { resetRealtime } from "@/lib/realtime/stompClient";
 import * as authApi from "@/lib/api/auth";
 import { isApiError } from "@/lib/api/errors";
 import { getAccessToken, getRefreshToken, onSessionEnded } from "@/lib/api/tokens";
@@ -135,6 +136,19 @@ function toSessionUser(me: MeResponse): SessionUser {
 }
 
 /**
+ * Forgets everything cached on behalf of the previous viewer — or of nobody:
+ * authors resolved while signed out are placeholders, and `likedByMe`, the
+ * follow cache and the socket's `/user/**` identity are all per viewer.
+ */
+function resetViewerState(): void {
+  clearAuthorCache();
+  clearCommentCache();
+  clearRepostContextCache();
+  usersApi.clearFollowCache();
+  resetRealtime();
+}
+
+/**
  * Owns who the viewer is, and the login modal in front of everything they
  * cannot do while signed out.
  *
@@ -201,10 +215,7 @@ export function SessionProvider({
   useEffect(
     () =>
       onSessionEnded(() => {
-        clearAuthorCache();
-        clearCommentCache();
-        clearRepostContextCache();
-        usersApi.clearFollowCache();
+        resetViewerState();
         setUser(null);
         setLoading(false);
       }),
@@ -259,10 +270,7 @@ export function SessionProvider({
     // Every author resolved while signed out is a placeholder — user-service
     // will not answer without a token — and those must not outlive the moment
     // a token exists.
-    clearAuthorCache();
-    clearCommentCache();
-    clearRepostContextCache();
-    usersApi.clearFollowCache();
+    resetViewerState();
     try {
       await loadMe();
     } catch {
@@ -320,10 +328,7 @@ export function SessionProvider({
     try {
       await authApi.logout();
     } finally {
-      clearAuthorCache();
-      clearCommentCache();
-      clearRepostContextCache();
-      usersApi.clearFollowCache();
+      resetViewerState();
       setUser(null);
       router.push("/");
       toast.success("You’re logged out.");

@@ -1,9 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import type { StompSubscription } from "@stomp/stompjs";
-
-import { getStompClient, onStompConnect } from "@/lib/realtime/stompClient";
+import { useStompTopic } from "@/hooks/use-stomp-topic";
 import type { NotificationType } from "@/lib/api/notifications";
 
 /**
@@ -39,33 +36,8 @@ export interface NotificationFrame {
  * service has none of its own.
  */
 export function useNotificationRealtime(
-  token: string | null,
+  enabled: boolean,
   onFrame: (frame: NotificationFrame) => void,
 ) {
-  const handler = useRef(onFrame);
-  useEffect(() => {
-    handler.current = onFrame;
-  });
-
-  useEffect(() => {
-    if (!token) return;
-    const client = getStompClient(token);
-    let subscription: StompSubscription | null = null;
-
-    const sync = () => {
-      if (!client.connected || subscription) return;
-      subscription = client.subscribe("/user/queue/notifications", (message) => {
-        handler.current(JSON.parse(message.body) as NotificationFrame);
-      });
-    };
-
-    sync();
-    const unsubscribeConnect = onStompConnect(sync);
-
-    return () => {
-      unsubscribeConnect();
-      subscription?.unsubscribe();
-      subscription = null;
-    };
-  }, [token]);
+  useStompTopic(enabled ? "/user/queue/notifications" : null, onFrame);
 }

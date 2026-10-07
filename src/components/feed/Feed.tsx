@@ -12,7 +12,6 @@ import { useVideoRealtime, withLikeCount, type VideoFrame } from "@/hooks/use-vi
 import { isBackendHandle } from "@/lib/api/adapters";
 import { useSavedVideos } from "@/hooks/use-saved-videos";
 import { getLikeStatuses, likeVideo, unlikeVideo } from "@/lib/api/interactions";
-import { getAccessToken } from "@/lib/api/tokens";
 import { getVideo } from "@/lib/api/videos";
 import { loadFirstCommentPage } from "@/lib/comment-cache";
 import { cn } from "@/lib/utils";
@@ -182,8 +181,7 @@ export function Feed({
     () => videos.filter((video) => isBackendHandle(video.id)).map((video) => video.id),
     [videos],
   );
-  const wsToken = user ? getAccessToken() : null;
-  useVideoRealtime(backendVideoIds, wsToken, handleRealtimeFrame);
+  useVideoRealtime(backendVideoIds, user !== null, handleRealtimeFrame);
 
   const visibleVideos = useMemo(
     () => videos.filter((video) => !hiddenIds.has(video.id)),

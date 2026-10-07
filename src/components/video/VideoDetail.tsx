@@ -21,7 +21,6 @@ import type { VideoPlayback } from "@/hooks/use-video-playback";
 import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
 import { useVideoSave } from "@/hooks/use-video-save";
 import { isBackendHandle } from "@/lib/api/adapters";
-import { getAccessToken } from "@/lib/api/tokens";
 import { COMMENT_PANEL_COOKIE } from "@/lib/comment-panel";
 import { getOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
@@ -112,7 +111,7 @@ export function VideoDetail({
   const { user: sessionUser } = useSession();
   useVideoRealtime(
     realtimeIds,
-    sessionUser ? getAccessToken() : null,
+    sessionUser !== null,
     useCallback((frame: VideoFrame) => {
       // `state` frames carry no counters; only the counts ones say anything here.
       if (frame.type === "counts") setLiveFrame(frame);
