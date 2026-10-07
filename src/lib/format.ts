@@ -39,6 +39,19 @@ export function formatRelativeTime(iso: string): string {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
+/**
+ * A moment to the minute, as "Oct 13, 2026, 9:05 PM" in the viewer's own zone —
+ * for limits that lift at a time of day rather than at midnight, like the
+ * rename locks. `timeZone` exists for tests.
+ */
+export function formatDateTime(at: Date, timeZone?: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone,
+  }).format(at);
+}
+
 /** File size for the upload preview — MB below a gigabyte, GB from there. */
 export function formatBytes(bytes: number): string {
   const mb = bytes / (1024 * 1024);

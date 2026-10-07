@@ -205,7 +205,7 @@ export const uploadSchema = z.object({
   visibility: z.enum(["PUBLIC", "PRIVATE"]),
 });
 
-export const editProfileSchema = z.object({
+const editProfileSchema = z.object({
   username: usernameField,
   nickname: z
     .string()
@@ -221,6 +221,26 @@ export const editProfileSchema = z.object({
       "The avatar must be an https URL.",
     ),
 });
+
+/**
+ * The Edit profile form for an account whose handle is `currentUsername`. The
+ * handle is held to the rule only once it is edited: one from before the rule
+ * — a generated handle can start with a digit — is the owner's to keep, and
+ * must not stop them saving a new bio.
+ */
+export function editProfileSchemaFor(currentUsername: string) {
+  return editProfileSchema.extend({
+    username: z.string().superRefine((value, ctx) => {
+      if (value.trim() === currentUsername) return;
+
+      const result = usernameField.safeParse(value);
+      if (result.success) return;
+      for (const issue of result.error.issues) {
+        ctx.addIssue({ code: "custom", message: issue.message });
+      }
+    }),
+  });
+}
 
 /**
  * `/setting` → Sleep hours: two `<input type="time">` values, already the

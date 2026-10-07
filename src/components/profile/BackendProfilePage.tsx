@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import type { ProfileDraft } from "@/components/profile/EditProfileModal";
 import { ProfilePage } from "@/components/profile/ProfilePage";
@@ -11,11 +12,16 @@ import {
   profileToUserProfile,
   videoToProfileVideo,
 } from "@/lib/api/adapters";
+import * as authApi from "@/lib/api/auth";
+import { forgetAuthor } from "@/lib/api/authors";
 import { isApiError, messageFor } from "@/lib/api/errors";
 import { listLikedVideos, listRepostedVideos, listSavedVideos } from "@/lib/api/interactions";
 import { getAccessToken } from "@/lib/api/tokens";
+import type { AccountResponse } from "@/lib/api/types";
 import * as usersApi from "@/lib/api/users";
 import { getUserVideoStats, getUserVideos, getVideosByIds } from "@/lib/api/videos";
+import { clearCommentCache } from "@/lib/comment-cache";
+import { changedProfileFields } from "@/lib/profile/changed-fields";
 import { useUserRealtime } from "@/hooks/use-user-realtime";
 import type { ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
 
@@ -45,6 +51,7 @@ const MAX_GRID_SKELETON = 10;
  */
 export function BackendProfilePage({ userId }: { userId?: string }) {
   const session = useSession();
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Tab whose videos are in flight, and how many of them to expect. */
@@ -285,38 +292,76 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
     return <ProfileSkeleton />;
   }
 
+  /**
+   * The page is addressed by handle, so a new one needs a new URL. The session
+   * takes the handle in the same transition as the navigation: updated alone,
+   * the old URL would stop matching the viewer and `ProfileRouter` would put up
+   * a skeleton to look that handle up — at user-service, which hears of renames
+   * through Kafka and can still be answering with the old one.
+   */
+  const moveToHandle = (account: AccountResponse) => {
+    startTransition(() => {
+      session.updateUser({
+        username: account.username,
+        handle: account.username,
+        usernameChangeableAt: account.usernameChangeableAt,
+      });
+      router.replace(`/@${encodeURIComponent(account.username)}`);
+    });
+  };
+
   const saveProfile = async (draft: ProfileDraft) => {
     /**
      * Only what actually changed goes in the body. This is not tidiness: on
      * this endpoint an empty string **deletes** the field, so posting the whole
      * form would wipe a bio the viewer never touched.
      */
+    const changes = changedProfileFields(draft, {
+      username: profile.author.username,
+      nickname: profile.author.nickname,
+      bio: profile.bio,
+    });
     const patch: { displayName?: string; bio?: string; avatarUrl?: string } = {};
-    if (draft.nickname !== profile.author.nickname) {
-      patch.displayName = draft.nickname;
+    if (changes.nickname !== undefined) patch.displayName = changes.nickname;
+    if (changes.bio !== undefined) patch.bio = changes.bio;
+
+    const newUsername = changes.username;
+    if (
+      newUsername === undefined &&
+      !draft.avatarFile &&
+      Object.keys(patch).length === 0
+    ) {
+      return;
     }
-    if (draft.bio !== profile.bio) patch.bio = draft.bio;
 
     try {
       /**
-       * The photo is uploaded here and nowhere earlier: picking one only
-       * previewed a `blob:` URL, which is meaningless to the server and must
-       * never reach `avatarUrl`. The upload comes first so that a failing one
-       * aborts the whole save — the modal stays open with the error rather than
-       * reporting success for a name change that went through beside a photo
-       * that did not.
+       * The rename goes last because it is the one step that moves the page:
+       * the URL follows the handle. Any failure, the rename's own included (a
+       * handle is often taken), then leaves the modal open with its message,
+       * over a page already showing whatever did save. The photo is uploaded
+       * here and nowhere earlier: picking one only previewed a `blob:` URL,
+       * which is meaningless to the server and must never reach `avatarUrl`.
        */
       if (draft.avatarFile) {
         const uploaded = await usersApi.uploadMyAvatar(draft.avatarFile);
         session.updateUser({ avatarUrl: uploaded.avatarUrl ?? undefined });
-      } else if (Object.keys(patch).length === 0) {
-        return;
       }
 
       if (Object.keys(patch).length > 0) await session.updateProfile(patch);
-      await load();
+
+      if (newUsername !== undefined) {
+        moveToHandle(await authApi.changeUsername(newUsername));
+      } else {
+        await load();
+      }
     } catch (cause) {
       throw new Error(messageFor(cause));
+    } finally {
+      // Your own name, handle and photo are cached like anyone else's, by id
+      // and inside every comment page fetched so far, for the life of the tab.
+      if (viewerId) forgetAuthor(viewerId);
+      clearCommentCache();
     }
   };
 
@@ -364,7 +409,8 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       profile={profile}
       onSaveProfile={isOwner ? saveProfile : undefined}
       onToggleFollow={toggleFollow}
-      usernameLocked
+      usernameChangeableAt={session.user?.usernameChangeableAt}
+      nicknameChangeableAt={session.user?.nicknameChangeableAt}
       onTabSelect={loadTab}
       pendingTab={pending?.tab ?? null}
       pendingCount={pending?.count ?? 0}

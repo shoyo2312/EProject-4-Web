@@ -100,3 +100,12 @@ export async function resolveAuthors(
 export function clearAuthorCache(): void {
   cache.clear();
 }
+
+/**
+ * Drops one author, so the next lookup asks user-service again. Called after
+ * the viewer edits their own profile, which would otherwise keep its old name,
+ * handle and photo here for the life of the tab.
+ */
+export function forgetAuthor(userId: string): void {
+  cache.delete(userId);
+}

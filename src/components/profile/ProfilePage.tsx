@@ -32,7 +32,8 @@ export function ProfilePage({
   profile,
   onSaveProfile,
   onToggleFollow,
-  usernameLocked,
+  usernameChangeableAt,
+  nicknameChangeableAt,
   onTabSelect,
   pendingTab,
   pendingCount,
@@ -42,8 +43,9 @@ export function ProfilePage({
   onSaveProfile?: (draft: ProfileDraft) => Promise<void>;
   /** Persists a follow/unfollow. Throwing reverts the button. */
   onToggleFollow?: (next: boolean) => Promise<void>;
-  /** auth-service has no rename endpoint, so backend handles are read-only. */
-  usernameLocked?: boolean;
+  /** The owner's rename locks, passed through to the Edit profile modal. */
+  usernameChangeableAt?: string | null;
+  nicknameChangeableAt?: string | null;
   /** Lets a backend-backed page load a tab's videos when it is opened. */
   onTabSelect?: (tab: ProfileTab) => void;
   /** Tab still fetching its videos, and how many are coming — see `ProfileBody`. */
@@ -153,7 +155,8 @@ export function ProfilePage({
           profile={current}
           saving={saving}
           error={saveError}
-          usernameLocked={usernameLocked}
+          usernameChangeableAt={usernameChangeableAt}
+          nicknameChangeableAt={nicknameChangeableAt}
           onClose={() => {
             setEditing(false);
             setSaveError(null);

@@ -190,9 +190,14 @@ scrolling. Reproduce it by *not* padding the scroll area for the footer.
 - No crop step: the picked file is previewed straight from an `URL.createObjectURL()`.
 - The username rule the tip describes is actually **enforced**, with the error replacing the
   tip in `#FF3B5C`. The live modal validates server-side on Save.
-- Saving does not change the URL. `getProfile` reads the unedited mock data, so navigating to
-  the new handle would discard the edit; the edited profile lives in page state instead, and
-  is also pushed into the session so the sidebar and top bar repaint.
+- Mock profiles: saving does not change the URL. `getProfile` reads the unedited mock data, so
+  navigating to the new handle would discard the edit; the edited profile lives in page state
+  instead, and is also pushed into the session so the sidebar and top bar repaint.
+- Backend accounts enforce the two limits the tips describe: a new username (auth-service,
+  once every 30 days) moves the page to `/@<new>`, and the nickname (user-service) changes
+  once every 7 days. While a limit holds, its field is read-only with the moment it reopens
+  ("You can change your username again on …"). That wording, and the 30-day sentence added
+  to the username tip once it is edited, are ours — the live locked state was not captured.
 
 ## Settings
 

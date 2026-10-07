@@ -81,6 +81,22 @@ export interface SocialLoginResponse {
   requiresEmail: boolean;
 }
 
+/**
+ * auth-service's `UserResponse` — the account itself, as `PUT /auth/me/username`
+ * answers it.
+ */
+export interface AccountResponse {
+  id: string;
+  username: string;
+  email: string | null;
+  role: UserRole;
+  status: UserStatus;
+  emailVerified: boolean;
+  createdAt: string;
+  /** When the handle may change again; null when it may change now. */
+  usernameChangeableAt: string | null;
+}
+
 /* --- user-service -------------------------------------------------------- */
 
 export interface UserProfileResponse {
@@ -95,6 +111,11 @@ export interface UserProfileResponse {
   avatarUrl: string | null;
   followerCount: number;
   followingCount: number;
+  /**
+   * When the display name may change again. Only on the owner's own profile:
+   * null for everyone else, and for the owner when it may change now.
+   */
+  displayNameChangeableAt?: string | null;
 }
 
 export interface FollowResponse {
@@ -146,6 +167,13 @@ export interface MeResponse {
   followerCount: number | null;
   followingCount: number | null;
   profileReady: boolean;
+  /**
+   * When the handle (once every 30 days) and the display name (once every 7)
+   * may change again; null when they may change now. A gateway older than these
+   * fields leaves them out, which reads the same as null.
+   */
+  usernameChangeableAt?: string | null;
+  displayNameChangeableAt?: string | null;
 }
 
 /* --- video-service ------------------------------------------------------- */

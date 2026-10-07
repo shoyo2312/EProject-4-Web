@@ -31,7 +31,7 @@ const BASE = "/api/v1";
 type AuthMode = "required" | "optional" | "none";
 
 export interface RequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   auth?: AuthMode;
   query?: Record<string, string | number | boolean | undefined>;

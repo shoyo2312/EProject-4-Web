@@ -46,6 +46,7 @@ const MESSAGES: Record<string, string> = {
   TOO_MANY_LOGIN_ATTEMPTS:
     "Too many failed attempts. Try again in about 15 minutes.",
   USERNAME_ALREADY_EXISTS: "That username is taken.",
+  USERNAME_CHANGE_TOO_SOON: "You can only change your username once every 30 days.",
   EMAIL_ALREADY_EXISTS: "An account already exists for that email.",
   INVALID_OTP: "That code is incorrect or has expired.",
   SIGNUP_SESSION_EXPIRED: "Your sign-up timed out. Please start again.",
@@ -82,6 +83,7 @@ const MESSAGES: Record<string, string> = {
   ALREADY_MUTED: "You already muted this account.",
   NOT_MUTED: "This account is not muted.",
   INVALID_AVATAR: "That photo must be a JPEG, PNG, or WebP under 5 MB.",
+  DISPLAY_NAME_CHANGE_TOO_SOON: "Your nickname can only be changed once every 7 days.",
 
   // video-service
   NOT_VIDEO_OWNER: "You can only delete your own videos.",

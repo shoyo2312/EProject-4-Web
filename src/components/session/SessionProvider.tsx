@@ -43,6 +43,10 @@ export interface SessionUser extends Author {
    * eventual; it usually resolves in a few hundred milliseconds.
    */
   profileReady: boolean;
+  /** When the handle may change again (once every 30 days); null when it may now. */
+  usernameChangeableAt: string | null;
+  /** When the nickname may change again (once every 7 days); null when it may now. */
+  nicknameChangeableAt: string | null;
 }
 
 interface SessionValue {
@@ -125,6 +129,8 @@ function toSessionUser(me: MeResponse): SessionUser {
     followerCount: me.followerCount ?? 0,
     followingCount: me.followingCount ?? 0,
     profileReady: me.profileReady,
+    usernameChangeableAt: me.usernameChangeableAt ?? null,
+    nicknameChangeableAt: me.displayNameChangeableAt ?? null,
   };
 }
 
@@ -340,6 +346,7 @@ export function SessionProvider({
               bio: profile.bio ?? "",
               followerCount: profile.followerCount,
               followingCount: profile.followingCount,
+              nicknameChangeableAt: profile.displayNameChangeableAt ?? null,
             }
           : current,
       );

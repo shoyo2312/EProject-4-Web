@@ -3,6 +3,7 @@
 import { apiFetch } from "@/lib/api/client";
 import { clearTokens, getRefreshToken, storeTokens } from "@/lib/api/tokens";
 import type {
+  AccountResponse,
   MeResponse,
   SignupTicketResponse,
   SocialLoginResponse,
@@ -249,4 +250,21 @@ export async function logout(): Promise<void> {
  */
 export function getMe(): Promise<MeResponse> {
   return apiFetch<MeResponse>("/me", { auth: "required" });
+}
+
+/**
+ * `PUT /api/v1/auth/me/username` — a new handle, once every 30 days.
+ * 409 `USERNAME_ALREADY_EXISTS`, 429 `USERNAME_CHANGE_TOO_SOON`. The current
+ * handle is a no-op that spends nothing.
+ *
+ * user-service learns of the change through Kafka, so for a few seconds
+ * `/users/by-username/{new}` can still 404: route to the viewer's own page from
+ * the session, not by looking the new handle up.
+ */
+export function changeUsername(username: string): Promise<AccountResponse> {
+  return apiFetch<AccountResponse>("/auth/me/username", {
+    method: "PUT",
+    body: { username },
+    auth: "required",
+  });
 }
