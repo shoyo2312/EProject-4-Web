@@ -29,7 +29,7 @@ Gateway ──▶ auth-service / user-service / video-service / chat-service ...
 
 - Trình duyệt gọi `/api/v1/...` trên **cùng origin** với Next.js. `next.config.ts` có cấu hình `rewrites()` để proxy các request này sang Gateway (`API_GATEWAY_URL`, mặc định `http://localhost:8080`).
 - Lý do dùng rewrite thay vì gọi thẳng cross-origin: Gateway không cấu hình CORS, và giữ same-origin để sau này có thể chuyển token sang httpOnly cookie mà không phải sửa từng nơi gọi API.
-- **WebSocket (STOMP/SockJS)** cho tính năng realtime (chat, thông báo, cập nhật video/like...) **không** đi qua rewrite này (rewrite chỉ proxy HTTP, không proxy WS Upgrade) — nó kết nối thẳng tới Gateway qua `NEXT_PUBLIC_WS_GATEWAY_URL`.
+- **WebSocket (STOMP)** cho tính năng realtime (chat, thông báo, cập nhật video/like...) **không** đi qua rewrite này (rewrite chỉ proxy HTTP, không proxy WS Upgrade) — nó kết nối thẳng tới Gateway qua `NEXT_PUBLIC_WS_GATEWAY_URL`.
 - **Media (ảnh/video)**: avatar và thumbnail được phục vụ qua CDN (`MEDIA_CDN_HOST`) hoặc trực tiếp từ MinIO (`MEDIA_ORIGIN`, dev dùng cổng `:9000`). Avatar từ Google/Facebook (đăng nhập social) được phục vụ trực tiếp từ domain của Google/Facebook cho tới khi `media-worker` mirror nó về MinIO.
 
 ## 3. Công nghệ sử dụng (Tech stack)
@@ -39,10 +39,10 @@ Gateway ──▶ auth-service / user-service / video-service / chat-service ...
 | Framework | Next.js 16 (App Router, React 19, TypeScript strict) |
 | UI | shadcn/ui (dựa trên Radix), Tailwind CSS v4 (design token dạng oklch) |
 | Icon | Lucide React + SVG tự trích xuất (`src/components/icons.tsx`) |
-| State/data | Zustand, TanStack React Query |
-| Form | react-hook-form + zod (validate schema) |
-| HTTP | `fetch` thuần qua wrapper riêng (`src/lib/api/client.ts`), có dùng `axios` cho vài trường hợp |
-| Realtime | `@stomp/stompjs` + `sockjs-client` (WebSocket/STOMP) |
+| State/data | React state/context + hook tự viết (`src/hooks/`), cache cấp module trong `src/lib/` — không dùng thư viện state ngoài |
+| Form | Hook `useForm` tự viết (`src/lib/forms/use-form.ts`) + zod (validate schema) |
+| HTTP | `fetch` thuần qua wrapper riêng (`src/lib/api/client.ts`); riêng upload file lên storage dùng XHR để báo tiến độ |
+| Realtime | `@stomp/stompjs` trên WebSocket thuần (STOMP) |
 | Video | `hls.js` (phát HLS) |
 | Test | Vitest + Testing Library (jsdom) |
 | Lint/Type | ESLint 9 + TypeScript strict |
@@ -106,7 +106,7 @@ src/
       tokens.ts            #   Lưu/đọc access & refresh token
       errors.ts            #   ApiError, isApiError()
     auth/                   # Social login (Google/Facebook), Cloudflare Turnstile
-    forms/                  # Schema zod dùng chung + hook wrapper cho react-hook-form
+    forms/                  # Schema zod dùng chung + hook `useForm` tự viết
     realtime/
       stompClient.ts        # Client STOMP dùng chung toàn app (singleton)
     comments/                # Logic thuần xử lý comment (build/merge cây comment...)
