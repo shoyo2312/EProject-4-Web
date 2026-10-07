@@ -14,9 +14,9 @@ import {
 } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
 
+import { Dropdown } from "./Dropdown";
 import {
   ConsentCheckbox,
-  Dropdown,
   FieldHeading,
   ModalTitle,
   PasswordField,

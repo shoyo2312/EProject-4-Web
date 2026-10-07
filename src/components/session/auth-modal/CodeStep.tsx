@@ -8,7 +8,8 @@ import { isApiError, messageFor } from "@/lib/api/errors";
 import { maskEmail } from "@/lib/auth/mask-email";
 import { CODE_LENGTH, emptyCode } from "@/lib/forms/code-digits";
 
-import { CodeBoxes, ModalTitle } from "./ModalFields";
+import { CodeBoxes } from "./CodeBoxes";
+import { ModalTitle } from "./ModalFields";
 
 const RESEND_COOLDOWN = 60;
 

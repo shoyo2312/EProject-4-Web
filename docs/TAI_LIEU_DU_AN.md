@@ -67,17 +67,21 @@ src/
   components/             # React components, chia theo tính năng
     auth/                 # Đăng nhập, đăng ký, social login, Turnstile captcha
     feed/                 # Feed video (For You), thẻ video, action rail, comment, share
-      comments/           #   sub-component riêng của CommentPanel (khi file > ~500 dòng)
+      card/               #   sub-component riêng của VideoCard (thanh tiến độ, âm lượng, lớp tap/double-tap)
+      comments/           #   sub-component riêng của CommentPanel/CommentItem (khi file > ~500 dòng)
+      list/               #   sub-component riêng của Feed (thẻ video + action rail, nút lên/xuống)
     video/                # Trang chi tiết video
       detail/             #   sub-component riêng của BackendVideoDetail/VideoDetail
     profile/               # Trang cá nhân, chỉnh sửa hồ sơ, danh sách follow
     explore/, following/   # Trang khám phá, trang đang theo dõi
     layout/                 # TopBar, SideNav, các drawer (thông báo, tìm kiếm)
+      side-nav/             #   sub-component riêng của SideNav (dòng menu, ô tìm kiếm, footer)
     player/                 # Cấu hình player video (tốc độ phát, cài đặt...)
     search/                 # Kết quả tìm kiếm
     session/                 # SessionProvider (quản lý trạng thái đăng nhập toàn app), LoginModal
     settings/                # Trang cài đặt tài khoản
     upload/                  # Trang upload video
+      page/                  #   sub-component riêng của UploadPage (drop zone, preview, field)
     report/                  # Dialog báo cáo vi phạm
     ui/                      # shadcn/ui primitives (Button, Modal, Toast, Skeleton, Tooltip...)
     icons.tsx                # Icon SVG trích xuất từ TikTok gốc

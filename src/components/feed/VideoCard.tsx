@@ -8,7 +8,9 @@ import {
   VideoContextMenu,
   type MenuAnchor,
 } from "@/components/feed/VideoContextMenu";
-import { MutedIcon, VolumeIcon } from "@/components/icons";
+import { ProgressBar } from "@/components/feed/card/ProgressBar";
+import { TapLayer } from "@/components/feed/card/TapLayer";
+import { VolumeControl } from "@/components/feed/card/VolumeControl";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { useClampOverflow } from "@/hooks/use-clamp-overflow";
@@ -16,14 +18,13 @@ import { useHlsSource, isHlsManifest } from "@/hooks/use-hls-source";
 import { useVideoPlayback, type VideoPlayback } from "@/hooks/use-video-playback";
 import { useWatchSession } from "@/hooks/use-watch-session";
 import { cn } from "@/lib/utils";
-import { formatDuration } from "@/lib/format";
 import type { FeedVideo } from "@/types/tiktok";
 
 interface VideoCardProps {
   video: FeedVideo;
   /**
    * Double-tap only ever likes — it never un-likes. The state itself lives in
-   * `Feed` so the action rail's heart reflects it.
+   * the page's `useVideoLike` so the action rail's heart reflects it.
    */
   onLike: () => void;
   /**
@@ -74,19 +75,6 @@ interface VideoCardProps {
    * single-card pages, where the card on screen is the only one there is.
    */
   distance?: number;
-}
-
-/** How long to wait for a second click before treating one as a plain tap. */
-const DOUBLE_TAP_MS = 250;
-
-/** Matches the `tt-heart-pop` keyframe duration in globals.css. */
-const HEART_LIFETIME_MS = 1000;
-
-interface FloatingHeart {
-  id: number;
-  x: number;
-  y: number;
-  rotate: number;
 }
 
 /**
@@ -202,66 +190,6 @@ export function VideoCard({
 
   const fraction = duration > 0 ? currentTime / duration : 0;
 
-  /*
-   * Tap vs double-tap. A double-click always fires two `click` events first, so
-   * the play toggle is held for DOUBLE_TAP_MS and cancelled if a second click
-   * lands inside the window. Without this, double-tapping to like would also
-   * pause and immediately resume the video.
-   */
-  const [hearts, setHearts] = useState<FloatingHeart[]>([]);
-  const tapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const heartTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
-  const nextHeartId = useRef(0);
-
-  useEffect(() => {
-    const timers = heartTimers.current;
-    return () => {
-      if (tapTimer.current) clearTimeout(tapTimer.current);
-      timers.forEach(clearTimeout);
-      timers.clear();
-    };
-  }, []);
-
-  const spawnHeart = useCallback((clientX: number, clientY: number, host: HTMLElement) => {
-    const rect = host.getBoundingClientRect();
-    const id = nextHeartId.current++;
-    setHearts((current) => [
-      ...current,
-      {
-        id,
-        x: clientX - rect.left,
-        y: clientY - rect.top,
-        // The live heart lands at a slight angle; the jitter range is a guess.
-        rotate: Math.random() * 50 - 25,
-      },
-    ]);
-    const timer = setTimeout(() => {
-      setHearts((current) => current.filter((heart) => heart.id !== id));
-      heartTimers.current.delete(timer);
-    }, HEART_LIFETIME_MS);
-    heartTimers.current.add(timer);
-  }, []);
-
-  const handleTap = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      const { clientX, clientY, currentTarget } = event;
-
-      if (tapTimer.current) {
-        clearTimeout(tapTimer.current);
-        tapTimer.current = null;
-        onLike();
-        spawnHeart(clientX, clientY, currentTarget);
-        return;
-      }
-
-      tapTimer.current = setTimeout(() => {
-        tapTimer.current = null;
-        togglePlay();
-      }, DOUBLE_TAP_MS);
-    },
-    [onLike, spawnHeart, togglePlay],
-  );
-
   /**
    * Where the overflow menu was summoned, in this card's coordinates, or null
    * when it is closed. Stored relative to the card rather than to the viewport
@@ -361,34 +289,7 @@ export function VideoCard({
       )}
 
       {/* Tap = play/pause, double-tap = like. */}
-      <button
-        type="button"
-        onClick={handleTap}
-        aria-label={isPlaying ? "Pause" : "Play"}
-        className="absolute inset-0 flex items-center justify-center"
-      >
-        {!isPlaying && <PlayGlyph />}
-      </button>
-
-      {/* Double-tap hearts. `transform-origin: 50% 100%` is the one value here
-          taken from the live `.HeartWrapper`; the motion is a reconstruction. */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {hearts.map((heart) => (
-          <span
-            key={heart.id}
-            className="absolute block h-24 w-24 -translate-x-1/2 -translate-y-full text-[var(--tt-red)] [animation:tt-heart-pop_1s_ease-out_forwards] [transform-origin:50%_100%]"
-            style={{
-              left: heart.x,
-              top: heart.y,
-              rotate: `${heart.rotate}deg`,
-            }}
-          >
-            <svg viewBox="0 0 48 48" fill="currentColor" className="h-full w-full drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
-              <path d="M24 42s-16-9.9-16-21.2A9.8 9.8 0 0 1 17.8 11c3.2 0 5.1 1.6 6.2 3.3 1.1-1.7 3-3.3 6.2-3.3A9.8 9.8 0 0 1 40 20.8C40 32.1 24 42 24 42Z" />
-            </svg>
-          </span>
-        ))}
-      </div>
+      <TapLayer isPlaying={isPlaying} onTogglePlay={togglePlay} onLike={onLike} />
 
       {/* Overlay — transparent to pointer events except its own controls. */}
       <div className="pointer-events-none absolute inset-0 flex flex-col justify-between">
@@ -493,259 +394,3 @@ export function VideoCard({
     </section>
   );
 }
-
-/**
- * `.DivProgressBar` — geometry taken verbatim from the live site:
- *   container   height: max(0.25rem, 1rem)              → 16px hit area
- *   bounds      height: 0.25rem, :hover 0.375rem        → 4px → 6px
- *               background: --ui-image-overlay-white-a40
- *               align-self: end, transition height 150ms ease-in-out
- *   elapsed     transform: scaleX(n), transform-origin: left center
- *               background: --ui-shape-primary (#fe2c55 — red, not white)
- *   scrub head  0.75rem square, border-radius 50%, opacity 0, bottom 0,
- *               transform translateX(-50%) translateY(0.25rem),
- *               :hover translateY(0.125rem),
- *               box-shadow 0 0 1px 1px --ui-image-overlay-black-a15
- *   container   clip-path: inset(0 round 0 0 1rem 1rem)
- *
- * The head's opacity is driven by hovering the *player*, not the bar:
- * `DivVideoPlayerContainer:hover .es7xsve0 { opacity: 1 }`.
- */
-function ProgressBar({
-  fraction,
-  currentTime,
-  duration,
-  onSeek,
-}: {
-  fraction: number;
-  currentTime: number;
-  duration: number;
-  onSeek: (fraction: number) => void;
-}) {
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
-
-  const seekFromClientX = useCallback(
-    (clientX: number) => {
-      const rect = trackRef.current?.getBoundingClientRect();
-      if (!rect || rect.width === 0) return;
-      onSeek((clientX - rect.left) / rect.width);
-    },
-    [onSeek],
-  );
-
-  useEffect(() => {
-    if (!dragging) return;
-    const onMove = (event: PointerEvent) => seekFromClientX(event.clientX);
-    const onUp = () => setDragging(false);
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-  }, [dragging, seekFromClientX]);
-
-  const percent = `${fraction * 100}%`;
-
-  return (
-    <div
-      role="slider"
-      tabIndex={0}
-      aria-label="Seek"
-      aria-valuemin={0}
-      aria-valuemax={Math.round(duration)}
-      aria-valuenow={Math.round(currentTime)}
-      onPointerDown={(event) => {
-        // Primary button only: the card's right-click opens the overflow menu,
-        // and that must not also scrub the timeline under it.
-        if (event.button !== 0) return;
-        setDragging(true);
-        seekFromClientX(event.clientX);
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "ArrowRight") onSeek(fraction + 0.02);
-        if (event.key === "ArrowLeft") onSeek(fraction - 0.02);
-      }}
-      className="group/bar absolute inset-x-0 bottom-0 h-4 cursor-pointer"
-    >
-      <div className="absolute inset-0 flex [clip-path:inset(0_round_0_0_1rem_1rem)]">
-        <div
-          ref={trackRef}
-          className={cn(
-            "w-full self-end bg-[var(--tt-progress-track)] transition-[height] duration-150 ease-in-out",
-            dragging ? "h-1.5" : "h-1 group-hover/bar:h-1.5",
-          )}
-        />
-        <div
-          className={cn(
-            "absolute bottom-0 left-0 w-full origin-left bg-[var(--tt-progress-elapsed)] transition-[height] duration-150 ease-in-out",
-            dragging ? "h-1.5" : "h-1 group-hover/bar:h-1.5",
-          )}
-          style={{ transform: `scaleX(${fraction})` }}
-        />
-      </div>
-
-      <span
-        className={cn(
-          "absolute bottom-0 z-[1] h-3 w-3 -translate-x-1/2 cursor-grab rounded-full bg-white",
-          "shadow-[0_0_1px_1px_var(--tt-scrub-shadow)]",
-          "transition-[transform,opacity] duration-150 ease-in-out",
-          dragging
-            ? "translate-y-0.5 opacity-100"
-            : "translate-y-1 opacity-0 group-hover/bar:translate-y-0.5 group-hover/player:opacity-100",
-        )}
-        style={{ left: percent }}
-      />
-
-      <p
-        className={cn(
-          "pointer-events-none absolute bottom-5 right-3 text-[12px] font-bold text-white/80 transition-opacity duration-150",
-          dragging ? "opacity-100" : "opacity-0 group-hover/player:opacity-100",
-        )}
-      >
-        {formatDuration(currentTime)} / {formatDuration(duration)}
-      </p>
-    </div>
-  );
-}
-
-function PlayGlyph() {
-  return (
-    <svg viewBox="0 0 48 48" className="h-16 w-16 text-white/70" fill="currentColor">
-      <path d="M16 10.5c0-1.2 1.3-1.9 2.3-1.3l21 13.5a1.5 1.5 0 0 1 0 2.6l-21 13.5A1.5 1.5 0 0 1 16 37.5v-27Z" />
-    </svg>
-  );
-}
-
-/**
- * `.DivVolumeControlContainer` — collapsed it is just the 48px mute button; on
- * hover it grows sideways and a slider appears beside it.
- *
- * The two states are two emotion classes that differ in **exactly two
- * declarations**, which is what makes this cheap to reproduce:
- *
- *   collapsed  tiktok-8071rl   max-width: 3rem     background: transparent
- *   expanded   tiktok-5xj2l3   max-width: 12.5rem  background: neutral-4
- *
- * Everything else is shared: `display: flex; align-items: center; gap: .5rem;
- * padding: .5rem; padding-inline-end: 1rem; padding-inline-start: 0` (the last
- * only at `min-width: 767px`), `position: relative; border-radius: 24px;
- * min-width: 3rem; height: 3rem;` and
- * `transition-property: max-width, max-height; transition-duration: 300ms`.
- *
- * 200px checks out exactly: 0 (start) + 48 (button) + 8 (gap) + 128 (slider)
- * + 16 (end) = 200. Note the button therefore *overflows* the collapsed 48px
- * box by its 16px end padding; `overflow` is `visible` and the box is
- * transparent, so this is invisible — it is reproduced rather than corrected.
- *
- * Slider internals, measured with the control expanded:
- *   wrapper                128 × 32, position relative
- *   .VolumeSliderTrack     128 × 6,  radius 3px, rgba(255,255,255,.19)
- *   .VolumeSliderNotch       3 × 10, radius 2px, rgba(255,255,255,.32),
- *                          absolute at exactly 50% of the track
- *   .VolumeSliderKnob       20 × 24, radius 8px, rgb(250,250,250),
- *                          absolute, role="slider"
- *
- * There is **no filled/elapsed portion** — the track is one flat colour and
- * only the knob moves, unlike the red progress bar below the video.
- *
- * Reconstructed, not extracted: the live slider was never dragged (it would
- * change a real account's playback preference), so how value maps to mute is
- * this clone's own choice — dragging above 0 unmutes, dragging to 0 mutes.
- */
-function VolumeControl({
-  muted,
-  volume,
-  onToggleMuted,
-  onVolumeChange,
-}: {
-  muted: boolean;
-  volume: number;
-  onToggleMuted: () => void;
-  onVolumeChange: (volume: number) => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const trackRef = useRef<HTMLDivElement>(null);
-
-  // A muted card reads as zero on the slider regardless of the stored level, so
-  // unmuting restores where the knob was rather than jumping to full.
-  const shown = muted ? 0 : volume;
-  const expanded = hovered || dragging;
-
-  const setFromClientX = useCallback(
-    (clientX: number) => {
-      const rect = trackRef.current?.getBoundingClientRect();
-      if (!rect || rect.width === 0) return;
-      const next = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-      onVolumeChange(next);
-    },
-    [onVolumeChange],
-  );
-
-  useEffect(() => {
-    if (!dragging) return;
-    const onMove = (event: PointerEvent) => setFromClientX(event.clientX);
-    const onUp = () => setDragging(false);
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-  }, [dragging, setFromClientX]);
-
-  return (
-    <div
-      onPointerEnter={() => setHovered(true)}
-      onPointerLeave={() => setHovered(false)}
-      className={cn(
-        "pointer-events-auto relative flex h-12 min-w-12 items-center gap-2",
-        "rounded-[24px] py-2 pe-4 ps-0",
-        "transition-[max-width,max-height] duration-300",
-        expanded ? "max-w-[200px] bg-[var(--tt-field)]" : "max-w-12",
-      )}
-    >
-      <button
-        type="button"
-        onClick={onToggleMuted}
-        aria-label={muted ? "Unmute" : "Mute"}
-        className="flex h-12 w-12 flex-none items-center justify-center rounded-full text-white/90"
-      >
-        {muted ? <MutedIcon className="h-6 w-6" /> : <VolumeIcon className="h-6 w-6" />}
-      </button>
-
-      {expanded && (
-        <div
-          ref={trackRef}
-          onPointerDown={(event) => {
-            if (event.button !== 0) return;
-            setDragging(true);
-            setFromClientX(event.clientX);
-          }}
-          className="relative flex h-8 w-32 flex-none cursor-pointer items-center"
-        >
-          <div className="h-1.5 w-full rounded-[3px] bg-[rgba(255,255,255,0.19)]" />
-          {/* Midpoint tick, measured at exactly 64px into the 128px track. */}
-          <span className="pointer-events-none absolute left-1/2 h-2.5 w-[3px] rounded-[2px] bg-[rgba(255,255,255,0.32)]" />
-          <span
-            role="slider"
-            tabIndex={0}
-            aria-label="Volume"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(shown * 100)}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowRight") onVolumeChange(Math.min(1, shown + 0.05));
-              if (event.key === "ArrowLeft") onVolumeChange(Math.max(0, shown - 0.05));
-            }}
-            className="absolute h-6 w-5 rounded-[8px] bg-[rgb(250,250,250)]"
-            style={{ left: `calc(${shown * 100}% - 10px)` }}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-

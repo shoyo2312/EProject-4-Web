@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import type { SocialLinkChallenge } from "@/components/auth/use-social-sign-in";
 import { CODE_LENGTH, emptyCode } from "@/lib/forms/code-digits";
 
-import { CodeBoxes, ModalTitle, PillButton } from "./ModalFields";
+import { CodeBoxes } from "./CodeBoxes";
+import { ModalTitle, PillButton } from "./ModalFields";
 
 /**
  * The step between "signed in with Facebook" and signed in, shown when that

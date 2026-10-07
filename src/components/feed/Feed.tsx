@@ -2,18 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ActionRail } from "@/components/feed/ActionRail";
 import { CommentPanel } from "@/components/feed/CommentPanel";
-import { VideoCard } from "@/components/feed/VideoCard";
+import { FeedNavArrows } from "@/components/feed/list/FeedNavArrows";
+import { FeedVideoCard } from "@/components/feed/list/FeedVideoCard";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { useLikeStatuses } from "@/hooks/use-like-statuses";
-import { useVideoLike } from "@/hooks/use-video-like";
 import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
 import { isBackendHandle } from "@/lib/api/adapters";
 import { isApiError } from "@/lib/api/errors";
 import { useSavedVideos } from "@/hooks/use-saved-videos";
-import type { LikeStatusResponse } from "@/lib/api/types";
 import { getVideo } from "@/lib/api/videos";
 import { loadFirstCommentPage } from "@/lib/comment-cache";
 import { cn } from "@/lib/utils";
@@ -346,179 +344,5 @@ export function Feed({
         )}
       </aside>
     </main>
-  );
-}
-
-/**
- * One card + its action rail. Pulled out of `Feed`'s `.map` because the heart
- * lives behind `useVideoLike` — a hook, which cannot be called a variable
- * number of times inside a loop in the parent's own render. Each mounted
- * instance owns exactly one call, so the feed's length can change across
- * renders without breaking the rules of hooks.
- */
-function FeedVideoCard({
-  video,
-  index,
-  activeIndex,
-  commentsOpen,
-  commentCount,
-  liveFrame,
-  serverLiked,
-  serverLikeCount,
-  onLikeConfirmed,
-  onActive,
-  onEnded,
-  onCommentClick,
-  saved,
-  onToggleSave,
-}: {
-  video: FeedVideo;
-  index: number;
-  activeIndex: number;
-  /** True when this video's comment sidebar is the one currently open. */
-  commentsOpen: boolean;
-  /** Mock count plus anything the viewer posted this session or the server broadcast. */
-  commentCount: number;
-  /** Latest `counts` realtime frame for this video, if one has arrived. */
-  liveFrame?: VideoFrame;
-  /** The viewer's like as the server last confirmed it. */
-  serverLiked: boolean;
-  /** The server's latest like count, before this card's own pending tap. */
-  serverLikeCount: number;
-  onLikeConfirmed: (status: LikeStatusResponse) => void;
-  onActive: () => void;
-  onEnded?: () => void;
-  onCommentClick: () => void;
-  saved: boolean;
-  onToggleSave: () => void;
-}) {
-  const { liked, likeCount, toggleLike, likeOnly } = useVideoLike({
-    videoId: video.id,
-    serverLiked,
-    serverCount: serverLikeCount,
-    onConfirmed: onLikeConfirmed,
-  });
-
-  const displayComments = liveFrame?.commentCount ?? commentCount;
-
-  return (
-    <article
-      className={cn(
-        // Live site uses the two-axis value `start center` (block/inline).
-        "relative flex snap-always items-center justify-center gap-4 overflow-hidden py-4",
-        "[scroll-snap-align:start_center]",
-        "[min-height:calc(100vh-var(--one-column-top-content-height)-var(--one-column-item-bottom-content-height))]",
-        "mx-auto transition-[margin,height,width,padding] duration-300 ease-[var(--tt-ease)]",
-        commentsOpen
-          ? // With the sidebar open the live site swaps in an emotion class
-            // whose only padding declaration is `padding-inline: 1rem` — all
-            // four breakpoint branches below collapse into it.
-            "[padding-inline:1rem]"
-          : [
-              // >1280 — mirrors the base rule on the live site
-              "[padding-inline-start:calc(var(--feed-nav-button-width)+1rem)]",
-              "[padding-inline-end:calc(15rem-var(--feed-nav-button-width)-1rem)]",
-              // <=1280
-              "tt-1280:[padding-inline-start:1rem]",
-              "tt-1280:[padding-inline-end:calc(15rem-(var(--feed-nav-button-width)*2)-1rem)]",
-              // <=1024
-              "tt-1024:[padding-inline-start:var(--feed-nav-button-width)]",
-              "tt-1024:[padding-inline-end:1rem]",
-              // <=768
-              "tt-768:[padding-inline:1rem]",
-            ].join(" "),
-      )}
-    >
-      {/*
-       * `.DivContentFlexLayout` — full article content width, centred,
-       * 16px gap; the card grows into it and its own max-width decides
-       * where it stops. Cross-axis alignment is the one thing that
-       * differs by orientation, measured live at 1920×936:
-       *   portrait  align-items: end     rail bottom-aligned  (y 1476)
-       *   landscape align-items: center  rail centred         (y 252)
-       */}
-      <div
-        className={cn(
-          // `min-w-0`: without it this row's automatic minimum is the
-          // card's min-content, which the feed column cannot shrink
-          // past — that is what put a horizontal scrollbar on the page
-          // between 1025px and 1083px with the comment sidebar open.
-          "flex w-full min-w-0 flex-1 justify-center gap-4",
-          video.width > video.height ? "items-center" : "items-end",
-        )}
-      >
-        <VideoCard
-          video={video}
-          distance={index - activeIndex}
-          onLike={likeOnly}
-          onActive={onActive}
-          // The feed's counterpart to auto scroll on `/video/[id]`:
-          // there, finishing a clip navigates to the next video; here
-          // it scrolls the snap container on by one card. Passing this
-          // also turns `loop` off, which is what lets `ended` fire.
-          onEnded={onEnded}
-        />
-        <ActionRail
-          video={video}
-          commentCount={displayComments}
-          commentsOpen={commentsOpen}
-          onCommentClick={onCommentClick}
-          liked={liked}
-          likes={likeCount}
-          onToggleLike={toggleLike}
-          saved={saved}
-          saveCount={liveFrame?.saveCount}
-          onToggleSave={onToggleSave}
-        />
-      </div>
-    </article>
-  );
-}
-
-/**
- * `[data-e2e="feed-navigation-prev"|"feed-navigation-next"]` — 48×48, sitting
- * 16px from the feed column's right edge with a 16px gap. They live inside the
- * column, so opening the comment sidebar shifts them by exactly the panel width
- * (measured live: x 1856 → 1472, a 384px delta).
- */
-function FeedNavArrows({
-  onUp,
-  onDown,
-}: {
-  onUp: () => void;
-  onDown: () => void;
-}) {
-  return (
-    <div className="absolute right-4 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-4 tt-1024:hidden">
-      <ArrowButton onClick={onUp} label="Previous video" direction="up" />
-      <ArrowButton onClick={onDown} label="Next video" direction="down" />
-    </div>
-  );
-}
-
-function ArrowButton({
-  onClick,
-  label,
-  direction,
-}: {
-  onClick: () => void;
-  label: string;
-  direction: "up" | "down";
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--tt-field)] text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-shape-neutral-3)]"
-    >
-      <svg
-        viewBox="0 0 48 48"
-        className={`h-6 w-6 ${direction === "down" ? "rotate-180" : ""}`}
-        fill="currentColor"
-      >
-        <path d="M24 15.4 8.7 30.7a1 1 0 0 0 0 1.4l1.4 1.4a1 1 0 0 0 1.4 0L24 20.9l12.5 12.6a1 1 0 0 0 1.4 0l1.4-1.4a1 1 0 0 0 0-1.4L24 15.4Z" />
-      </svg>
-    </button>
   );
 }
