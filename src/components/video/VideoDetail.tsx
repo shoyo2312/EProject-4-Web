@@ -108,25 +108,42 @@ export function VideoDetail({
     () => (isBackendHandle(video.id) ? [video.id] : []),
     [video.id],
   );
-  const { user: sessionUser } = useSession();
+  const { user: sessionUser, requireSignIn } = useSession();
+  const signedIn = sessionUser !== null;
+
+  const like = useVideoLike(video.id, video.stats.likes, signedIn);
+  const { syncLikeCount } = like;
+  const save = useVideoSave(video.id, signedIn);
+
+  // Liking and saving need an account, as on the feed: signed out, the tap
+  // opens the login modal instead of a request that can only 401.
+  const toggleLike = () => {
+    if (requireSignIn()) like.toggleLike();
+  };
+  const likeOnly = () => {
+    if (requireSignIn()) like.likeOnly();
+  };
+  const toggleSave = () => {
+    if (requireSignIn()) save.toggleSave();
+  };
+
   useVideoRealtime(
     realtimeIds,
-    sessionUser !== null,
-    useCallback((frame: VideoFrame) => {
-      // `state` frames carry no counters; only the counts ones say anything here.
-      if (frame.type === "counts") setLiveFrame(frame);
-    }, []),
+    signedIn,
+    useCallback(
+      (frame: VideoFrame) => {
+        // `state` frames carry no counters; only the counts ones say anything here.
+        if (frame.type !== "counts") return;
+        setLiveFrame(frame);
+        if (frame.likeCount !== undefined) syncLikeCount(frame.likeCount);
+      },
+      [syncLikeCount],
+    ),
   );
   // The frame is authoritative — it already counts this tab's own comments, so
   // the local delta is only the gap before the first frame lands.
   const commentCount =
     liveFrame?.commentCount ?? video.stats.comments + extraComments;
-
-  const { liked, likeCount, toggleLike, likeOnly } = useVideoLike(
-    video.id,
-    video.stats.likes,
-  );
-  const { saved, toggleSave } = useVideoSave(video.id);
 
   /**
    * `router.back()` keeps the Explore scroll position, so it is preferred — but
@@ -326,10 +343,10 @@ export function VideoDetail({
                 commentCount={commentCount}
                 commentsOpen={panelOpen}
                 onCommentClick={togglePanel}
-                liked={liked}
-                likes={likeCount}
+                liked={like.liked}
+                likes={like.likeCount}
                 onToggleLike={toggleLike}
-                saved={saved}
+                saved={save.saved}
                 onToggleSave={toggleSave}
               />
             </div>
