@@ -135,8 +135,29 @@ export function CommentPanel({
   const cached: CommentPage | undefined = isBackend
     ? peekCommentPage(videoId)
     : undefined;
-  const [comments, setComments] = useState<Comment[]>(() =>
-    cached ? mergeComments([], cached.entries, []) : isBackend ? [] : initialComments,
+  /**
+   * The list, plus the replies a realtime frame delivered before their parent's
+   * page — held together so one pure updater can move a reply from one to the
+   * other when that page lands.
+   */
+  const [thread, setThread] = useState<{ comments: Comment[]; pending: PendingReply[] }>(
+    () => ({
+      comments: cached
+        ? mergeComments([], cached.entries, []).comments
+        : isBackend
+          ? []
+          : initialComments,
+      pending: [],
+    }),
+  );
+  const comments = thread.comments;
+  const setComments = useCallback(
+    (update: Comment[] | ((current: Comment[]) => Comment[])) =>
+      setThread((current) => ({
+        ...current,
+        comments: typeof update === "function" ? update(current.comments) : update,
+      })),
+    [],
   );
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   /** Newest locally-posted comment — drives the slide-in and the auto-expand. */
@@ -149,8 +170,6 @@ export function CommentPanel({
   const listRef = useRef<HTMLDivElement>(null);
   /** Scrolled into view at the foot of the list — fetches the next page. */
   const sentinelRef = useRef<HTMLButtonElement>(null);
-  /** Replies whose parent lands on a later page — held across `loadMore` calls until it arrives. */
-  const pendingRepliesRef = useRef<PendingReply[]>([]);
 
   // Real comments load once per video; the mock path keeps the prop as its
   // whole state, unchanged from before this was wired up.
@@ -168,12 +187,11 @@ export function CommentPanel({
     // otherwise kept painting the empty list until a full reload, under a
     // header count that came fresh from video-service and said 1.
     setLoading(!peekCommentPage(videoId));
-    pendingRepliesRef.current = [];
 
     loadFirstCommentPage(videoId, true)
       .then((page) => {
         if (cancelled) return;
-        setComments(mergeComments([], page.entries, pendingRepliesRef.current));
+        setThread((current) => mergeComments([], page.entries, current.pending));
         setCursor(page.cursor);
         setHasMore(page.hasMore);
       })
@@ -204,7 +222,11 @@ export function CommentPanel({
         return;
       }
       if (frame.type === "comment.deleted") {
-        setComments((current) => removeCommentById(current, frame.commentId));
+        // A parked reply can be deleted before its parent ever loads.
+        setThread((current) => ({
+          comments: removeCommentById(current.comments, frame.commentId),
+          pending: current.pending.filter((reply) => reply.ui.id !== frame.commentId),
+        }));
         return;
       }
       // Deduped by id, not by "is this my own comment": the same viewer can
@@ -218,26 +240,27 @@ export function CommentPanel({
         frame.replyToUserId ? resolveAuthor(frame.replyToUserId) : Promise.resolve(null),
       ])
         .then(([author, replyToAuthor]) => {
-          setComments((current) => {
+          const ui: Comment = {
+            id: frame.commentId,
+            author,
+            text: frame.content ?? "",
+            timestamp: formatRelativeTime(frame.createdAt ?? new Date().toISOString()),
+            likes: 0,
+            replyToName: replyToAuthor?.nickname,
+          };
+          const parentId = frame.parentId;
+          setThread((current) => {
             // Checks replies too: a reply already attached is not a top-level
             // absence, and re-inserting it would show the same row twice.
-            if (hasCommentId(current, frame.commentId)) return current;
-            const ui: Comment = {
-              id: frame.commentId,
-              author,
-              text: frame.content ?? "",
-              timestamp: formatRelativeTime(frame.createdAt ?? new Date().toISOString()),
-              likes: 0,
-              replyToName: replyToAuthor?.nickname,
-            };
-            if (!frame.parentId) return [ui, ...current];
-            // Parent not on a loaded page yet — same holding pen `loadMore`
-            // uses, so it attaches as soon as its page arrives.
-            if (!current.some((comment) => comment.id === frame.parentId)) {
-              pendingRepliesRef.current.push({ ui, parentId: frame.parentId });
-              return current;
+            if (hasCommentId(current.comments, ui.id)) return current;
+            if (!parentId) return { ...current, comments: [ui, ...current.comments] };
+            // Parent not on a loaded page yet — parked, and attached by
+            // `mergeComments` as soon as its page arrives.
+            if (!current.comments.some((comment) => comment.id === parentId)) {
+              if (current.pending.some((reply) => reply.ui.id === ui.id)) return current;
+              return { ...current, pending: [...current.pending, { ui, parentId }] };
             }
-            return addReply(current, frame.parentId, ui);
+            return { ...current, comments: addReply(current.comments, parentId, ui) };
           });
           // No count bump here: the counts frame carries the authoritative
           // comment total. Counting the row *and* the poster's optimistic
@@ -247,7 +270,7 @@ export function CommentPanel({
           // Author lookup failed — skip rather than show a comment with no author.
         });
     },
-    [videoId],
+    [videoId, setComments],
   );
 
   useCommentRealtime(videoId, isBackend && user !== null, applyRealtimeFrame);
@@ -258,7 +281,7 @@ export function CommentPanel({
     try {
       const page = await listComments(videoId, cursor);
       const entries = await toUiComments(page.items);
-      setComments((current) => mergeComments(current, entries, pendingRepliesRef.current));
+      setThread((current) => mergeComments(current.comments, entries, current.pending));
       setCursor(page.nextCursor);
       setHasMore(page.hasMore);
     } catch {
@@ -310,7 +333,7 @@ export function CommentPanel({
         };
       }),
     );
-  }, []);
+  }, [setComments]);
 
   const startReply = (target: ReplyTarget) => {
     setReplyTo(target);

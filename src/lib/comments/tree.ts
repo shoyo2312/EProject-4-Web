@@ -85,24 +85,30 @@ export function remapCommentId(list: Comment[], fromId: string, toId: string): C
  * its own "View N replies" — so the only replies here are ones a realtime
  * frame delivered before its parent's page had loaded; those wait in `pending`
  * and attach as soon as the parent arrives.
+ *
+ * Returns the replies still waiting rather than consuming them from `pending`:
+ * this runs inside a state updater, which React may call twice.
  */
 export function mergeComments(
   existing: Comment[],
   incoming: CommentEntry[],
   pending: PendingReply[],
-): Comment[] {
-  const next: Comment[] = [...existing];
-  const known = new Set(next.map((comment) => comment.id));
+): { comments: Comment[]; pending: PendingReply[] } {
+  let comments: Comment[] = [...existing];
+  const known = new Set(comments.map((comment) => comment.id));
 
   for (const { ui } of incoming) {
     if (known.has(ui.id)) continue;
-    next.push(ui);
+    comments.push(ui);
     known.add(ui.id);
   }
-  for (let i = pending.length - 1; i >= 0; i -= 1) {
-    if (!known.has(pending[i].parentId)) continue;
-    const { ui, parentId } = pending.splice(i, 1)[0];
-    return mergeComments(addReply(next, parentId, ui), [], pending);
+
+  const waiting: PendingReply[] = [];
+  for (const reply of pending) {
+    if (!known.has(reply.parentId)) waiting.push(reply);
+    else if (!hasCommentId(comments, reply.ui.id)) {
+      comments = addReply(comments, reply.parentId, reply.ui);
+    }
   }
-  return next;
+  return { comments, pending: waiting };
 }

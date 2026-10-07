@@ -64,7 +64,10 @@ describe("addReply / hasCommentId / remapCommentId", () => {
 
 describe("mergeComments", () => {
   it("dedupes by id and attaches pending replies once their parent lands", () => {
-    const pending: PendingReply[] = [{ ui: comment("2a"), parentId: "2" }];
+    const pending: PendingReply[] = [
+      { ui: comment("2a"), parentId: "2" },
+      { ui: comment("3a"), parentId: "3" },
+    ];
     const next = mergeComments(
       [comment("1")],
       [
@@ -73,9 +76,27 @@ describe("mergeComments", () => {
       ],
       pending,
     );
-    expect(next.map((c) => c.id)).toEqual(["1", "2"]);
-    expect(next[1].replies?.[0].id).toBe("2a");
-    // The parked reply is consumed, not left to attach twice.
-    expect(pending).toHaveLength(0);
+    expect(next.comments.map((c) => c.id)).toEqual(["1", "2"]);
+    expect(next.comments[1].replies?.[0].id).toBe("2a");
+    // The attached reply leaves the queue; the one whose parent is still missing stays.
+    expect(next.pending.map((reply) => reply.ui.id)).toEqual(["3a"]);
+  });
+
+  it("is pure, so a state updater can run it twice", () => {
+    const pending: PendingReply[] = [{ ui: comment("2a"), parentId: "2" }];
+    const incoming = [{ ui: comment("2"), parentId: null }];
+
+    const first = mergeComments([], incoming, pending);
+    const second = mergeComments([], incoming, pending);
+
+    expect(pending).toHaveLength(1);
+    expect(second).toEqual(first);
+    expect(second.comments[0].replies).toHaveLength(1);
+  });
+
+  it("does not attach a parked reply that is already in the list", () => {
+    const existing = [comment("2", [comment("2a")])];
+    const next = mergeComments(existing, [], [{ ui: comment("2a"), parentId: "2" }]);
+    expect(next.comments[0].replies).toHaveLength(1);
   });
 });

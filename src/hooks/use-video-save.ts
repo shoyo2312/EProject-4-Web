@@ -29,17 +29,17 @@ export function useVideoSave(videoId: string) {
     };
   }, [videoId]);
 
+  // The request goes out here, never from inside a `setSaved` updater: React
+  // may run an updater twice, which sent the save twice and let the second
+  // one's failure roll back a save that had worked.
   const toggleSave = useCallback(() => {
-    setSaved((current) => {
-      const next = !current;
-      if (isBackendHandle(videoId)) {
-        (next ? saveVideo(videoId) : unsaveVideo(videoId)).catch(() => {
-          setSaved(current);
-        });
-      }
-      return next;
+    const next = !saved;
+    setSaved(next);
+    if (!isBackendHandle(videoId)) return;
+    (next ? saveVideo(videoId) : unsaveVideo(videoId)).catch(() => {
+      setSaved(!next);
     });
-  }, [videoId]);
+  }, [videoId, saved]);
 
   return { saved, toggleSave };
 }
