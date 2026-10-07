@@ -81,14 +81,6 @@ export function unlikeVideo(videoId: string): Promise<LikeStatusResponse> {
   });
 }
 
-/** `GET /interactions/videos/{videoId}/like-status` — whether the viewer liked it. */
-export function getLikeStatus(videoId: string): Promise<LikeStatusResponse> {
-  return apiFetch<LikeStatusResponse>(
-    `/interactions/videos/${videoId}/like-status`,
-    { auth: "required" },
-  );
-}
-
 /**
  * `GET /interactions/videos/like-status/batch` — one request rather than one
  * per id, same reasoning as `getVideosByIds`: the gateway rate-limits 20

@@ -44,10 +44,10 @@ export function ActionRail({
   /** True when this video's comment sidebar is the one currently open. */
   commentsOpen?: boolean;
   onCommentClick?: () => void;
-  /** Controlled by `Feed` so double-tapping the video updates this heart too. */
+  /** Controlled by `useVideoLike` so double-tapping the video updates this heart too. */
   liked: boolean;
   /**
-   * The count to show, already reconciled with the server by `Feed`. Not derived
+   * The count to show, already reconciled with the server by `useVideoLike`. Not derived
    * from `liked` here: `video.stats.likes` comes back from the API *including*
    * the viewer's own like, so adding one for a filled heart showed 2 for a video
    * one account had liked once.

@@ -7,12 +7,13 @@ import { CommentPanel } from "@/components/feed/CommentPanel";
 import { VideoCard } from "@/components/feed/VideoCard";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
-import { useLikeDebounce } from "@/hooks/use-like-debounce";
-import { useVideoRealtime, withLikeCount, type VideoFrame } from "@/hooks/use-video-realtime";
+import { useLikeStatuses } from "@/hooks/use-like-statuses";
+import { useVideoLike } from "@/hooks/use-video-like";
+import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
 import { isBackendHandle } from "@/lib/api/adapters";
 import { isApiError } from "@/lib/api/errors";
 import { useSavedVideos } from "@/hooks/use-saved-videos";
-import { getLikeStatuses, likeVideo, unlikeVideo } from "@/lib/api/interactions";
+import type { LikeStatusResponse } from "@/lib/api/types";
 import { getVideo } from "@/lib/api/videos";
 import { loadFirstCommentPage } from "@/lib/comment-cache";
 import { cn } from "@/lib/utils";
@@ -58,85 +59,28 @@ export function Feed({
   /** Set from the card's right-click menu; see `PlayerSettingsProvider`. */
   const { autoScroll } = usePlayerSettings();
 
-  /**
-   * Like state is lifted here because two things drive it: the action rail's
-   * heart button (toggles) and double-tapping the video (likes only, never
-   * un-likes).
-   */
-  const [likedIds, setLikedIds] = useState<ReadonlySet<string>>(new Set());
+  const { user } = useSession();
+
+  // The scope of the hearts' batch and of the realtime subscriptions: the whole
+  // rendered feed, not just the playing card. Mock videos have neither.
+  const backendVideoIds = useMemo(
+    () => videos.filter((video) => isBackendHandle(video.id)).map((video) => video.id),
+    [videos],
+  );
 
   /**
-   * Bookmarks. Unlike the hearts above this is one request for the whole set
-   * rather than one per card — see `useSavedVideos`.
+   * The server's side of every heart, lifted here so one batch request seeds
+   * the whole list. Each card's own taps — the rail's heart and a double tap
+   * on the video — go through that card's `useVideoLike`.
+   */
+  const likes = useLikeStatuses(backendVideoIds, user?.userId);
+  const { syncCount: syncLikeCount } = likes;
+
+  /**
+   * Bookmarks — the viewer's whole saved set, fetched once and shared by every
+   * card; see `useSavedVideos`.
    */
   const { isSaved, toggleSave } = useSavedVideos();
-
-  /**
-   * Server-known like counts, by video id, overriding the count the feed was
-   * rendered with. Needed because `stats.likes` already counts the viewer's own
-   * like: the heart cannot add one on top without showing 2 for a single like.
-   */
-  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
-
-  // Liking needs an account: signed out, the live site swallows the tap and
-  // opens the login modal instead. Both entry points funnel through here, so
-  // the gate only has to exist once.
-  const { user, requireSignIn } = useSession();
-
-  const viewerId = user?.userId;
-
-  // Hearts are per viewer: whoever signs in next must not inherit them.
-  // Adjusted during render rather than in an effect, so no frame paints the
-  // previous viewer's hearts under the new one.
-  const [likesViewerId, setLikesViewerId] = useState(viewerId);
-  if (likesViewerId !== viewerId) {
-    setLikesViewerId(viewerId);
-    setLikedIds(new Set());
-  }
-
-  /** Ids whose like status was already asked for on behalf of `viewerId`. */
-  const askedLikes = useRef<{ viewerId?: string; ids: Set<string> }>({ ids: new Set() });
-
-  // Seed hearts for videos the viewer already liked in a previous session.
-  // Backend videos only — mock ids have no like-status endpoint to ask. Only
-  // the videos not asked about yet: asking for the whole list on every
-  // appended page grew the request by a page each time.
-  useEffect(() => {
-    if (!viewerId) return;
-    if (askedLikes.current.viewerId !== viewerId) {
-      askedLikes.current = { viewerId, ids: new Set() };
-    }
-    const asked = askedLikes.current;
-    const fresh = videos
-      .filter((v) => isBackendHandle(v.id) && !asked.ids.has(v.id))
-      .map((v) => v.id);
-    if (fresh.length === 0) return;
-    fresh.forEach((id) => asked.ids.add(id));
-
-    // No cleanup-driven cancel: the next page re-runs this effect while the
-    // answer is still on its way, and those ids are already marked as asked.
-    // What makes an answer stale is the viewer changing, so that is the check.
-    getLikeStatuses(fresh).then((statuses) => {
-      if (askedLikes.current !== asked) return;
-      setLikedIds((current) => {
-        const next = new Set(current);
-        statuses.forEach((status) => {
-          if (status.liked) next.add(status.videoId);
-        });
-        return next;
-      });
-      setLikeCounts((current) => {
-        const next = { ...current };
-        statuses.forEach((status) => {
-          next[status.videoId] = status.likeCount;
-        });
-        return next;
-      });
-    }).catch(() => {
-      // The call failed — hearts start unfilled, and these ids may be asked again.
-      fresh.forEach((id) => asked.ids.delete(id));
-    });
-  }, [videos, viewerId]);
 
   /**
    * Snapshot of the latest `counts` realtime frame per video id — a video not
@@ -155,32 +99,12 @@ export function Feed({
    */
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
 
-  /**
-   * Confirmed once a per-video `useLikeDebounce` (see `FeedVideoCard` below)
-   * gets a real response back — `likedIds` is that hook's `serverLiked`, and
-   * has to move in lockstep with `likeCounts` or the offset each card
-   * computes (`liked !== serverLiked ? ±1 : 0`) double-counts against a
-   * `likeCounts` entry that already includes the change.
-   */
-  const onLikeConfirmed = useCallback((id: string, liked: boolean, likeCount: number) => {
-    setLikeCounts((current) => ({ ...current, [id]: likeCount }));
-    // The last counts frame was read before this like landed, and the card
-    // prefers the frame over `likeCounts` — see `withLikeCount`. Left alone it
-    // pulls the count back to its pre-like value for the ~150ms until the next
-    // frame arrives, which is the flicker this corrects.
-    setLiveFrames((current) => withLikeCount(current, id, likeCount));
-    setLikedIds((current) => {
-      if (current.has(id) === liked) return current;
-      const next = new Set(current);
-      if (liked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
-
   const handleRealtimeFrame = useCallback((frame: VideoFrame) => {
     if (frame.type === "counts") {
       setLiveFrames((current) => ({ ...current, [frame.videoId]: frame }));
+      // The heart reads its count from the ledger, where a like reply newer
+      // than this frame can still correct it.
+      if (frame.likeCount !== undefined) syncLikeCount(frame.videoId, frame.likeCount);
       return;
     }
     const setVisible = (visible: boolean) =>
@@ -202,13 +126,8 @@ export function Feed({
         if (isApiError(cause) && cause.status === 404) setVisible(false);
         // Anything else is transient — leave visibility as it was until the next frame.
       });
-  }, []);
+  }, [syncLikeCount]);
 
-  // The realtime scope is the whole rendered feed, not just the playing card.
-  const backendVideoIds = useMemo(
-    () => videos.filter((video) => isBackendHandle(video.id)).map((video) => video.id),
-    [videos],
-  );
   useVideoRealtime(backendVideoIds, user !== null, handleRealtimeFrame);
 
   const visibleVideos = useMemo(
@@ -373,10 +292,9 @@ export function Feed({
               commentsOpen={commentsOpen && commentVideo?.id === video.id}
               commentCount={video.stats.comments + (extraComments[video.id] ?? 0)}
               liveFrame={liveFrames[video.id]}
-              baseLikeCount={likeCounts[video.id] ?? video.stats.likes}
-              serverLiked={likedIds.has(video.id)}
-              requireSignIn={requireSignIn}
-              onLikeConfirmed={onLikeConfirmed}
+              serverLiked={likes.liked[video.id] ?? false}
+              serverLikeCount={likes.counts[video.id] ?? video.stats.likes}
+              onLikeConfirmed={likes.confirm}
               onActive={() => {
                 setActiveIndex(index);
                 followActiveVideo(video);
@@ -432,11 +350,11 @@ export function Feed({
 }
 
 /**
- * One card + its action rail. Pulled out of `Feed`'s `.map` because the like
- * state now lives behind `useLikeDebounce` — a hook, which cannot be called a
- * variable number of times inside a loop in the parent's own render. Each
- * mounted instance owns exactly one `useLikeDebounce` call, so the feed's
- * length can change across renders without breaking the rules of hooks.
+ * One card + its action rail. Pulled out of `Feed`'s `.map` because the heart
+ * lives behind `useVideoLike` — a hook, which cannot be called a variable
+ * number of times inside a loop in the parent's own render. Each mounted
+ * instance owns exactly one call, so the feed's length can change across
+ * renders without breaking the rules of hooks.
  */
 function FeedVideoCard({
   video,
@@ -445,9 +363,8 @@ function FeedVideoCard({
   commentsOpen,
   commentCount,
   liveFrame,
-  baseLikeCount,
   serverLiked,
-  requireSignIn,
+  serverLikeCount,
   onLikeConfirmed,
   onActive,
   onEnded,
@@ -464,43 +381,24 @@ function FeedVideoCard({
   commentCount: number;
   /** Latest `counts` realtime frame for this video, if one has arrived. */
   liveFrame?: VideoFrame;
-  /** Server-confirmed like count, before this card's own pending toggle. */
-  baseLikeCount: number;
-  /** Server-confirmed liked state — `useLikeDebounce`'s `serverLiked`. */
+  /** The viewer's like as the server last confirmed it. */
   serverLiked: boolean;
-  requireSignIn: () => boolean;
-  onLikeConfirmed: (id: string, liked: boolean, likeCount: number) => void;
+  /** The server's latest like count, before this card's own pending tap. */
+  serverLikeCount: number;
+  onLikeConfirmed: (status: LikeStatusResponse) => void;
   onActive: () => void;
   onEnded?: () => void;
   onCommentClick: () => void;
   saved: boolean;
   onToggleSave: () => void;
 }) {
-  const send = useCallback(
-    async (liked: boolean) => {
-      if (!isBackendHandle(video.id)) return;
-      const status = liked ? await likeVideo(video.id) : await unlikeVideo(video.id);
-      // The reply carries the true state and count — the debounced tap only
-      // guessed, and is stale the moment anyone else likes the same video.
-      onLikeConfirmed(video.id, status.liked, status.likeCount);
-    },
-    [video.id, onLikeConfirmed],
-  );
+  const { liked, likeCount, toggleLike, likeOnly } = useVideoLike({
+    videoId: video.id,
+    serverLiked,
+    serverCount: serverLikeCount,
+    onConfirmed: onLikeConfirmed,
+  });
 
-  const { liked, toggle } = useLikeDebounce(serverLiked, send);
-
-  const toggleLike = useCallback(() => {
-    if (!requireSignIn()) return;
-    toggle();
-  }, [requireSignIn, toggle]);
-
-  const likeOnly = useCallback(() => {
-    if (!requireSignIn()) return;
-    if (!liked) toggle();
-  }, [requireSignIn, liked, toggle]);
-
-  const likesBase = liveFrame?.likeCount ?? baseLikeCount;
-  const displayLikes = liked === serverLiked ? likesBase : likesBase + (liked ? 1 : -1);
   const displayComments = liveFrame?.commentCount ?? commentCount;
 
   return (
@@ -566,7 +464,7 @@ function FeedVideoCard({
           commentsOpen={commentsOpen}
           onCommentClick={onCommentClick}
           liked={liked}
-          likes={displayLikes}
+          likes={likeCount}
           onToggleLike={toggleLike}
           saved={saved}
           saveCount={liveFrame?.saveCount}

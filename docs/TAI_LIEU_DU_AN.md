@@ -85,7 +85,8 @@ src/
   hooks/                  # Custom hook, đặt tên kebab-case (vd: use-video-feed.ts)
     __tests__/            # Test đặt cạnh hook, trong thư mục __tests__ sibling
     use-video-feed.ts, use-follow-feed.ts, use-explore-feed.ts  # Lấy dữ liệu feed
-    use-video-like.ts, use-like-debounce.ts, use-video-save.ts  # Tương tác (like/save có debounce)
+    use-like-statuses.ts, use-video-like.ts, use-like-debounce.ts  # Tim: dùng chung cho feed và trang video, có debounce
+    use-video-save.ts     # Lưu video (bookmark)
     use-*-realtime.ts     # Lắng nghe cập nhật realtime qua STOMP (comment, notification, user, video)
     use-dismiss.ts        # Đóng popover/menu khi click ra ngoài hoặc nhấn Escape
     use-escape-key.ts     # Đóng modal/drawer khi nhấn Escape
@@ -105,6 +106,7 @@ src/
     realtime/
       stompClient.ts        # Client STOMP dùng chung toàn app (singleton)
     comments/                # Logic thuần xử lý comment (build/merge cây comment...)
+    likes.ts                 # Logic thuần cho tim video (gộp trạng thái like, số đếm hiển thị)
     comment-cache.ts, comment-panel.ts, repost-context.ts, overlay-origin.ts, mock-feed.ts, data.ts
     format.ts                # Format số/thời gian hiển thị (vd: 1.2K, "3 giờ trước")
     utils.ts                 # cn() — merge class Tailwind (từ shadcn)

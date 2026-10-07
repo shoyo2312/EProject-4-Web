@@ -16,6 +16,7 @@ import { SeekBar } from "@/components/video/detail/SeekBar";
 import { VideoMeta } from "@/components/video/detail/VideoMeta";
 import { useWheelStep } from "@/components/video/detail/use-wheel-step";
 import { CreatorVideosPanel } from "@/components/video/CreatorVideosPanel";
+import { useLikeStatuses } from "@/hooks/use-like-statuses";
 import { useVideoLike } from "@/hooks/use-video-like";
 import type { VideoPlayback } from "@/hooks/use-video-playback";
 import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
@@ -104,38 +105,41 @@ export function VideoDetail({
    * budged. Same source of truth as the feed's cards — see `Feed`.
    */
   const [liveFrame, setLiveFrame] = useState<VideoFrame | null>(null);
-  const realtimeIds = useMemo(
+  /** This video, when it has a backend to ask — the scope of the heart's seed and of realtime. */
+  const backendIds = useMemo(
     () => (isBackendHandle(video.id) ? [video.id] : []),
     [video.id],
   );
   const { user: sessionUser, requireSignIn } = useSession();
   const signedIn = sessionUser !== null;
 
-  const like = useVideoLike(video.id, video.stats.likes, signedIn);
-  const { syncLikeCount } = like;
+  // The same heart as a feed card: the server's side seeded for this one
+  // video, and the viewer's debounced taps on top of it.
+  const likes = useLikeStatuses(backendIds, sessionUser?.userId);
+  const { syncCount: syncLikeCount } = likes;
+  const like = useVideoLike({
+    videoId: video.id,
+    serverLiked: likes.liked[video.id] ?? false,
+    serverCount: likes.counts[video.id] ?? video.stats.likes,
+    onConfirmed: likes.confirm,
+  });
   const save = useVideoSave(video.id, signedIn);
 
-  // Liking and saving need an account, as on the feed: signed out, the tap
-  // opens the login modal instead of a request that can only 401.
-  const toggleLike = () => {
-    if (requireSignIn()) like.toggleLike();
-  };
-  const likeOnly = () => {
-    if (requireSignIn()) like.likeOnly();
-  };
+  // Saving needs an account, as on the feed: signed out, the tap opens the
+  // login modal instead of a request that can only 401.
   const toggleSave = () => {
     if (requireSignIn()) save.toggleSave();
   };
 
   useVideoRealtime(
-    realtimeIds,
+    backendIds,
     signedIn,
     useCallback(
       (frame: VideoFrame) => {
         // `state` frames carry no counters; only the counts ones say anything here.
         if (frame.type !== "counts") return;
         setLiveFrame(frame);
-        if (frame.likeCount !== undefined) syncLikeCount(frame.likeCount);
+        if (frame.likeCount !== undefined) syncLikeCount(frame.videoId, frame.likeCount);
       },
       [syncLikeCount],
     ),
@@ -318,7 +322,7 @@ export function VideoDetail({
           >
             <VideoCard
               video={video}
-              onLike={likeOnly}
+              onLike={like.likeOnly}
               showCaption={false}
               showVolumeControl={false}
               showContextMenu={false}
@@ -345,7 +349,7 @@ export function VideoDetail({
                 onCommentClick={togglePanel}
                 liked={like.liked}
                 likes={like.likeCount}
-                onToggleLike={toggleLike}
+                onToggleLike={like.toggleLike}
                 saved={save.saved}
                 onToggleSave={toggleSave}
               />
