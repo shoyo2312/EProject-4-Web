@@ -24,8 +24,25 @@ type SessionEndedListener = () => void;
 const sessionEndedListeners = new Set<SessionEndedListener>();
 
 export function onSessionEnded(listener: SessionEndedListener): () => void {
+  if (sessionEndedListeners.size === 0) window.addEventListener("storage", onStorage);
   sessionEndedListeners.add(listener);
-  return () => sessionEndedListeners.delete(listener);
+  return () => {
+    sessionEndedListeners.delete(listener);
+    if (sessionEndedListeners.size === 0) window.removeEventListener("storage", onStorage);
+  };
+}
+
+/**
+ * Every tab shares one pair, so another tab signing out — or losing its
+ * session to a refused refresh — has ended this tab's session too. Without
+ * this, the tab kept a signed-in UI whose every request answered 401.
+ * `key === null` is another tab clearing storage outright.
+ */
+function onStorage(event: StorageEvent): void {
+  if (event.storageArea !== window.localStorage) return;
+  if (event.key !== REFRESH_KEY && event.key !== null) return;
+  if (getRefreshToken() !== null) return;
+  sessionEndedListeners.forEach((listener) => listener());
 }
 
 export function getAccessToken(): string | null {

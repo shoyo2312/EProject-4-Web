@@ -1,6 +1,39 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isAccessTokenFresh } from "@/lib/api/tokens";
+import { isAccessTokenFresh, onSessionEnded, storeTokens } from "@/lib/api/tokens";
+
+afterEach(() => {
+  window.localStorage.clear();
+});
+
+describe("onSessionEnded", () => {
+  const otherTab = (key: string | null) =>
+    window.dispatchEvent(
+      new StorageEvent("storage", { key, newValue: null, storageArea: window.localStorage }),
+    );
+
+  it("fires when another tab removes the refresh token", () => {
+    const listener = vi.fn();
+    const stop = onSessionEnded(listener);
+
+    otherTab("tiktok.refreshToken");
+    stop();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores other keys, and a tab that still holds a session", () => {
+    const listener = vi.fn();
+    const stop = onSessionEnded(listener);
+
+    otherTab("tiktok.accessToken");
+    storeTokens({ accessToken: "a", refreshToken: "r" });
+    otherTab(null);
+    stop();
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
 
 const NOW = 1_700_000_000_000;
 
