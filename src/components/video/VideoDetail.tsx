@@ -286,8 +286,12 @@ export function VideoDetail({
         </button>
 
         {/* Previous / next, stacked against the column edge. They go through
-            `step` as the wheel does, so both routes animate the same way. */}
-        <div className="absolute right-6 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-3">
+            `step` as the wheel does, so both routes animate the same way.
+            Centred, but never lower than 16px above the action rail: on a
+            viewport under ~790px the centre lands on the rail, and Next sat
+            over the heart and took its clicks. 394px = 82px of seek and
+            control bars + the 250px compact rail + 16px + half this stack. */}
+        <div className="absolute right-6 top-[min(50%,calc(100%-394px))] z-20 flex -translate-y-1/2 flex-col gap-3">
           <OverlayButton
             label="Previous video"
             onClick={() => step("previous")}
