@@ -166,6 +166,7 @@ export function setFollowState(userId: string, value: boolean): void {
 /** Called on sign-in/sign-out: one viewer's answers must not serve another. */
 export function clearFollowCache(): void {
   followState.clear();
+  followingWalk = null;
   notifyFollowState();
 }
 
@@ -390,6 +391,37 @@ async function collectIds(
 }
 
 /**
+ * The walk of the viewer's following list that `isFollowing` answers from,
+ * resolving to whether it read the list to its end. One per viewer per tab,
+ * shared by every caller: a feed of twenty cards by ten authors asks the
+ * question ten times at once, and ten parallel walks of the same list is the
+ * gateway's per-IP limit spent on identical requests.
+ */
+let followingWalk: { viewerId: string; complete: Promise<boolean> } | null = null;
+
+function walkFollowing(viewerId: string, maxPages: number): Promise<boolean> {
+  if (followingWalk?.viewerId === viewerId) return followingWalk.complete;
+
+  const complete = (async () => {
+    for (let page = 0; page < maxPages; page += 1) {
+      const result = await getFollowing(viewerId, page, 50);
+      for (const profile of result.content) followState.set(profile.userId, true);
+      notifyFollowState();
+      if (isLastPage(result.page)) return true;
+    }
+    return false;
+  })();
+
+  const walk = { viewerId, complete };
+  followingWalk = walk;
+  // A failed walk is forgotten, so the next question tries again.
+  complete.catch(() => {
+    if (followingWalk === walk) followingWalk = null;
+  });
+  return complete;
+}
+
+/**
  * Whether the viewer follows `userId`.
  *
  * There is no `GET /users/{id}/relationship` endpoint and the profile response
@@ -397,11 +429,11 @@ async function collectIds(
  * Follow button asks is to walk the viewer's own following list. That costs up
  * to `maxPages` requests against a gateway that allows 20 per second per IP —
  * and behind the Next proxy every viewer shares one IP — so the walk happens
- * at most once per account per tab:
+ * at most once per tab:
  *
  *  - `follow`/`unfollow` write the answer directly, so toggling never walks;
- *  - a walk seeds *every* profile it passes, not just the one asked about, so
- *    the second profile page usually costs nothing;
+ *  - the walk seeds *every* profile it passes, and is shared by every caller
+ *    asking while it runs or after it, so later questions cost nothing;
  *  - `false` is only remembered when the list was read to its end. Giving up
  *    at `maxPages` means the answer is a guess, and a guess must not be cached.
  */
@@ -413,18 +445,10 @@ export async function isFollowing(
   const known = followState.get(userId);
   if (known !== undefined) return known;
 
-  for (let page = 0; page < maxPages; page += 1) {
-    const result = await getFollowing(viewerId, page, 50);
-    for (const profile of result.content) followState.set(profile.userId, true);
-    notifyFollowState();
+  const complete = await walkFollowing(viewerId, maxPages);
+  const found = followState.get(userId);
+  if (found !== undefined) return found;
 
-    if (result.content.some((profile) => profile.userId === userId)) return true;
-
-    if (page + 1 >= result.page.totalPages) {
-      setFollowState(userId, false);
-      return false;
-    }
-  }
-
+  if (complete) setFollowState(userId, false);
   return false;
 }
