@@ -74,6 +74,7 @@ export function ShareSheet({
   onClose: () => void;
 }) {
   const { user, openLogin } = useSession();
+  const viewerId = user?.userId;
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [friends, setFriends] = useState<Author[]>(SHARE_FRIENDS);
@@ -84,18 +85,18 @@ export function ShareSheet({
   /* Real accounts once signed in — the mock trio (see SHARE_FRIENDS) stands
      in for a guest, who has no following list to show. */
   useEffect(() => {
-    if (!user) return;
-    getFollowing(user.userId, 0, FRIEND_LIMIT)
+    if (!viewerId) return;
+    getFollowing(viewerId, 0, FRIEND_LIMIT)
       .then((page) => setFriends(page.content.map(authorFromProfile)))
       .catch(() => {
         // Left on the mock trio — a failed fetch should not empty the row.
       });
-  }, [user]);
+  }, [viewerId]);
 
   /* The search icon's own row: user-service's search over every account,
      same debounce-and-abort shape as the comment panel's @mention lookup. */
   useEffect(() => {
-    if (!searchOpen || !user) return;
+    if (!searchOpen || !viewerId) return;
     const trimmed = query.trim();
     // Clearing back to the friends row on an empty query is a direct response
     // to the keystroke that emptied it — handled in the input's own onChange,
@@ -106,7 +107,7 @@ export function ShareSheet({
       searchUsers(trimmed, FRIEND_LIMIT, controller.signal)
         .then((page) => {
           if (controller.signal.aborted) return;
-          setResults(page.content.filter((p) => p.userId !== user.userId).map(authorFromProfile));
+          setResults(page.content.filter((p) => p.userId !== viewerId).map(authorFromProfile));
         })
         .catch(() => {
           // Aborted or failed — the previous results stay rather than blinking out.
@@ -116,7 +117,7 @@ export function ShareSheet({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [searchOpen, query, user]);
+  }, [searchOpen, query, viewerId]);
 
   const toggleSearch = () => {
     setSearchOpen((open) => !open);

@@ -68,7 +68,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
     // `/me` is still in flight would compute "not following" from a viewer id
     // that does not exist yet, and the Follow button would lie.
     if (!sessionSettled) return;
-    if (!userId && !session.user) return;
+    if (!userId && !viewerId) return;
 
     setError(null);
 
@@ -78,9 +78,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
         : await usersApi.getMyProfile();
 
       const isOwnPage = viewerId !== undefined && viewerId === raw.userId;
-
-      const author =
-        isOwnPage && session.user ? { ...session.user } : authorFromProfile(raw);
+      const author = authorFromProfile(raw);
 
       /**
        * Started here, awaited below. The grid is the slow request, so making
@@ -131,7 +129,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       // direction. It is never presented as one or the other.
       setError(messageFor(cause));
     }
-  }, [userId, sessionSettled, session.user, viewerId]);
+  }, [userId, sessionSettled, viewerId]);
 
   /**
    * Followers/following/total-likes only, no video refetch. Used after a
@@ -291,6 +289,24 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
   }
 
   /**
+   * Ownership is decided by the id that came back, not by how the page was
+   * addressed: `/@<your id>` and `/@<your handle>` are the same account, and
+   * only the id is comparable — the handle is unknown for everyone but the
+   * viewer.
+   */
+  const isOwner =
+    session.user !== null && session.user.userId === profile.author.userId;
+
+  /**
+   * Your own header is drawn from the session, at render time: it repaints the
+   * moment an edit lands, and it knows a new handle before user-service hears
+   * of it through Kafka. Folding the session into `load` instead made every
+   * session update — each step of a profile save — reload the whole page.
+   */
+  const shown: UserProfile =
+    isOwner && session.user ? { ...profile, author: { ...session.user } } : profile;
+
+  /**
    * The page is addressed by handle, so a new one needs a new URL. The session
    * takes the handle in the same transition as the navigation: updated alone,
    * the old URL would stop matching the viewer and `ProfileRouter` would put up
@@ -315,9 +331,9 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
      * form would wipe a bio the viewer never touched.
      */
     const changes = changedProfileFields(draft, {
-      username: profile.author.username,
-      nickname: profile.author.nickname,
-      bio: profile.bio,
+      username: shown.author.username,
+      nickname: shown.author.nickname,
+      bio: shown.bio,
     });
     const patch: { displayName?: string; bio?: string; avatarUrl?: string } = {};
     if (changes.nickname !== undefined) patch.displayName = changes.nickname;
@@ -363,15 +379,6 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
     }
   };
 
-  /**
-   * Ownership is decided by the id that came back, not by how the page was
-   * addressed: `/@<your id>` and `/@<your handle>` are the same account, and
-   * only the id is comparable — the handle is unknown for everyone but the
-   * viewer.
-   */
-  const isOwner =
-    session.user !== null && session.user.userId === profile.author.userId;
-
   const toggleFollow = async (next: boolean) => {
     if (targetId === undefined || isOwner) return;
 
@@ -404,7 +411,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
 
   return (
     <ProfilePage
-      profile={profile}
+      profile={shown}
       onSaveProfile={isOwner ? saveProfile : undefined}
       onToggleFollow={toggleFollow}
       usernameChangeableAt={session.user?.usernameChangeableAt}

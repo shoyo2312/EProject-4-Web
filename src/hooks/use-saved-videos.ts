@@ -30,12 +30,15 @@ const PAGE_SIZE = 50;
  */
 export function useSavedVideos(): SavedVideos {
   const { user, requireSignIn } = useSession();
+  // Keyed on the id, not the object: `user` is rebuilt on every `/me` read and
+  // profile edit, and each rebuild re-read up to ten pages of favourites.
+  const viewerId = user?.userId;
   const [savedIds, setSavedIds] = useState<ReadonlySet<string>>(new Set());
 
   // Signed out there is nothing to ask: every save endpoint needs a token, so
   // the bookmarks start empty and the tap opens the login modal.
   useEffect(() => {
-    if (!user) return;
+    if (!viewerId) return;
     let cancelled = false;
 
     (async () => {
@@ -56,14 +59,14 @@ export function useSavedVideos(): SavedVideos {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [viewerId]);
 
   // Gated on the session rather than cleared on sign-out: emptying the set
   // inside the effect above is a second render for a value nothing reads while
   // signed out, and the next sign-in replaces it wholesale anyway.
   const isSaved = useCallback(
-    (videoId: string) => user !== null && savedIds.has(videoId),
-    [savedIds, user],
+    (videoId: string) => viewerId !== undefined && savedIds.has(videoId),
+    [savedIds, viewerId],
   );
 
   const toggleSave = useCallback(

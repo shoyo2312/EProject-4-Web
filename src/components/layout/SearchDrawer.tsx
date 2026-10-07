@@ -91,6 +91,7 @@ function writeHistory(terms: string[]): void {
 export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
   const { user } = useSession();
+  const signedIn = user !== null;
   const [query, setQuery] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -122,7 +123,7 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
 
   useEffect(() => {
     // user-service has no public read, so there is nothing to ask for signed out.
-    if (!user || term.length === 0) return;
+    if (!signedIn || term.length === 0) return;
 
     const controller = new AbortController();
     // Debounced, and the in-flight request is aborted when the next keystroke
@@ -141,7 +142,7 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
       clearTimeout(timer);
       controller.abort();
     };
-  }, [term, user, open]);
+  }, [term, signedIn, open]);
 
   /**
    * Submitting the field is a video search, not an account one: the accounts

@@ -62,6 +62,7 @@ export function CommentComposer({
   const barRef = useRef<HTMLDivElement>(null);
   const canPost = value.trim() !== "";
   const { user, openLogin } = useSession();
+  const viewerId = user?.userId;
   const mentionQuery = mention?.query ?? null;
   const mentionOpen = mention !== null && mentionResults.length > 0;
 
@@ -86,16 +87,16 @@ export function CommentComposer({
    * every account. Both need a token, so a signed-out viewer never gets here.
    */
   useEffect(() => {
-    if (mentionQuery === null || !user) return;
+    if (mentionQuery === null || !viewerId) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
       const request = mentionQuery
         ? searchUsers(mentionQuery, MENTION_LIMIT, controller.signal)
-        : getFollowing(user.userId, 0, MENTION_LIMIT);
+        : getFollowing(viewerId, 0, MENTION_LIMIT);
       request
         .then((page) => {
           if (controller.signal.aborted) return;
-          setMentionResults(page.content.filter((p) => p.userId !== user.userId));
+          setMentionResults(page.content.filter((p) => p.userId !== viewerId));
           setMentionIndex(0);
         })
         .catch(() => {
@@ -107,7 +108,7 @@ export function CommentComposer({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [mentionQuery, user]);
+  }, [mentionQuery, viewerId]);
 
   /* Re-read the token on every keystroke and every caret move. */
   const syncMention = (nextValue: string, caret: number | null) => {

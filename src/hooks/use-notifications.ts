@@ -135,6 +135,9 @@ export interface NotificationInbox {
  */
 export function useNotifications(): NotificationInbox {
   const { user } = useSession();
+  // The inbox belongs to an account, not to a render of it: keyed on `user`,
+  // every `/me` read and profile edit refetched it.
+  const viewerId = user?.userId;
   const [items, setItems] = useState<NotificationResponse[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -146,7 +149,7 @@ export function useNotifications(): NotificationInbox {
   );
 
   useEffect(() => {
-    if (!user) return;
+    if (!viewerId) return;
     let cancelled = false;
     Promise.all([listNotifications(), getUnreadCount()])
       .then(([inbox, unread]) => {
@@ -166,7 +169,7 @@ export function useNotifications(): NotificationInbox {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [viewerId]);
 
   // Batch-resolve whichever actors the current list names that a prior batch
   // has not already answered. Runs after every items change rather than only
