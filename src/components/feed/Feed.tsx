@@ -82,16 +82,41 @@ export function Feed({
   // the gate only has to exist once.
   const { user, requireSignIn } = useSession();
 
-  // Seed hearts for videos the viewer already liked in a previous session.
-  // Backend videos only — mock ids have no like-status endpoint to ask.
-  useEffect(() => {
-    if (!user) return;
-    const backendIds = videos.filter((v) => isBackendHandle(v.id)).map((v) => v.id);
-    if (backendIds.length === 0) return;
-    let cancelled = false;
+  const viewerId = user?.userId;
 
-    getLikeStatuses(backendIds).then((statuses) => {
-      if (cancelled) return;
+  // Hearts are per viewer: whoever signs in next must not inherit them.
+  // Adjusted during render rather than in an effect, so no frame paints the
+  // previous viewer's hearts under the new one.
+  const [likesViewerId, setLikesViewerId] = useState(viewerId);
+  if (likesViewerId !== viewerId) {
+    setLikesViewerId(viewerId);
+    setLikedIds(new Set());
+  }
+
+  /** Ids whose like status was already asked for on behalf of `viewerId`. */
+  const askedLikes = useRef<{ viewerId?: string; ids: Set<string> }>({ ids: new Set() });
+
+  // Seed hearts for videos the viewer already liked in a previous session.
+  // Backend videos only — mock ids have no like-status endpoint to ask. Only
+  // the videos not asked about yet: asking for the whole list on every
+  // appended page grew the request by a page each time.
+  useEffect(() => {
+    if (!viewerId) return;
+    if (askedLikes.current.viewerId !== viewerId) {
+      askedLikes.current = { viewerId, ids: new Set() };
+    }
+    const asked = askedLikes.current;
+    const fresh = videos
+      .filter((v) => isBackendHandle(v.id) && !asked.ids.has(v.id))
+      .map((v) => v.id);
+    if (fresh.length === 0) return;
+    fresh.forEach((id) => asked.ids.add(id));
+
+    // No cleanup-driven cancel: the next page re-runs this effect while the
+    // answer is still on its way, and those ids are already marked as asked.
+    // What makes an answer stale is the viewer changing, so that is the check.
+    getLikeStatuses(fresh).then((statuses) => {
+      if (askedLikes.current !== asked) return;
       setLikedIds((current) => {
         const next = new Set(current);
         statuses.forEach((status) => {
@@ -107,13 +132,10 @@ export function Feed({
         return next;
       });
     }).catch(() => {
-      // No session, or the call failed — hearts just start unfilled.
+      // The call failed — hearts start unfilled, and these ids may be asked again.
+      fresh.forEach((id) => asked.ids.delete(id));
     });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [videos, user]);
+  }, [videos, viewerId]);
 
   /**
    * Snapshot of the latest `counts` realtime frame per video id — a video not
