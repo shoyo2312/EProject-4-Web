@@ -322,11 +322,15 @@ export function SessionProvider({
    * rethrows a network failure — so signing out with the gateway unreachable
    * skipped everything below and left a signed-in-looking UI over a session
    * that no longer had tokens. The local sign-out is what was asked for, so it
-   * happens either way.
+   * happens either way — and the failure stops here rather than surfacing as
+   * an unhandled rejection from a caller that fires and forgets: this device
+   * is signed out, and the server-side tokens run out on their own.
    */
   const signOut = useCallback(async () => {
     try {
       await authApi.logout();
+    } catch {
+      // Gateway unreachable: the tokens are already gone locally.
     } finally {
       resetViewerState();
       setUser(null);
