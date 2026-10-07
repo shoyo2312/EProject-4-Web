@@ -10,6 +10,7 @@ import { useSession } from "@/components/session/SessionProvider";
 import { useLikeDebounce } from "@/hooks/use-like-debounce";
 import { useVideoRealtime, withLikeCount, type VideoFrame } from "@/hooks/use-video-realtime";
 import { isBackendHandle } from "@/lib/api/adapters";
+import { isApiError } from "@/lib/api/errors";
 import { useSavedVideos } from "@/hooks/use-saved-videos";
 import { getLikeStatuses, likeVideo, unlikeVideo } from "@/lib/api/interactions";
 import { getVideo } from "@/lib/api/videos";
@@ -182,19 +183,24 @@ export function Feed({
       setLiveFrames((current) => ({ ...current, [frame.videoId]: frame }));
       return;
     }
+    const setVisible = (visible: boolean) =>
+      setHiddenIds((current) => {
+        if (current.has(frame.videoId) === !visible) return current;
+        const next = new Set(current);
+        if (visible) next.delete(frame.videoId);
+        else next.add(frame.videoId);
+        return next;
+      });
+
     getVideo(frame.videoId)
       .then((video) => {
-        const visible = video.status === "PUBLISHED" && video.visibility === "PUBLIC";
-        setHiddenIds((current) => {
-          if (current.has(frame.videoId) === !visible) return current;
-          const next = new Set(current);
-          if (visible) next.delete(frame.videoId);
-          else next.add(frame.videoId);
-          return next;
-        });
+        setVisible(video.status === "PUBLISHED" && video.visibility === "PUBLIC");
       })
-      .catch(() => {
-        // Transient — leave visibility as it was until the next frame.
+      .catch((cause: unknown) => {
+        // A 404 is the answer, not a failure: deleted, or no longer readable
+        // by this viewer — either way the card has to go.
+        if (isApiError(cause) && cause.status === 404) setVisible(false);
+        // Anything else is transient — leave visibility as it was until the next frame.
       });
   }, []);
 
