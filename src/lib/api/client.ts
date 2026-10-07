@@ -162,6 +162,9 @@ async function unwrap<T>(response: Response): Promise<T> {
  */
 let inFlightRefresh: Promise<string | null> | null = null;
 
+/** Refresh answers that mean the token itself was rejected: invalid, revoked, or the account barred. */
+const SESSION_OVER_STATUSES = new Set([400, 401, 403]);
+
 export function refreshAccessToken(): Promise<string | null> {
   if (inFlightRefresh) return inFlightRefresh;
 
@@ -173,9 +176,11 @@ export function refreshAccessToken(): Promise<string | null> {
 }
 
 /**
- * Returns the new access token, or null when the session is over. Never
- * retries: a second attempt lands outside the server's 10-second grace window
- * and *is* the replay that logs the user out everywhere.
+ * Returns the new access token, or null when the session is over. Throws
+ * `ApiError` when the refresh could not be answered (network, 5xx, 429) — the
+ * session may well still be alive, so the tokens stay. Never retries: a second
+ * attempt lands outside the server's 10-second grace window and *is* the
+ * replay that logs the user out everywhere.
  */
 async function performRefresh(): Promise<string | null> {
   const refreshToken = getRefreshToken();
@@ -197,9 +202,15 @@ async function performRefresh(): Promise<string | null> {
     throw new ApiError(0, "NETWORK_ERROR", "Cannot reach the API gateway");
   }
 
-  if (!response.ok) {
+  // Only the server refusing the token ends the session. A 5xx while
+  // auth-service restarts, or the gateway's per-IP 429, says nothing about the
+  // token — clearing on those signed the viewer out of a perfectly good session.
+  if (SESSION_OVER_STATUSES.has(response.status)) {
     clearTokens();
     return null;
+  }
+  if (!response.ok) {
+    throw new ApiError(response.status, null, response.statusText);
   }
 
   const envelope = parseJsonPreservingIds<ApiEnvelope<TokenResponse>>(
