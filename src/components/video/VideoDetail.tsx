@@ -21,7 +21,7 @@ import { useVideoLike } from "@/hooks/use-video-like";
 import type { VideoPlayback } from "@/hooks/use-video-playback";
 import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
 import { useVideoSave } from "@/hooks/use-video-save";
-import { isBackendHandle } from "@/lib/api/adapters";
+import { isBackendVideoId } from "@/lib/api/adapters";
 import { COMMENT_PANEL_COOKIE } from "@/lib/comment-panel";
 import { getOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
@@ -107,7 +107,7 @@ export function VideoDetail({
   const [liveFrame, setLiveFrame] = useState<VideoFrame | null>(null);
   /** This video, when it has a backend to ask — the scope of the heart's seed and of realtime. */
   const backendIds = useMemo(
-    () => (isBackendHandle(video.id) ? [video.id] : []),
+    () => (isBackendVideoId(video.id) ? [video.id] : []),
     [video.id],
   );
   const { user: sessionUser, requireSignIn } = useSession();

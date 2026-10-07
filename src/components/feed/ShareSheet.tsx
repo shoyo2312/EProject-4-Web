@@ -17,7 +17,7 @@ import { useEscapeKey } from "@/hooks/use-escape-key";
 import { CloseIcon } from "@/components/icons";
 import { toast } from "@/components/ui/toast";
 import { useSession } from "@/components/session/SessionProvider";
-import { authorFromProfile } from "@/lib/api/adapters";
+import { authorFromProfile, isBackendVideoId } from "@/lib/api/adapters";
 import { isApiError } from "@/lib/api/errors";
 import { repostVideo } from "@/lib/api/interactions";
 import { setRepostedByMe } from "@/lib/repost-context";
@@ -125,7 +125,7 @@ export function ShareSheet({
     setResults(null);
   };
 
-  const isMockVideo = !/^\d+$/.test(videoId);
+  const isMockVideo = !isBackendVideoId(videoId);
 
   const copyLink = async () => {
     try {

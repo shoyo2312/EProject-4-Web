@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
-import { isBackendHandle } from "@/lib/api/adapters";
+import { isBackendVideoId } from "@/lib/api/adapters";
 import { listSavedVideos, saveVideo, unsaveVideo } from "@/lib/api/interactions";
 
 interface SavedVideos {
@@ -83,7 +83,7 @@ export function useSavedVideos(): SavedVideos {
 
       // Mock videos have no backend row to save; the icon still fills, which is
       // what the cloned UI did before any of this was wired up.
-      if (!isBackendHandle(videoId)) return;
+      if (!isBackendVideoId(videoId)) return;
 
       (next ? saveVideo(videoId) : unsaveVideo(videoId)).catch(() => {
         setSavedIds((current) => {

@@ -17,6 +17,7 @@ import { useClampOverflow } from "@/hooks/use-clamp-overflow";
 import { useHlsSource, isHlsManifest } from "@/hooks/use-hls-source";
 import { useVideoPlayback, type VideoPlayback } from "@/hooks/use-video-playback";
 import { useWatchSession } from "@/hooks/use-watch-session";
+import { isBackendVideoId } from "@/lib/api/adapters";
 import { cn } from "@/lib/utils";
 import type { FeedVideo } from "@/types/tiktok";
 
@@ -177,7 +178,8 @@ export function VideoCard({
    * Signed out it does nothing: the endpoint records per viewer and has no
    * identity to attach an anonymous session to. Poster-only cards are excluded
    * for the same reason the server rejects them: a video still transcoding has
-   * no length, and a fraction of an unknown duration means nothing.
+   * no length, and a fraction of an unknown duration means nothing. A mock
+   * video has no row to record against at all.
    */
   const { isSignedIn } = useSession();
   useWatchSession({
@@ -185,7 +187,7 @@ export function VideoCard({
     isActive,
     isPlaying,
     duration,
-    enabled: isSignedIn && hasSource,
+    enabled: isSignedIn && hasSource && isBackendVideoId(video.id),
   });
 
   const fraction = duration > 0 ? currentTime / duration : 0;

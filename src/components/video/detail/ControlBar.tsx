@@ -9,7 +9,7 @@ import { ReportControl } from "@/components/video/detail/ReportControl";
 import { VerticalVolumeControl } from "@/components/video/detail/VerticalVolumeControl";
 import { useDismiss } from "@/hooks/use-dismiss";
 import { useFollow } from "@/hooks/use-follow";
-import { isBackendHandle } from "@/lib/api/adapters";
+import { isBackendVideoId } from "@/lib/api/adapters";
 import { formatDuration } from "@/lib/format";
 import type { FeedVideo } from "@/types/tiktok";
 
@@ -169,7 +169,7 @@ function VideoActionsControl({
 }) {
   const { isSelf } = useFollow(video.author.userId, video.isFollowing);
 
-  if (!isBackendHandle(video.id)) return null;
+  if (!isBackendVideoId(video.id)) return null;
 
   return isSelf ? (
     <OwnerControls

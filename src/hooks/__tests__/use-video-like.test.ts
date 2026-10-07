@@ -17,6 +17,8 @@ vi.mock("@/lib/api/interactions", () => ({
   unlikeVideo: (id: string) => unlikeVideo(id),
 }));
 
+const VIDEO_ID = "365050354607333376";
+
 const render = (videoId: string, onConfirmed = vi.fn()) =>
   renderHook(() =>
     useVideoLike({ videoId, serverLiked: false, serverCount: 5, onConfirmed }),
@@ -37,7 +39,7 @@ afterEach(() => {
 describe("useVideoLike", () => {
   it("opens the login modal instead of liking while signed out", () => {
     signedIn = false;
-    const { result } = render("1");
+    const { result } = render(VIDEO_ID);
 
     act(() => {
       result.current.toggleLike();
@@ -50,10 +52,10 @@ describe("useVideoLike", () => {
   });
 
   it("counts the tap at once and hands the reply back", async () => {
-    const reply = { videoId: "1", liked: true, likeCount: 9 };
+    const reply = { videoId: VIDEO_ID, liked: true, likeCount: 9 };
     likeVideo.mockResolvedValue(reply);
     const onConfirmed = vi.fn();
-    const { result } = render("1", onConfirmed);
+    const { result } = render(VIDEO_ID, onConfirmed);
 
     act(() => result.current.toggleLike());
     expect(result.current.liked).toBe(true);
@@ -63,13 +65,13 @@ describe("useVideoLike", () => {
       await vi.advanceTimersByTimeAsync(600);
     });
 
-    expect(likeVideo).toHaveBeenCalledWith("1");
+    expect(likeVideo).toHaveBeenCalledWith(VIDEO_ID);
     expect(onConfirmed).toHaveBeenCalledWith(reply);
   });
 
   it("never clears the heart on a double tap", () => {
     likeVideo.mockReturnValue(new Promise(() => {}));
-    const { result } = render("1");
+    const { result } = render(VIDEO_ID);
 
     act(() => result.current.likeOnly());
     act(() => result.current.likeOnly());
@@ -78,7 +80,8 @@ describe("useVideoLike", () => {
   });
 
   it("toggles a mock video locally, with nothing to send", async () => {
-    const { result } = render("mock-video");
+    // The mock feed's ids include plain numbers like this one.
+    const { result } = render("1");
 
     act(() => result.current.toggleLike());
     await act(async () => {

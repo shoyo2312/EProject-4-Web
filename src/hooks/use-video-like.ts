@@ -4,7 +4,7 @@ import { useCallback } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import { useLikeDebounce } from "@/hooks/use-like-debounce";
-import { isBackendHandle } from "@/lib/api/adapters";
+import { isBackendVideoId } from "@/lib/api/adapters";
 import { likeVideo, unlikeVideo } from "@/lib/api/interactions";
 import type { LikeStatusResponse } from "@/lib/api/types";
 import { displayLikeCount } from "@/lib/likes";
@@ -35,7 +35,7 @@ export function useVideoLike({
 
   const send = useCallback(
     async (liked: boolean) => {
-      if (!isBackendHandle(videoId)) return;
+      if (!isBackendVideoId(videoId)) return;
       const status = liked ? await likeVideo(videoId) : await unlikeVideo(videoId);
       // The reply carries the true state and count — the debounced tap only
       // guessed, and is stale the moment anyone else likes the same video.

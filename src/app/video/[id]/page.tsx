@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { BackendVideoDetail } from "@/components/video/BackendVideoDetail";
 import { VideoDetail } from "@/components/video/VideoDetail";
+import { isBackendVideoId } from "@/lib/api/adapters";
 import { COMMENT_PANEL_COOKIE } from "@/lib/comment-panel";
 import {
   getCommentsForVideo,
@@ -14,15 +15,6 @@ import {
 type Params = {
   params: Promise<{ id: string }>;
 };
-
-/**
- * video-service ids are 19-digit Snowflakes; the mock feed's are "1", "x7",
- * "citylapse~videos~3". Length separates them cleanly, and it is tested as a
- * string — parsing a Snowflake into a JS number loses precision silently.
- */
-function isBackendVideoId(id: string): boolean {
-  return /^\d{15,}$/.test(id);
-}
 
 export async function generateMetadata({
   params,

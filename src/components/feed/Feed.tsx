@@ -9,7 +9,7 @@ import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { useLikeStatuses } from "@/hooks/use-like-statuses";
 import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
-import { isBackendHandle } from "@/lib/api/adapters";
+import { isBackendVideoId } from "@/lib/api/adapters";
 import { isApiError } from "@/lib/api/errors";
 import { useSavedVideos } from "@/hooks/use-saved-videos";
 import { getVideo } from "@/lib/api/videos";
@@ -62,7 +62,7 @@ export function Feed({
   // The scope of the hearts' batch and of the realtime subscriptions: the whole
   // rendered feed, not just the playing card. Mock videos have neither.
   const backendVideoIds = useMemo(
-    () => videos.filter((video) => isBackendHandle(video.id)).map((video) => video.id),
+    () => videos.filter((video) => isBackendVideoId(video.id)).map((video) => video.id),
     [videos],
   );
 
@@ -256,7 +256,7 @@ export function Feed({
   useEffect(() => {
     if (!commentsOpen) return;
     const next = visibleVideos[activeIndex + 1];
-    if (!next || !isBackendHandle(next.id) || next.commentsDisabled) return;
+    if (!next || !isBackendVideoId(next.id) || next.commentsDisabled) return;
     loadFirstCommentPage(next.id).catch(() => {
       // A prefetch that fails changes nothing: the panel retries on open.
     });

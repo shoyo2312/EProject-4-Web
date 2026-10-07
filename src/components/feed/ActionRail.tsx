@@ -14,7 +14,7 @@ import {
 } from "@/components/icons";
 import { ShareSheet } from "@/components/feed/ShareSheet";
 import { useFollow } from "@/hooks/use-follow";
-import { isBackendHandle } from "@/lib/api/adapters";
+import { isBackendVideoId } from "@/lib/api/adapters";
 import { shareVideo } from "@/lib/api/interactions";
 import { cn } from "@/lib/utils";
 import { formatCount } from "@/lib/format";
@@ -84,7 +84,7 @@ export function ActionRail({
   const recordShare = () => {
     setShareOpen(true);
     setExtraShares((n) => n + 1);
-    if (!isBackendHandle(video.id)) return;
+    if (!isBackendVideoId(video.id)) return;
     shareVideo(video.id).catch(() => setExtraShares((n) => n - 1));
   };
 

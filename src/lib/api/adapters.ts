@@ -36,6 +36,18 @@ export function isBackendHandle(handle: string): boolean {
 }
 
 /**
+ * True when a video id belongs to video-service rather than the mock feed.
+ * video-service ids are 19-digit Snowflakes; the mock feed's are "1", "x7",
+ * "citylapse~videos~3". Length separates them cleanly — any run of digits,
+ * as `isBackendHandle` takes it, sends the mock "1" to the backend for a 404 —
+ * and it is tested as a string: parsing a Snowflake into a JS number loses
+ * precision silently.
+ */
+export function isBackendVideoId(id: string): boolean {
+  return /^\d{15,}$/.test(id);
+}
+
+/**
  * The "@handle" to show in a header or list row, or null when there isn't a
  * real one to show. `author.handle` is the auth-service handle; `username` is
  * only a usable fallback for mock authors — on a backend account it is the

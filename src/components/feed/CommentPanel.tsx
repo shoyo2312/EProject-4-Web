@@ -16,7 +16,7 @@ import { CloseIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
 import { useCommentRestriction } from "@/hooks/use-comment-restriction";
-import { isBackendHandle } from "@/lib/api/adapters";
+import { isBackendVideoId } from "@/lib/api/adapters";
 import {
   COMMENT_FIRST_PAGE_SIZE,
   addComment,
@@ -100,7 +100,7 @@ export function CommentPanel({
   variant?: "sidebar" | "detail";
 }) {
   const isDetail = variant === "detail";
-  const isBackend = isBackendHandle(videoId);
+  const isBackend = isBackendVideoId(videoId);
   const { user } = useSession();
   // The video carries both switches — its own and an account open to no one.
   // Friends-only depends on who is asking, so it is asked for; the owner is
