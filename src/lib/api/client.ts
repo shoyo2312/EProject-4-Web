@@ -24,8 +24,10 @@ const BASE = "/api/v1";
 /**
  * - `required`: send the token; a 401 triggers one refresh + one replay.
  * - `optional`: send it if we have one. video-service's GETs read it to decide
- *   whether you may see your own PROCESSING/PRIVATE videos, and an expired
- *   token there does not 401 — it just downgrades you to a guest.
+ *   whether you may see your own PROCESSING/PRIVATE videos. An expired token
+ *   still gets a 401 there — the gateway refuses a bad token on public paths
+ *   too rather than serve a guest — so it takes the same one refresh + one
+ *   replay as `required`. Only a request with no token at all is a guest.
  * - `none`: never send it (login, register, refresh…).
  */
 type AuthMode = "required" | "optional" | "none";
