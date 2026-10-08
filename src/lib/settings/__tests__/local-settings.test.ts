@@ -11,23 +11,36 @@ describe("parseLocalSettings", () => {
     expect(parseLocalSettings("")).toEqual(DEFAULT_LOCAL_SETTINGS);
   });
 
-  it("reads both flags back", () => {
+  it("reads every flag back", () => {
     expect(
-      parseLocalSettings('{"highContrast":true,"browserNotifications":true}'),
-    ).toEqual({ highContrast: true, browserNotifications: true });
+      parseLocalSettings(
+        '{"highContrast":true,"browserNotifications":true,"sideNavCollapsed":true}',
+      ),
+    ).toEqual({
+      highContrast: true,
+      browserNotifications: true,
+      sideNavCollapsed: true,
+    });
   });
 
   it("keeps the fields a partial blob does carry", () => {
     expect(parseLocalSettings('{"highContrast":true}')).toEqual({
       highContrast: true,
       browserNotifications: false,
+      sideNavCollapsed: false,
     });
   });
 
   it("falls back per field rather than wholesale on a wrong type", () => {
     expect(
-      parseLocalSettings('{"highContrast":"yes","browserNotifications":true}'),
-    ).toEqual({ highContrast: false, browserNotifications: true });
+      parseLocalSettings(
+        '{"highContrast":"yes","browserNotifications":true,"sideNavCollapsed":1}',
+      ),
+    ).toEqual({
+      highContrast: false,
+      browserNotifications: true,
+      sideNavCollapsed: false,
+    });
   });
 
   it("survives anything that is not an object", () => {
@@ -40,6 +53,7 @@ describe("parseLocalSettings", () => {
     expect(parseLocalSettings('{"highContrast":true,"muted":true}')).toEqual({
       highContrast: true,
       browserNotifications: false,
+      sideNavCollapsed: false,
     });
   });
 });

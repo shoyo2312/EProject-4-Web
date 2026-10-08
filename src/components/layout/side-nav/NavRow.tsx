@@ -45,7 +45,8 @@ export function NavRow({
   item: NavItem;
   /** The viewer's avatar, which the Profile row renders in place of an icon. */
   avatarUrl: string;
-  /** True while a drawer holds the sidebar at 4.5rem. */
+  /** True while the sidebar is held at 4.5rem — by an open drawer, or by the
+   *  reader's collapse toggle. */
   collapsed?: boolean;
   /** True whenever the label is off screen — a drawer is open *or* the rail is
    *  below its 1024px breakpoint. Gates the hover tip that stands in for the label. */

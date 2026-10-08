@@ -4,12 +4,14 @@
 const STORAGE_KEY = "tt:settings";
 
 /**
- * The `/setting` rows this app can honour with no backend behind them.
+ * Viewer preferences this app can honour with no backend behind them: two
+ * `/setting` rows, and the sidebar's collapse toggle.
  *
- * The account-level rows save to user-service (`useAccountSettings`). These two
+ * The account-level rows save to user-service (`useAccountSettings`). These
  * are not account state: the live page's own copy scopes contrast to "your
- * computer", and desktop notifications are a browser permission. So
- * `localStorage` is where they belong, not an endpoint that is missing.
+ * computer", desktop notifications are a browser permission, and a sidebar
+ * width only makes sense for the screen it was picked on. So `localStorage` is
+ * where they belong, not an endpoint that is missing.
  */
 export interface LocalSettings {
   highContrast: boolean;
@@ -22,11 +24,17 @@ export interface LocalSettings {
    * are reconciled in `shouldNotify`, never by mirroring one into the other.
    */
   browserNotifications: boolean;
+  /**
+   * Whether the reader collapsed the sidebar to its icon rail. Only read above
+   * 1024px — below it the rail is icon-only whatever this says.
+   */
+  sideNavCollapsed: boolean;
 }
 
 export const DEFAULT_LOCAL_SETTINGS: LocalSettings = {
   highContrast: false,
   browserNotifications: false,
+  sideNavCollapsed: false,
 };
 
 /**
@@ -47,7 +55,8 @@ export function parseLocalSettings(raw: string | null): LocalSettings {
   }
   if (typeof parsed !== "object" || parsed === null) return DEFAULT_LOCAL_SETTINGS;
 
-  const { highContrast, browserNotifications } = parsed as Partial<LocalSettings>;
+  const { highContrast, browserNotifications, sideNavCollapsed } =
+    parsed as Partial<LocalSettings>;
   return {
     highContrast:
       typeof highContrast === "boolean"
@@ -57,6 +66,10 @@ export function parseLocalSettings(raw: string | null): LocalSettings {
       typeof browserNotifications === "boolean"
         ? browserNotifications
         : DEFAULT_LOCAL_SETTINGS.browserNotifications,
+    sideNavCollapsed:
+      typeof sideNavCollapsed === "boolean"
+        ? sideNavCollapsed
+        : DEFAULT_LOCAL_SETTINGS.sideNavCollapsed,
   };
 }
 
@@ -109,6 +122,10 @@ export function setHighContrast(on: boolean): void {
 
 export function setBrowserNotifications(on: boolean): void {
   write({ ...getLocalSettings(), browserNotifications: on });
+}
+
+export function setSideNavCollapsed(collapsed: boolean): void {
+  write({ ...getLocalSettings(), sideNavCollapsed: collapsed });
 }
 
 function write(next: LocalSettings): void {

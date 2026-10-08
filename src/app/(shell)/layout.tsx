@@ -22,8 +22,11 @@ export default async function ShellLayout({
 
   return (
     <>
-      {/* Placeholder reserves the sidebar's 240px; SideNav itself is fixed. */}
-      <div className="z-[99] h-screen w-[var(--side-nav-width)] flex-none tt-1024:w-18">
+      {/* Placeholder reserves the sidebar's 240px; SideNav itself is fixed.
+          It narrows with the rail, whether the breakpoint or the reader's
+          toggle collapsed it — `.side-nav-collapsed` sits on SideNav's root —
+          on the rail's own curve, so the page slides along with its edge. */}
+      <div className="z-[99] h-screen w-[var(--side-nav-width)] flex-none transition-[width] duration-300 ease-[var(--tt-ease)] tt-1024:w-18 has-[.side-nav-collapsed]:w-18">
         <SideNav navItems={navItems} footerSections={footerSections} />
       </div>
 

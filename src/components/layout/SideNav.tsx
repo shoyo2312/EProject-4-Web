@@ -1,5 +1,6 @@
 "use client";
 
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -11,8 +12,11 @@ import { NavRow } from "@/components/layout/side-nav/NavRow";
 import { SearchField } from "@/components/layout/side-nav/SearchField";
 import { SidebarFooter } from "@/components/layout/side-nav/SidebarFooter";
 import { useSession } from "@/components/session/SessionProvider";
+import { Tooltip } from "@/components/ui/Tooltip";
+import { useLocalSettings } from "@/hooks/use-local-settings";
 import { useNotifications } from "@/hooks/use-notifications";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
+import { setSideNavCollapsed } from "@/lib/settings/local-settings";
 import { cn } from "@/lib/utils";
 import type { FooterSection, NavItem } from "@/types/tiktok";
 
@@ -37,6 +41,11 @@ import type { FooterSection, NavItem } from "@/types/tiktok";
  * Note the collapsed variant drops the border entirely — the drawer sitting
  * against it carries its own `border-inline` instead. The placeholder does not
  * change, so the feed never moves.
+ *
+ * The toggle beside the logo is ours, not the live site's: it puts a wide
+ * screen into the same icon-only rail the 1024px breakpoint does, and unlike a
+ * drawer it does move the feed — the placeholder narrows with it, since nothing
+ * covers the space it frees.
  */
 export function SideNav({
   navItems,
@@ -53,9 +62,22 @@ export function SideNav({
   // Both drawers sit in the same slot beside the rail, so opening one closes
   // the other, and either one collapses the rail the same way.
   const collapsed = activityOpen || searchOpen;
+  // The reader's own collapse, from the toggle beside the logo. The rows and
+  // the header read it exactly as they read an open drawer — icons only — but
+  // unlike a drawer it keeps the rows on screen, so the rail gets the 1024px
+  // breakpoint's look rather than the drawer's.
+  const { sideNavCollapsed } = useLocalSettings();
+  // Set for as long as the toggle's width transition runs, and only for that:
+  // a drawer snaps the rail, as on the live site, so the transition class
+  // cannot stay on. While collapsing, the full layout is held until the rail
+  // has closed over it — swapping to icons first would empty the rail before
+  // it moved, and the rows would jump as it shrank.
+  const [railMotion, setRailMotion] = useState<"collapsing" | "expanding" | null>(null);
+  const railCompact = sideNavCollapsed && railMotion !== "collapsing";
+  const narrow = collapsed || railCompact;
   // Below 1024px the rail is icon-only regardless of the drawers (the `tt-1024:`
-  // classes on every label). The row labels only exist in the DOM when neither
-  // this nor `collapsed` is true, so a hover tip stands in for them otherwise.
+  // classes on every label). The row labels only exist in the DOM when none of
+  // these is true, so a hover tip stands in for them otherwise.
   const [railBelow, setRailBelow] = useState(false);
   useEffect(() => {
     const query = window.matchMedia("(max-width: 1024px)");
@@ -64,7 +86,7 @@ export function SideNav({
     query.addEventListener("change", sync);
     return () => query.removeEventListener("change", sync);
   }, []);
-  const iconOnly = collapsed || railBelow;
+  const iconOnly = narrow || railBelow;
   // The highlighted row follows the URL, so every new route lights itself up
   // without touching the nav data.
   const pathname = usePathname();
@@ -98,11 +120,25 @@ export function SideNav({
       className={cn(
         "fixed inset-y-0 left-0 z-[99] flex h-screen flex-none flex-col items-center px-4",
         "overflow-x-clip overflow-y-hidden overscroll-contain bg-[var(--tt-page)]",
+        // A marker only: the placeholder in `(shell)/layout.tsx` narrows on it.
+        sideNavCollapsed && "side-nav-collapsed",
+        // Same curve and length as the placeholder, so the feed beside the rail
+        // moves with its edge.
+        railMotion && "transition-[width] duration-300 ease-[var(--tt-ease)]",
         collapsed
           ? "w-18"
-          : "w-[var(--side-nav-width)] tt-1024:w-18 tt-1024:border-r tt-1024:border-[var(--tt-divider)]",
+          : sideNavCollapsed
+            ? "w-18 border-r border-[var(--tt-divider)]"
+            : "w-[var(--side-nav-width)] tt-1024:w-18 tt-1024:border-r tt-1024:border-[var(--tt-divider)]",
       )}
       style={{ overscrollBehavior: "contain" }}
+      onTransitionEnd={(event) => {
+        // The rail's own width only — the cover inside it eases too, and its
+        // event bubbles up here.
+        if (event.target === event.currentTarget && event.propertyName === "width") {
+          setRailMotion(null);
+        }
+      }}
     >
       {/*
         `.DivAnimationCover` — the piece that makes the live collapse smooth:
@@ -127,12 +163,49 @@ export function SideNav({
         className={cn(
           "pointer-events-none absolute inset-y-0 start-0 z-[2] bg-[var(--tt-page)]",
           "transition-[width] duration-[400ms]",
-          collapsed ? "w-18" : "w-[12.5rem] tt-1024:w-18",
+          narrow ? "w-18" : "w-[12.5rem] tt-1024:w-18",
         )}
       />
 
-      {/* Fixed header block: logo (48px) + search (40px), 208px content width */}
-      <div className={cn("relative z-[4] flex-none", collapsed ? "w-auto" : "w-52 tt-1024:w-auto")}>
+      {/* Pinned to the rail's right edge rather than placed in the header row:
+          that is where it sits both expanded (x = 184) and collapsed (x = 16),
+          so it rides the edge across the width transition instead of jumping.
+          Gone below 1024px, where the rail stays icon-only whatever this says,
+          and while a drawer holds the rail narrow on its own. */}
+      <Tooltip label={sideNavCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+        <button
+          type="button"
+          onClick={() => {
+            setRailMotion(sideNavCollapsed ? "expanding" : "collapsing");
+            setSideNavCollapsed(!sideNavCollapsed);
+          }}
+          aria-label={sideNavCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!sideNavCollapsed}
+          className={cn(
+            "absolute top-1 right-4 z-[5] opacity-40 flex h-10 w-10 items-center justify-center rounded-[6px]",
+            "text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-field)] tt-1024:hidden",
+            collapsed && "hidden",
+          )}
+        >
+          {sideNavCollapsed ? (
+            <PanelLeftOpen className="h-6 w-6" />
+          ) : (
+            <PanelLeftClose className="h-6 w-6" />
+          )}
+        </button>
+      </Tooltip>
+
+      {/* Fixed header block: logo (48px) + search (40px), 208px content width.
+          Held at the rail's left padding rather than centred whenever no drawer
+          is open: centring a 208px block in a rail mid-transition would slide
+          it off the left edge. Where it is 40px wide, the two agree. */}
+      <div
+        className={cn(
+          "relative z-[4] flex-none",
+          !collapsed && "self-start",
+          narrow ? "w-auto" : "w-52 tt-1024:w-auto",
+        )}
+      >
         <div className="relative flex h-12 items-center">
           {/* The hiding class goes on the link, not on the wordmark: the
               wordmark sets its own `inline-flex`, and Tailwind v4 emits that
@@ -143,7 +216,12 @@ export function SideNav({
             aria-label="Nowa"
             className={cn(
               "flex items-center gap-1.5",
-              collapsed ? "hidden" : "tt-1024:hidden",
+              narrow ? "hidden" : "tt-1024:hidden",
+              // The toggle sweeps across the wordmark on its way along the
+              // edge, so the mark fades rather than being cut in half under it.
+              "transition-opacity duration-300 ease-[var(--tt-ease)]",
+              sideNavCollapsed && "opacity-0",
+              railMotion === "expanding" && "starting:opacity-0",
             )}
           >
             <NowaWordmark className="h-6 w-auto text-white" />
@@ -153,11 +231,11 @@ export function SideNav({
         <div
           className={cn(
             "flex w-full pt-4",
-            collapsed ? "justify-center" : "tt-1024:justify-center",
+            narrow ? "justify-center" : "tt-1024:justify-center",
           )}
         >
           <SearchField
-            collapsed={collapsed}
+            collapsed={narrow}
             iconOnly={iconOnly}
             onOpen={() => {
               setActivityOpen(false);
@@ -186,8 +264,11 @@ export function SideNav({
           // the collapse reads as a stutter rather than a cut.
           //
           // Nothing here is transitioned, on purpose: the live rail animates no
-          // layout at all. Only the cover above eases.
-          "w-52 tt-1024:w-auto",
+          // layout at all. Only the cover above eases. (The reader's toggle
+          // does move the rail's edge, and this column sits still under it —
+          // held at the left padding, like the header.)
+          !collapsed && "self-start",
+          railCompact ? "w-auto" : "w-52 tt-1024:w-auto",
         )}
       >
         <nav className="flex flex-col">
@@ -196,7 +277,7 @@ export function SideNav({
               key={item.label}
               item={item}
               avatarUrl={user?.avatarUrl ?? DEFAULT_AVATAR}
-              collapsed={collapsed}
+              collapsed={narrow}
               iconOnly={iconOnly}
               active={item.href === pathname}
               selected={item.label === "Activity" && activityOpen}
@@ -225,7 +306,7 @@ export function SideNav({
               // The collapsed 4.5rem rail has no room for a text button; the
               // top bar's Log in pill stays reachable there.
               "tt-1024:hidden",
-              collapsed && "hidden",
+              narrow && "hidden",
             )}
           >
             <button
@@ -238,7 +319,7 @@ export function SideNav({
           </div>
         )}
 
-        <SidebarFooter sections={footerSections} hidden={collapsed} />
+        <SidebarFooter sections={footerSections} hidden={narrow} />
       </div>
 
       <ActivityDrawer
