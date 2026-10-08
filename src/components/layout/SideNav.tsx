@@ -321,17 +321,17 @@ export function SideNav({
               </button>
             </div>
 
-            {/* The icon-only rail's version, measured on the collapsed live
-                rail: a 44px `#FE2C55` circle 16px under More, centred on the
-                rows' 40px column (x = 14 in the 72px rail), around a 20px
-                white glyph. */}
+            {/* The icon-only rail's version: a 40px `#FE2C55` circle 16px under
+                More, around a 20px white glyph, the same size as the rows so it
+                lines up with them (x = 16 in the 72px rail). The live rail's
+                circle is 44px at x = 14. */}
             <div className={cn("pt-4", narrow ? "flex justify-center" : "hidden tt-1024:block")}>
               <Tooltip label="Log in">
                 <button
                   type="button"
                   onClick={openLogin}
                   aria-label="Log in"
-                  className="-mx-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tt-red)] text-white transition-colors hover:bg-[var(--tt-red-hover)]"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tt-red)] text-white transition-colors hover:bg-[var(--tt-red-hover)]"
                 >
                   <LoginIcon className="h-5 w-5" />
                 </button>
