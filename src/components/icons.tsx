@@ -98,6 +98,29 @@ export function MoreIcon(props: IconProps) {
   );
 }
 
+/**
+ * The collapsed rail's stand-in for the guest Log in button — a person in a
+ * ring, read off `.SquareTUXButton` with the live sidebar collapsed. TikTok
+ * renders it at 20px, not the rows' 19-in-32.
+ */
+export function LoginIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M24 11.2a8.47 8.47 0 1 1 0 16.94 8.47 8.47 0 0 1 0-16.94Zm5.17 8.47a5.17 5.17 0 1 0-10.35-.01 5.17 5.17 0 0 0 10.34 0Z"
+      />
+      <path d="M15.87 36.25a12.65 12.65 0 0 1 16.26 0c.94-.62 1.8-1.35 2.56-2.16A15.94 15.94 0 0 0 24 30c-4.1 0-7.85 1.55-10.69 4.1.77.8 1.62 1.53 2.56 2.15Z" />
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M2 24a22 22 0 1 1 44 0 22 22 0 0 1-44 0ZM24 6a18 18 0 1 0 0 36 18 18 0 0 0 0-36Z"
+      />
+    </Icon>
+  );
+}
+
 /* --- Search ------------------------------------------------------------- */
 
 export function SearchIcon(props: IconProps) {

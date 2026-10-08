@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { LoginIcon } from "@/components/icons";
 import { ActivityDrawer } from "@/components/layout/ActivityDrawer";
 import { SearchDrawer } from "@/components/layout/SearchDrawer";
 import { NowaWordmark } from "@/components/layout/NowaWordmark";
@@ -298,25 +299,41 @@ export function SideNav({
             `border-radius: 6px`, 16px/500/21px, `margin-bottom: 24px`, which is
             what pushes the footer down to where the guest sidebar has it. */}
         {showGuest && (
-          <div
-            className={cn(
-              // 16px above the button, 24px below it, and the 4px inset that
-              // puts the 200px button inside the 208px nav column.
-              "mb-6 px-1 pt-4",
-              // The collapsed 4.5rem rail has no room for a text button; the
-              // top bar's Log in pill stays reachable there.
-              "tt-1024:hidden",
-              narrow && "hidden",
-            )}
-          >
-            <button
-              type="button"
-              onClick={openLogin}
-              className="h-10 w-full rounded-[6px] bg-[var(--tt-red)] px-4 text-[16px] leading-[21px] font-medium text-white transition-colors hover:bg-[var(--tt-red-hover)]"
+          <>
+            <div
+              className={cn(
+                // 16px above the button, 24px below it, and the 4px inset that
+                // puts the 200px button inside the 208px nav column.
+                "mb-6 px-1 pt-4",
+                narrow ? "hidden" : "tt-1024:hidden",
+              )}
             >
-              Log in
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={openLogin}
+                className="h-10 w-full rounded-[6px] bg-[var(--tt-red)] px-4 text-[16px] leading-[21px] font-medium text-white transition-colors hover:bg-[var(--tt-red-hover)]"
+              >
+                Log in
+              </button>
+            </div>
+
+            {/* The icon-only rail's version, measured on the collapsed live
+                rail: a 44px `#FE2C55` circle 16px under More, centred on the
+                rows' 40px column (x = 14 in the 72px rail), around a 20px
+                white glyph. */}
+            <div className={cn("pt-4", narrow ? "flex justify-center" : "hidden tt-1024:block")}>
+              <Tooltip label="Log in">
+                <button
+                  type="button"
+                  onClick={openLogin}
+                  aria-label="Log in"
+                  className="-mx-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tt-red)] text-white transition-colors hover:bg-[var(--tt-red-hover)]"
+                >
+                  <LoginIcon className="h-5 w-5" />
+                </button>
+              </Tooltip>
+            </div>
+          </>
         )}
 
         <SidebarFooter sections={footerSections} hidden={narrow} />
