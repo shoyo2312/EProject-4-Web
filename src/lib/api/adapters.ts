@@ -30,18 +30,17 @@ export function handleFor(userId: string): string {
   return userId;
 }
 
-/** True when a `/@…` segment addresses a backend account rather than mock data. */
+/** True when a `/@…` segment is a user-service id rather than a handle. */
 export function isBackendHandle(handle: string): boolean {
   return /^\d+$/.test(handle);
 }
 
 /**
- * True when a video id belongs to video-service rather than the mock feed.
- * video-service ids are 19-digit Snowflakes; the mock feed's are "1", "x7",
- * "citylapse~videos~3". Length separates them cleanly — any run of digits,
- * as `isBackendHandle` takes it, sends the mock "1" to the backend for a 404 —
- * and it is tested as a string: parsing a Snowflake into a JS number loses
- * precision silently.
+ * True when a video id is shaped like video-service's: a 19-digit Snowflake.
+ * Anything else ("1", "x7") cannot be a video, so it 404s without a request.
+ * Length matters — any run of digits, as `isBackendHandle` takes it, would let
+ * "1" through to the backend — and it is tested as a string: parsing a
+ * Snowflake into a JS number loses precision silently.
  */
 export function isBackendVideoId(id: string): boolean {
   return /^\d{15,}$/.test(id);

@@ -125,9 +125,6 @@ export function BackendVideoDetail({
       )}
       <VideoDetail
         video={video}
-        // `VideoDetail`'s `CommentPanel` fetches real comments itself from
-        // this video's (numeric) id — this prop only serves mock ids.
-        comments={[]}
         previousId={neighbours.previousId}
         nextId={neighbours.nextId}
         initialPanelOpen={initialPanelOpen}

@@ -27,10 +27,10 @@ are rendered at a 19px glyph size inside a 32×32 `.TUXButton-iconContainer`.
 The Profile nav row has **no SVG** on the live site — it renders the user's avatar image.
 
 ### Text content
-Sidebar nav labels, hrefs and order are verbatim (see `src/lib/mock-feed.ts` →
+Sidebar nav labels, hrefs and order are verbatim (see `src/lib/site-config.ts` →
 `NAV_ITEMS`). The Activity badge count is **not**: the live value was the account owner's
-real unread count, which is personal data rather than a design token, so it is replaced
-with an arbitrary number.
+real unread count, which is personal data rather than a design token, so the clone shows
+the viewer's own unread count from notification-service instead.
 
 Footer headings **and** their link lists are now verbatim — see `BEHAVIORS.md`. The links
 had to be read by clicking each heading in turn, because the footer is a single-open

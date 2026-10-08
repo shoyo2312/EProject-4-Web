@@ -25,7 +25,7 @@ import { isBackendVideoId } from "@/lib/api/adapters";
 import { COMMENT_PANEL_COOKIE } from "@/lib/comment-panel";
 import { getOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
-import type { Comment, FeedVideo } from "@/types/tiktok";
+import type { FeedVideo } from "@/types/tiktok";
 
 type Step = "next" | "previous";
 type PanelTab = "comments" | "creator";
@@ -65,13 +65,11 @@ export function isCommentPanelOpen(fromServer: boolean) {
 
 export function VideoDetail({
   video,
-  comments,
   previousId,
   nextId,
   initialPanelOpen = true,
 }: {
   video: FeedVideo;
-  comments: Comment[];
   /** Neighbours in the same collection; `null` at either end of it. */
   previousId?: string | null;
   nextId?: string | null;
@@ -458,7 +456,6 @@ export function VideoDetail({
                 variant="detail"
                 videoId={video.id}
                 videoOwnerId={video.author.userId}
-                comments={comments}
                 commentsDisabled={video.commentsDisabled}
                 commentCount={commentCount}
                 onClose={closePanel}

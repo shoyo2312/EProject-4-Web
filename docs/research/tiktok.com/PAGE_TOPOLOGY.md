@@ -294,9 +294,9 @@ column count falls out of the wrap rather than out of a media query.
 
 ### What the clone does *not* copy
 The live grid is 20 real accounts. Their names, handles, avatars and cover frames are real
-people's data read from an authenticated session, so — as with `FEED_COMMENTS` — only the shape
-is reproduced (`SUGGESTED_CREATORS` in `lib/mock-feed.ts`); the identities are invented from the
-same three fictional creators the rest of the mock data uses. For the same reason there is no reference shot of
+people's data read from an authenticated session, so only the shape is reproduced; the clone
+fills it with creators from its own public feed (`pickSuggestedCreators` in
+`lib/creators/suggested.ts`). For the same reason there is no reference shot of
 the signed-in Following feed at all, only the clone's.
 
 ---
@@ -363,8 +363,8 @@ The modal is **not** the same design as `/login`, which is a full page with
   in the clone, Share keeps its sheet and the nav rows stay plain links.
 
 ### How the clone models it
-`CURRENT_SESSION` in `lib/mock-feed.ts` is the default (signed in); `?guest=1` on
-any URL forces the signed-out state for a look. `SessionProvider` owns the modal
+The session comes from auth-service: signed out until a login stores a token
+pair, then `GET /api/v1/me` fills the viewer in. `SessionProvider` owns the modal
 and exposes `requireSignIn()`, which every gated action calls before acting.
 
 The four third-party option rows keep their verbatim labels and layout but render

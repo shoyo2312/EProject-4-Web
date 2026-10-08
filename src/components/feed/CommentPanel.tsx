@@ -31,7 +31,6 @@ import {
   removeCommentById,
 } from "@/lib/comments/tree";
 import { formatCount } from "@/lib/format";
-import { CURRENT_USER } from "@/lib/mock-feed";
 import { cn } from "@/lib/utils";
 import type { Comment } from "@/types/tiktok";
 
@@ -62,7 +61,6 @@ import type { Comment } from "@/types/tiktok";
 export function CommentPanel({
   videoId,
   videoOwnerId,
-  comments: initialComments,
   commentCount,
   commentsDisabled = false,
   onClose,
@@ -70,16 +68,12 @@ export function CommentPanel({
   onCommentDeleted,
   variant = "sidebar",
 }: {
-  /** Backend id (numeric) fetches real comments; a mock id keeps `comments` as-is. */
   videoId: string;
   /**
    * The video's uploader — interaction-service lets them delete any comment on their own video,
-   * not only their own, so the "⋯" menu offers Delete there too. Absent for mock videos, whose
-   * comments carry no `userId` to match against anyway.
+   * not only their own, so the "⋯" menu offers Delete there too.
    */
   videoOwnerId?: string;
-  /** This video's comments as loaded by the page — used only for mock ids. */
-  comments: Comment[];
   /** Total shown in the header — the loaded count plus anything posted here. */
   commentCount: number;
   /**
@@ -118,7 +112,6 @@ export function CommentPanel({
       videoId,
       isBackend,
       commentsDisabled,
-      initialComments,
       realtime: user !== null,
     });
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
@@ -200,33 +193,8 @@ export function CommentPanel({
   };
 
   const post = (text: string) => {
-    // A real video persists both a top-level comment and a reply through
-    // interaction-service; the mock path keeps everything local.
-    if (isBackend) {
-      void postBackendComment(text, replyTo);
-      setReplyTo(null);
-      return;
-    }
-
-    const entry: Comment = {
-      id: `local-${Date.now()}`,
-      author: user ?? CURRENT_USER,
-      text,
-      timestamp: "now",
-      likes: 0,
-      replyToName: replyTo?.replyToName,
-    };
-
-    setComments((current) =>
-      replyTo
-        ? addReply(current, replyTo.parentId, entry)
-        : // A brand new top-level comment lands at the top of the list.
-          [entry, ...current],
-    );
-    setJustAddedId(entry.id);
-    if (!replyTo) listRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    void postBackendComment(text, replyTo);
     setReplyTo(null);
-    onCommentAdded();
   };
 
   const deleteOwnComment = async (id: string) => {

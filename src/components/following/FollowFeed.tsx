@@ -54,13 +54,5 @@ export function FollowFeed({
     return <SuggestedCreators exclude={exclude} />;
   }
 
-  return (
-    <Feed
-      videos={videos}
-      // `CommentPanel` fetches real comments itself for these (numeric) ids —
-      // same as the For You feed, this map serves nothing here.
-      comments={{}}
-      onReachEnd={loadMore}
-    />
-  );
+  return <Feed videos={videos} onReachEnd={loadMore} />;
 }

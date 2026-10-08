@@ -111,7 +111,8 @@ src/
       stompClient.ts        # Client STOMP dùng chung toàn app (singleton)
     comments/                # Logic thuần xử lý comment (build/merge cây comment...)
     likes.ts                 # Logic thuần cho tim video (gộp trạng thái like, số đếm hiển thị)
-    comment-cache.ts, comment-panel.ts, repost-context.ts, overlay-origin.ts, mock-feed.ts, data.ts
+    comment-cache.ts, comment-panel.ts, repost-context.ts, overlay-origin.ts
+    site-config.ts           # Cấu hình UI tĩnh: nav, footer, lựa chọn đăng nhập, share targets, danh mục Explore, settings
     format.ts                # Format số/thời gian hiển thị (vd: 1.2K, "3 giờ trước")
     utils.ts                 # cn() — merge class Tailwind (từ shadcn)
     __tests__/               # Test cho lib/ thuần (không phải component)

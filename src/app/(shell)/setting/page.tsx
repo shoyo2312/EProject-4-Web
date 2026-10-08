@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { SettingsPage } from "@/components/settings/SettingsPage";
-import { getSettingsSections } from "@/lib/data";
+import { SETTINGS_SECTIONS } from "@/lib/site-config";
 
 export const metadata: Metadata = {
   title: "Privacy and Settings | Nowa",
@@ -14,8 +14,6 @@ export const metadata: Metadata = {
  * a full-width header of its own; see `docs/research/tiktok.com/SETTINGS.md`
  * for why that one difference is not reproduced.
  */
-export default async function SettingRoute() {
-  const sections = await getSettingsSections();
-
-  return <SettingsPage sections={sections} />;
+export default function SettingRoute() {
+  return <SettingsPage sections={SETTINGS_SECTIONS} />;
 }

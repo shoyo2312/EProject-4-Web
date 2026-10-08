@@ -8,7 +8,7 @@ describe("isBackendVideoId", () => {
     expect(isBackendVideoId("7301234567890123456")).toBe(true);
   });
 
-  it("leaves the mock feed's ids to the mock feed, short numbers included", () => {
+  it("rejects anything that is not a Snowflake, short numbers included", () => {
     for (const id of ["1", "3", "x7", "citylapse~videos~3"]) {
       expect(isBackendVideoId(id)).toBe(false);
     }

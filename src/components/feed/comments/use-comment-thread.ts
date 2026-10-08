@@ -33,14 +33,11 @@ export function useCommentThread({
   videoId,
   isBackend,
   commentsDisabled,
-  initialComments,
   realtime,
 }: {
   videoId: string;
   isBackend: boolean;
   commentsDisabled: boolean;
-  /** The page's own list — the whole state for a mock video. */
-  initialComments: Comment[];
   /** Subscribe to the video's comment frames; the socket needs a signed-in viewer. */
   realtime: boolean;
 }) {
@@ -59,11 +56,7 @@ export function useCommentThread({
    */
   const [thread, setThread] = useState<{ comments: Comment[]; pending: PendingReply[] }>(
     () => ({
-      comments: cached
-        ? mergeComments([], cached.entries, []).comments
-        : isBackend
-          ? []
-          : initialComments,
+      comments: cached ? mergeComments([], cached.entries, []).comments : [],
       pending: [],
     }),
   );
@@ -81,8 +74,7 @@ export function useCommentThread({
   const [hasMore, setHasMore] = useState(cached?.hasMore ?? false);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Real comments load once per video; the mock path keeps the prop as its
-  // whole state, unchanged from before this was wired up.
+  // Comments load once per video.
   useEffect(() => {
     // Comments off: the backend returns an empty list, so there is nothing to fetch.
     if (!isBackend || commentsDisabled) {

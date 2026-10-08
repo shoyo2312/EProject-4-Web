@@ -15,7 +15,7 @@ import { useSavedVideos } from "@/hooks/use-saved-videos";
 import { getVideo } from "@/lib/api/videos";
 import { loadFirstCommentPage } from "@/lib/comment-cache";
 import { cn } from "@/lib/utils";
-import type { Comment, FeedVideo } from "@/types/tiktok";
+import type { FeedVideo } from "@/types/tiktok";
 
 /** Matches the wrapper's `transition-duration: 300ms` on the live site. */
 const SIDEBAR_TRANSITION_MS = 300;
@@ -40,12 +40,9 @@ const SIDEBAR_TRANSITION_MS = 300;
  */
 export function Feed({
   videos,
-  comments,
   onReachEnd,
 }: {
   videos: FeedVideo[];
-  /** Comments keyed by video id — the panel reads its own list out of this. */
-  comments: Record<string, Comment[]>;
   /**
    * Fired when the viewer is within a couple of cards of the end, so a paged
    * feed can fetch the next page. Absent for a fixed list.
@@ -327,7 +324,6 @@ export function Feed({
             key={commentVideo.id}
             videoId={commentVideo.id}
             videoOwnerId={commentVideo.author.userId}
-            comments={comments[commentVideo.id] ?? []}
             commentsDisabled={commentVideo.commentsDisabled}
             commentCount={
               // Same source of truth as the card: the counts frame is

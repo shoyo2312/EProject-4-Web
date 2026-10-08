@@ -22,12 +22,12 @@ import { isApiError } from "@/lib/api/errors";
 import { repostVideo } from "@/lib/api/interactions";
 import { setRepostedByMe } from "@/lib/repost-context";
 import { getFollowing, searchUsers } from "@/lib/api/users";
+import { SHARE_TARGETS } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
-import { SHARE_FRIENDS, SHARE_TARGETS } from "@/lib/mock-feed";
 import type { Author, ShareTarget } from "@/types/tiktok";
 
 /** How many tiles the friends row shows, following or search results alike —
- * matches the mock row it replaces and the sheet's own scroller width. */
+ * what the sheet's own scroller fits. */
 const FRIEND_LIMIT = 8;
 
 /** Same debounce as the comment panel's @mention search — see CommentPanel. */
@@ -77,19 +77,19 @@ export function ShareSheet({
   const viewerId = user?.userId;
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [friends, setFriends] = useState<Author[]>(SHARE_FRIENDS);
+  const [friends, setFriends] = useState<Author[]>([]);
   const [results, setResults] = useState<Author[] | null>(null);
 
   useEscapeKey(onClose);
 
-  /* Real accounts once signed in — the mock trio (see SHARE_FRIENDS) stands
-     in for a guest, who has no following list to show. */
+  /* The accounts the viewer follows. A guest has none, and the row is left
+     out rather than drawn empty. */
   useEffect(() => {
     if (!viewerId) return;
     getFollowing(viewerId, 0, FRIEND_LIMIT)
       .then((page) => setFriends(page.content.map(authorFromProfile)))
       .catch(() => {
-        // Left on the mock trio — a failed fetch should not empty the row.
+        // No row then — the share targets below still work.
       });
   }, [viewerId]);
 
@@ -220,13 +220,17 @@ export function ShareSheet({
         </div>
 
         <div className="flex flex-col gap-3">
-          <ScrollRow>
-            {(results ?? friends).map((friend) => (
-              <FriendTile key={friend.username} friend={friend} />
-            ))}
-          </ScrollRow>
+          {(searchOpen || friends.length > 0) && (
+            <>
+              <ScrollRow>
+                {(results ?? friends).map((friend) => (
+                  <FriendTile key={friend.username} friend={friend} />
+                ))}
+              </ScrollRow>
 
-          <div className="h-px bg-[rgba(255,255,255,0.19)]" />
+              <div className="h-px bg-[rgba(255,255,255,0.19)]" />
+            </>
+          )}
 
           <ScrollRow>
             {SHARE_TARGETS.map((target) => (

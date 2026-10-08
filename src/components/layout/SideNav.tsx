@@ -101,15 +101,17 @@ export function SideNav({
   // rows measured on the live signed-out nav.
   const visibleNavItems = (showGuest ? navItems.filter((item) => !item.authOnly) : navItems)
     // Two rows are session-dependent rather than static: Profile has to point
-    // at whoever is signed in, and Upload at the route that actually exists
-    // here (the live site's is `/tiktokstudio/upload`).
+    // at whoever is signed in — a guest has no profile, so theirs opens the
+    // login modal, as on the live site — and Upload at the route that actually
+    // exists here (the live site's is `/tiktokstudio/upload`).
     .map((item) => {
-      if (item.label === "Profile" && user) {
-        return { ...item, href: `/@${user.username}` };
+      if (item.label === "Profile") {
+        return user
+          ? { ...item, href: `/@${user.username}` }
+          : { ...item, kind: "button" as const };
       }
       if (item.label === "Upload") return { ...item, href: "/upload" };
-      // The static badge in the nav data was a placeholder; this is the real
-      // count. Zero drops the badge entirely rather than painting a "0".
+      // Zero drops the badge entirely rather than painting a "0".
       if (item.label === "Activity") {
         return { ...item, badgeCount: inbox.unreadCount || undefined };
       }
@@ -288,7 +290,9 @@ export function SideNav({
                       setSearchOpen(false);
                       setActivityOpen((v) => !v);
                     }
-                  : undefined
+                  : item.label === "Profile" && showGuest
+                    ? openLogin
+                    : undefined
               }
             />
           ))}

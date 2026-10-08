@@ -3,37 +3,28 @@
 import { useEffect, useState } from "react";
 
 import { BackendProfilePage } from "@/components/profile/BackendProfilePage";
-import { ProfilePage } from "@/components/profile/ProfilePage";
 import { ProfileSkeleton } from "@/components/profile/ProfileSkeleton";
 import { useSession } from "@/components/session/SessionProvider";
 import { isBackendHandle } from "@/lib/api/adapters";
 import { getProfileByUsername } from "@/lib/api/users";
-import type { UserProfile } from "@/types/tiktok";
 
 /**
- * Decides which of the two profile worlds a `/@handle` URL belongs to.
+ * Resolves a `/@handle` URL to a user-service account.
  *
- *   /@123456789012345  → user-service, by id
- *   /@<any real handle> → user-service, by handle
- *   /@sashtalk         → the cloned mock profile
+ *   /@123456789012345  → by id
+ *   /@<any real handle> → by handle
  *
  * Both spellings reach the same account: an id is answered straight away, a
  * handle costs one lookup (`GET /users/by-username/{handle}`) because
  * user-service stores profiles by id. Links elsewhere in the app carry
  * whichever they happen to hold — `videoToFeedVideo` puts an id in author
  * links, a notification row shows the actor's handle.
- *
- * Mock profiles stay reachable so the cloned UI keeps working with an empty
- * database; the moment the handle belongs to a real account, real data wins.
  */
 export function ProfileRouter({
   handle,
-  mockProfile,
 }: {
   /** The URL segment, with its leading "@" already stripped. */
   handle: string;
-  /** The cloned profile for this handle, if the mock data has one. */
-  mockProfile: UserProfile | null;
 }) {
   const { user, isLoading } = useSession();
   /**
@@ -60,8 +51,7 @@ export function ProfileRouter({
         if (!cancelled) setResolved({ handle, id: profile.userId });
       })
       .catch(() => {
-        // 404, or signed out: no real account behind this handle, so whatever
-        // the mock data has is the best answer left.
+        // 404, or signed out: no account to show behind this handle.
         if (!cancelled) setResolved({ handle, id: null });
       });
     return () => {
@@ -73,8 +63,8 @@ export function ProfileRouter({
     return <BackendProfilePage userId={handle} />;
   }
 
-  // Waiting matters: deciding before `/me` settles would render the mock page
-  // for the viewer's own handle and then swap it out under them.
+  // Waiting matters: deciding before `/me` settles would look the viewer's own
+  // handle up as a stranger's and then swap the page out under them.
   if (isLoading) {
     return <ProfileSkeleton />;
   }
@@ -91,8 +81,6 @@ export function ProfileRouter({
   if (lookup.id !== null) {
     return <BackendProfilePage userId={lookup.id} />;
   }
-
-  if (mockProfile) return <ProfilePage profile={mockProfile} />;
 
   return (
     <main className="flex h-screen flex-1 items-center justify-center">
