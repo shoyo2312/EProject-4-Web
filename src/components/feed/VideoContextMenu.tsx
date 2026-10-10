@@ -167,13 +167,16 @@ export function VideoContextMenu({
           trailing={<Switch on={autoScroll} />}
         />
 
-        {/* Nothing behind these two yet — no PiP surface, and videos carry
-            no caption tracks — so they only dismiss. */}
         <MenuRow
           icon={<FloatingPlayerIcon className="h-5 w-5" />}
           label="Floating Player"
-          onClick={onClose}
+          onClick={() => {
+            void floatingPlayer(hostRef.current?.querySelector("video") ?? null);
+            onClose();
+          }}
         />
+
+        {/* Videos carry no caption tracks yet, so this only dismisses. */}
 
         <MenuRow
           icon={<CaptionsIcon className="h-5 w-5" />}
@@ -227,6 +230,25 @@ export function VideoContextMenu({
 function place(click: number, size: number, available: number) {
   const max = available - size - EDGE_MARGIN;
   return Math.max(EDGE_MARGIN, Math.min(click, max));
+}
+
+/**
+ * The browser's own Picture-in-Picture window, toggled. It mirrors the card's
+ * element, so it pauses with the card when the feed scrolls on.
+ * ponytail: a window that keeps playing past the card would need its own
+ * element, detached from the feed's playback.
+ */
+async function floatingPlayer(video: HTMLVideoElement | null) {
+  if (!video || !document.pictureInPictureEnabled) {
+    toast.warning("Floating player isn’t available here.");
+    return;
+  }
+  try {
+    if (document.pictureInPictureElement === video) await document.exitPictureInPicture();
+    else await video.requestPictureInPicture();
+  } catch {
+    toast.warning("Couldn’t open the floating player.");
+  }
 }
 
 /**
