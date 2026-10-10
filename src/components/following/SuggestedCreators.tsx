@@ -53,7 +53,7 @@ export function SuggestedCreators({
       {!isLoading && creators.length === 0 && (
         <p className="px-4 py-24 text-center text-[15px] text-[var(--tt-text-muted)]">
           {error
-            ? "Can’t reach the API gateway on :8080."
+            ? "Can’t connect right now. Check your connection and try again."
             : "No creators to suggest yet."}
         </p>
       )}

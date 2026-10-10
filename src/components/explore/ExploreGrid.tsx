@@ -109,7 +109,7 @@ export function ExploreGrid({
 
       {Boolean(error) && (
         <p className="pb-6 text-center text-[13px] text-[var(--tt-red-active)]">
-          Can’t reach the API gateway on :8080.
+          Can’t connect right now. Check your connection and try again.
         </p>
       )}
 

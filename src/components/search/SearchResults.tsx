@@ -70,7 +70,7 @@ export function SearchResults() {
         if (controller.signal.aborted) return;
         setError(
           isApiError(cause) && cause.status === 0
-            ? "Can\u2019t reach the API gateway on :8080."
+            ? "Can\u2019t connect right now. Check your connection and try again."
             : "Search is unavailable right now.",
         );
       } finally {

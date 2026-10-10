@@ -115,7 +115,7 @@ const MESSAGES: Record<string, string> = {
   // shared
   CONCURRENT_MODIFICATION: "Something changed at the same time. Try again.",
   INTERNAL_ERROR: "Something went wrong. Please try again.",
-  NETWORK_ERROR: "Cannot reach the server. Check that the gateway is running.",
+  NETWORK_ERROR: "Can’t connect right now. Check your connection and try again.",
 };
 
 export function messageFor(error: unknown): string {

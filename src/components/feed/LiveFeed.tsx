@@ -29,7 +29,7 @@ export function LiveFeed() {
     return (
       <Centered>
         <p className="text-[16px] text-[var(--tt-text)]">
-          Can’t reach the API gateway on :8080.
+          Can’t connect right now. Check your connection and try again.
         </p>
       </Centered>
     );

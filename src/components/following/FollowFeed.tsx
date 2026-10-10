@@ -51,7 +51,7 @@ function ViewerFollowFeed({ source }: { source: FollowFeedSource }) {
     return (
       <div className="relative flex-1">
         <div className="absolute inset-x-0 top-0 z-20 bg-[var(--tt-red-active)]/90 px-4 py-2 text-center text-[13px] leading-5 text-white">
-          Can’t reach the API gateway on :8080 — showing creators to follow.
+          Can’t connect right now — showing creators to follow.
         </div>
         <SuggestedCreators exclude={exclude} />
       </div>
