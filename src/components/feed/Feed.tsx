@@ -204,7 +204,14 @@ export function Feed({
    * `useHlsSource`. Reported by the cards themselves, because the observer that
    * decides which one is playing is the only thing that knows.
    */
-  const [activeIndex, setActiveIndex] = useState(0);
+  // Kept by id, not position: a video hidden above the active one (a `state`
+  // frame) shifts every index below it, and the playing card would fall out of
+  // its own media window.
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeIndex = Math.max(
+    0,
+    visibleVideos.findIndex((video) => video.id === activeId),
+  );
 
   const followActiveVideo = useCallback((video: FeedVideo) => {
     if (!commentsOpenRef.current) return;
@@ -291,7 +298,7 @@ export function Feed({
               serverLikeCount={likes.counts[video.id] ?? video.stats.likes}
               onLikeConfirmed={likes.confirm}
               onActive={() => {
-                setActiveIndex(index);
+                setActiveId(video.id);
                 followActiveVideo(video);
               }}
               onEnded={autoScroll ? () => scrollByItem(1) : undefined}
