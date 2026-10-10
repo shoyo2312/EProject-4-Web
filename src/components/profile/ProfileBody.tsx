@@ -94,6 +94,7 @@ export function ProfileBody({
   onTabSelect,
   pendingTab,
   pendingCount = 0,
+  onLoadMoreVideos,
 }: {
   profile: UserProfile;
   isOwner: boolean;
@@ -111,6 +112,8 @@ export function ProfileBody({
    * requests each, and most visits never open either.
    */
   onTabSelect?: (tab: ProfileTab) => void;
+  /** Fetches the Videos grid's next page; absent once there is none. */
+  onLoadMoreVideos?: () => void;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -177,6 +180,25 @@ export function ProfileBody({
 
   const tabRowRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * Infinite scroll for the Videos grid, a screen ahead of the last row. The
+   * other tabs come back whole. Sort applies to what has loaded so far.
+   */
+  const loadMore = tab === "videos" ? onLoadMoreVideos : undefined;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !loadMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+      },
+      { rootMargin: "600px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore, posts.length]);
+
   return (
     <>
       <div className="relative flex items-center justify-between">
@@ -227,6 +249,7 @@ export function ProfileBody({
           ))}
         </div>
       )}
+      {loadMore && posts.length > 0 && <div ref={sentinelRef} aria-hidden className="h-px" />}
 
       {confirmingId && (
         <Modal

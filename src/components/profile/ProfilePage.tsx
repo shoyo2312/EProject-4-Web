@@ -33,6 +33,7 @@ export function ProfilePage({
   usernameChangeableAt,
   nicknameChangeableAt,
   onTabSelect,
+  onLoadMoreVideos,
   pendingTab,
   pendingCount,
 }: {
@@ -49,6 +50,8 @@ export function ProfilePage({
   nicknameChangeableAt?: string | null;
   /** Lets a backend-backed page load a tab's videos when it is opened. */
   onTabSelect?: (tab: ProfileTab) => void;
+  /** Fetches the Videos grid's next page; absent once there is none. */
+  onLoadMoreVideos?: () => void;
   /** Tab still fetching its videos, and how many are coming — see `ProfileBody`. */
   pendingTab?: ProfileTab | null;
   pendingCount?: number;
@@ -97,6 +100,7 @@ export function ProfilePage({
           profile={profile}
           isOwner={isOwner}
           onTabSelect={onTabSelect}
+          onLoadMoreVideos={onLoadMoreVideos}
           pendingTab={pendingTab}
           pendingCount={pendingCount}
         />

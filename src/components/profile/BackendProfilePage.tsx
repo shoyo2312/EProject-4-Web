@@ -16,10 +16,11 @@ import * as authApi from "@/lib/api/auth";
 import { forgetAuthor } from "@/lib/api/authors";
 import { isApiError, messageFor } from "@/lib/api/errors";
 import { listLikedVideos, listRepostedVideos, listSavedVideos } from "@/lib/api/interactions";
-import type { AccountResponse } from "@/lib/api/types";
+import { isLastPage, type AccountResponse } from "@/lib/api/types";
 import * as usersApi from "@/lib/api/users";
 import { getUserVideoStats, getUserVideos, getVideosByIds } from "@/lib/api/videos";
 import { clearCommentCache } from "@/lib/comment-cache";
+import { appendUnique } from "@/lib/paging";
 import { changedProfileFields } from "@/lib/profile/changed-fields";
 import { toast } from "@/components/ui/toast";
 import { useUserRealtime } from "@/hooks/use-user-realtime";
@@ -57,6 +58,11 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
     tab: ProfileTab;
     count: number;
   } | null>(null);
+
+  /** The Videos grid's last fetched page, and whether the server has more. */
+  const videoPage = useRef(0);
+  const [moreVideos, setMoreVideos] = useState(false);
+  const loadingMoreVideos = useRef(false);
 
   const viewerId = session.user?.userId;
   const sessionSettled = !session.isLoading;
@@ -122,6 +128,8 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       const videos = await videosLoading;
 
       setProfile(withVideos(videos.content.map(videoToProfileVideo)));
+      videoPage.current = 0;
+      setMoreVideos(!isLastPage(videos.page));
       setPending(null);
     } catch (cause) {
       // A 404 is deliberately ambiguous — no such account, or a block in either
@@ -129,6 +137,32 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       setError(messageFor(cause));
     }
   }, [userId, sessionSettled, viewerId]);
+
+  /** The next page of the Videos grid, when the reader scrolls to its end. */
+  const profileId = profile?.author.userId;
+  const loadMoreVideos = useCallback(async () => {
+    if (!profileId || loadingMoreVideos.current) return;
+    loadingMoreVideos.current = true;
+    try {
+      const next = videoPage.current + 1;
+      const page = await getUserVideos(profileId, next, VIDEO_PAGE);
+      videoPage.current = next;
+      const incoming = page.content.map(videoToProfileVideo);
+      setProfile((current) =>
+        current
+          ? {
+              ...current,
+              posts: { ...current.posts, videos: appendUnique(current.posts.videos, incoming) },
+            }
+          : current,
+      );
+      setMoreVideos(!isLastPage(page.page));
+    } catch {
+      // Left as it was: the sentinel is still there, so scrolling retries.
+    } finally {
+      loadingMoreVideos.current = false;
+    }
+  }, [profileId]);
 
   /**
    * Followers/following/total-likes only, no video refetch. Used after a
@@ -425,6 +459,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       usernameChangeableAt={session.user?.usernameChangeableAt}
       nicknameChangeableAt={session.user?.nicknameChangeableAt}
       onTabSelect={loadTab}
+      onLoadMoreVideos={moreVideos ? loadMoreVideos : undefined}
       pendingTab={pending?.tab ?? null}
       pendingCount={pending?.count ?? 0}
     />
