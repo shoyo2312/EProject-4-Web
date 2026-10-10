@@ -1,8 +1,10 @@
 "use client";
 
+import { useRef } from "react";
 import { createPortal } from "react-dom";
 
 import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useMounted } from "@/hooks/use-mounted";
 import { cn } from "@/lib/utils";
 
@@ -55,6 +57,8 @@ export function Modal({
      containing block for `position: fixed` and centres the sheet in the row
      instead of the viewport. */
   const mounted = useMounted();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, mounted);
   if (!mounted) return null;
 
   return createPortal(
@@ -66,6 +70,7 @@ export function Modal({
         className="absolute inset-0 cursor-default bg-black/[0.68]"
       />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         className={cn(

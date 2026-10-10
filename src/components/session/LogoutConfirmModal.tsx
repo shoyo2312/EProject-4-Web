@@ -1,9 +1,10 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useRef } from "react";
 
 import { modalCardMotion, modalOverlayMotion } from "@/components/ui/modal";
 import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { cn } from "@/lib/utils";
 
 /** The live `Button` at `size: "small"`, widened to 164 × 48 for this modal. */
@@ -42,6 +43,8 @@ export function LogoutConfirmModal({
 }) {
   const titleId = useId();
   useEscapeKey(onCancel, !closing);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, !closing);
 
   return (
     <div
@@ -59,6 +62,7 @@ export function LogoutConfirmModal({
       />
 
       <div
+        ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}

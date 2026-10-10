@@ -1,5 +1,9 @@
 "use client";
 
+import { useRef } from "react";
+
+import { useFocusTrap } from "@/hooks/use-focus-trap";
+
 /**
  * "Cancel verification?" — asked when Escape, the backdrop or the close button
  * would end a social link challenge, because that throws away the provider
@@ -13,8 +17,11 @@ export function CancelLinkDialog({
   onKeep: () => void;
   onCancel: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef);
   return (
     <div
+      ref={dialogRef}
       role="alertdialog"
       aria-modal="true"
       aria-label="Cancel verification?"

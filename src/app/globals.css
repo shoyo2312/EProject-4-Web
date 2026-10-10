@@ -278,6 +278,11 @@
   input[type="range"] {
     cursor: pointer;
   }
+  /* `useFocusTrap` focuses the dialog itself on open; that is not a control to ring. */
+  [role="dialog"]:focus,
+  [role="alertdialog"]:focus {
+    outline: none;
+  }
   /*
    * Chrome paints autofilled fields with its own `background-color` and
    * `color` marked `!important` in the UA stylesheet, which author CSS cannot

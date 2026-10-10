@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useSocialSignIn } from "@/components/auth/use-social-sign-in";
 import { ChevronLeftIcon, CloseIcon } from "@/components/icons";
@@ -8,6 +8,7 @@ import { useSession } from "@/components/session/SessionProvider";
 import { modalCardMotion, modalOverlayMotion } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
 import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import {
   addEmail,
   forgotPassword,
@@ -157,6 +158,8 @@ export function AuthModal({
     }, [confirmingCancel, dismiss]),
     !closing,
   );
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, !closing);
 
   const switchFlow = (next: Flow) => {
     cancel();
@@ -411,6 +414,7 @@ export function AuthModal({
       />
 
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         /* Named directly rather than by `aria-labelledby`: the heading changes

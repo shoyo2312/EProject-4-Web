@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CloseIcon } from "@/components/icons";
 import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useMounted } from "@/hooks/use-mounted";
 import {
   authorFromProfile,
@@ -34,6 +35,8 @@ const PAGE_SIZE = 20;
 export function BlockedAccountsModal({ onClose }: { onClose: () => void }) {
   useEscapeKey(onClose);
   const mounted = useMounted();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, mounted);
 
   if (!mounted) return null;
 
@@ -47,6 +50,7 @@ export function BlockedAccountsModal({ onClose }: { onClose: () => void }) {
       />
 
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Blocked accounts"

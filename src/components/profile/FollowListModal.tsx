@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { CloseIcon } from "@/components/icons";
 import { useFollow } from "@/hooks/use-follow";
 import { useSuggestedCreators } from "@/hooks/use-suggested-creators";
@@ -55,6 +56,8 @@ export function FollowListModal({
   const [tab, setTab] = useState<FollowTab>(initialTab);
 
   useEscapeKey(onClose);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef);
 
   return (
     <div className="fixed inset-0 z-[3001] flex items-center justify-center">
@@ -66,6 +69,7 @@ export function FollowListModal({
       />
 
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Followers and following"

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { CloseIcon, EditPencilIcon } from "@/components/icons";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import { ACCEPTED_AVATAR_TYPES, MAX_AVATAR_BYTES } from "@/lib/api/users";
@@ -124,6 +125,8 @@ export function EditProfileModal({
   }, []);
 
   useEscapeKey(onClose);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef);
 
   const changes = changedProfileFields(draft, {
     username: profile.author.username,
@@ -173,7 +176,8 @@ export function EditProfileModal({
       <div aria-hidden className="absolute inset-0 bg-black/[0.68]" />
 
       <div
-          role="dialog"
+        ref={dialogRef}
+        role="dialog"
         aria-modal="true"
         aria-labelledby="edit-profile-title"
         className="relative flex h-[700px] max-h-full w-[700px] max-w-full flex-col overflow-hidden rounded-[8px] bg-[#121212] shadow-[0_2px_12px_rgba(0,0,0,0.12)]"

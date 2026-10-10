@@ -13,6 +13,7 @@ import {
   ProfileVideosIcon,
   RepostIcon,
 } from "@/components/icons";
+import { Modal } from "@/components/ui/modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/toast";
 import { deleteVideo } from "@/lib/api/videos";
@@ -158,13 +159,19 @@ export function ProfileBody({
    * is deleted from its detail page, where the confirm sits next to the video
    * being deleted rather than next to a thumbnail in a grid of them.
    */
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const remove = async (id: string) => {
-    if (!window.confirm("Delete this video? This cannot be undone.")) return;
+    setDeleting(true);
     try {
       await deleteVideo(id);
       setRemoved((current) => new Set(current).add(id));
+      setConfirmingId(null);
     } catch {
       toast.error("Could not delete that video. Try again.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -209,7 +216,7 @@ export function ProfileBody({
             <ProfileTile
               key={post.id}
               post={post}
-              onDelete={isOwner ? () => remove(post.id) : undefined}
+              onDelete={isOwner ? () => setConfirmingId(post.id) : undefined}
               onOpen={() =>
                 markOverlayOrigin(
                   window.location.pathname + window.location.search,
@@ -219,6 +226,36 @@ export function ProfileBody({
             />
           ))}
         </div>
+      )}
+
+      {confirmingId && (
+        <Modal
+          onClose={() => {
+            if (!deleting) setConfirmingId(null);
+          }}
+        >
+          <h2 className="text-center text-[18px] font-bold text-[var(--tt-text)]">
+            Are you sure you want to delete this video?
+          </h2>
+          <div className="mt-6 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => remove(confirmingId)}
+              disabled={deleting}
+              className="h-11 rounded-[8px] bg-[var(--tt-red)] text-[15px] font-semibold text-white transition-colors hover:bg-[var(--tt-red-hover)] disabled:opacity-60"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingId(null)}
+              disabled={deleting}
+              className="h-11 rounded-[8px] border border-[var(--tt-divider)] text-[15px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)] disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </Modal>
       )}
     </>
   );

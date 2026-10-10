@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 
   CodeXml,
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { CloseIcon } from "@/components/icons";
 import { toast } from "@/components/ui/toast";
 import { useSession } from "@/components/session/SessionProvider";
@@ -79,6 +80,8 @@ export function ShareSheet({
   const [results, setResults] = useState<Author[] | null>(null);
 
   useEscapeKey(onClose);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef);
 
   /* The accounts the viewer follows. A guest has none, and the row is left
      out rather than drawn empty. */
@@ -161,6 +164,7 @@ export function ShareSheet({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={`Share to — ${shares} shares`}
