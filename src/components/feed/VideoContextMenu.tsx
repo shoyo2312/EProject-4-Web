@@ -187,7 +187,7 @@ export function VideoContextMenu({
           icon={<DownloadIcon className="h-5 w-5" />}
           label="Download video"
           onClick={() => {
-            download(video);
+            void download(video);
             onClose();
           }}
         />
@@ -230,15 +230,29 @@ function place(click: number, size: number, available: number) {
 }
 
 /**
- * Saves the file the card is playing. `download` only takes effect for
- * same-origin URLs, which every entry in the mock feed is (`/videos/*.mp4`).
+ * Saves the file the card is playing. The media lives on object storage, a
+ * different origin, where the browser ignores `download` and navigates the tab
+ * to the raw file instead — so it is fetched into a same-origin blob first.
+ * A plain media fetch, not an API call: it must not carry the session token,
+ * which is why it does not go through `lib/api/client`.
+ * ponytail: holds the whole file in memory; a server-side
+ * `Content-Disposition: attachment` link would stream it instead.
  */
-function download(video: FeedVideo) {
+async function download(video: FeedVideo) {
   if (!video.videoUrl) return;
-  const link = document.createElement("a");
-  link.href = video.videoUrl;
-  link.download = video.videoUrl.split("/").pop() ?? "video.mp4";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  try {
+    const response = await fetch(video.videoUrl);
+    if (!response.ok) throw new Error(String(response.status));
+    const href = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `${video.id}.mp4`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // Deferred: some browsers still read the blob after `click()` returns.
+    setTimeout(() => URL.revokeObjectURL(href));
+  } catch {
+    toast.warning("Couldn’t download this video.");
+  }
 }
