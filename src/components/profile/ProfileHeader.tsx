@@ -54,7 +54,8 @@ export function ProfileHeader({
    * Persists the follow state. Absent for mock profiles, where the toggle is
    * only local. Rejecting puts the button back where it was.
    */
-  onToggleFollow?: (next: boolean) => Promise<void>;
+  /** Resolves to where the server settled — a private account only takes a request. */
+  onToggleFollow?: (next: boolean) => Promise<boolean>;
   /**
    * Opens the Followers/Following dialog on that stat. Absent for mock
    * profiles — there is no backend account to list connections for.
@@ -95,7 +96,7 @@ export function ProfileHeader({
 
     setFollowPending(true);
     try {
-      await onToggleFollow(next);
+      setFollowing(await onToggleFollow(next));
     } catch {
       setFollowing(!next);
     } finally {

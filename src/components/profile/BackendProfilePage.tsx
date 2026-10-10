@@ -21,6 +21,7 @@ import * as usersApi from "@/lib/api/users";
 import { getUserVideoStats, getUserVideos, getVideosByIds } from "@/lib/api/videos";
 import { clearCommentCache } from "@/lib/comment-cache";
 import { changedProfileFields } from "@/lib/profile/changed-fields";
+import { toast } from "@/components/ui/toast";
 import { useUserRealtime } from "@/hooks/use-user-realtime";
 import type { ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
 
@@ -91,7 +92,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
 
       const [isFollowing, stats] = await Promise.all([
         viewerId !== undefined && !isOwnPage
-          ? usersApi.isFollowing(viewerId, raw.userId).catch(() => false)
+          ? usersApi.getFriendship(raw.userId).then((f) => f.following, () => false)
           : Promise.resolve(false),
         // The header's "Likes" and video totals. Not fatal if it fails — the
         // profile still renders, with a zero, rather than the whole page
@@ -379,12 +380,17 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
     }
   };
 
-  const toggleFollow = async (next: boolean) => {
-    if (targetId === undefined || isOwner) return;
+  const toggleFollow = async (next: boolean): Promise<boolean> => {
+    if (targetId === undefined || isOwner) return false;
 
     try {
-      if (next) await usersApi.follow(targetId);
-      else await usersApi.unfollow(targetId);
+      if (!next) {
+        await usersApi.unfollow(targetId);
+        return false;
+      }
+      const { status } = await usersApi.follow(targetId);
+      if (status === "REQUESTED") toast.success("Follow request sent.");
+      return status === "FOLLOWING";
     } catch (cause) {
       /**
        * `ALREADY_FOLLOWING` / `NOT_FOLLOWING` mean the server already agrees
@@ -395,7 +401,11 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
         isApiError(cause) &&
         (cause.is("ALREADY_FOLLOWING") || cause.is("NOT_FOLLOWING"))
       ) {
-        return;
+        return next;
+      }
+      if (isApiError(cause) && cause.is("ALREADY_REQUESTED")) {
+        toast.success("Your follow request is still pending.");
+        return false;
       }
       throw cause;
     } finally {

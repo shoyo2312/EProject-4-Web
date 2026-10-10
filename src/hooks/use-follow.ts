@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
+import { toast } from "@/components/ui/toast";
 import {
   follow,
   isFollowing,
@@ -100,7 +101,14 @@ export function useFollow(
     // of walking the following list the server has not updated yet.
     setFollowState(authorId, next);
 
-    (next ? follow(authorId) : unfollow(authorId)).catch(() => {
+    // A private account answers REQUESTED, and `follow` has already put the
+    // cache — so every card by this author — back on "Follow".
+    const request = next
+      ? follow(authorId).then(({ status }) => {
+          if (status === "REQUESTED") toast.success("Follow request sent.");
+        })
+      : unfollow(authorId);
+    request.catch(() => {
       // Silent rollback, matching the like button.
       setFollowState(authorId, !next);
       setFollowing(!next);

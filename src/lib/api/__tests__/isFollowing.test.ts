@@ -78,3 +78,23 @@ describe("isFollowing", () => {
     expect(apiFetch).toHaveBeenCalledTimes(4);
   });
 });
+
+describe("follow", () => {
+  it("does not mark a private account followed when it only took a request", async () => {
+    apiFetch.mockResolvedValue({ followerId: "viewer", followingId: "5", status: "REQUESTED" });
+    const { follow, peekFollowState } = await load();
+
+    await follow("5");
+
+    expect(peekFollowState("5")).toBe(false);
+  });
+
+  it("marks a public account followed", async () => {
+    apiFetch.mockResolvedValue({ followerId: "viewer", followingId: "5", status: "FOLLOWING" });
+    const { follow, peekFollowState } = await load();
+
+    await follow("5");
+
+    expect(peekFollowState("5")).toBe(true);
+  });
+});

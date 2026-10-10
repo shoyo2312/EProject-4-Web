@@ -121,6 +121,19 @@ export interface UserProfileResponse {
 export interface FollowResponse {
   followerId: string;
   followingId: string;
+  /** REQUESTED when the account is private and its owner has to approve first. */
+  status: "FOLLOWING" | "REQUESTED";
+}
+
+/** `GET /users/{id}/friendship` — the viewer's relationship to one account. */
+export interface FriendshipResponse {
+  userId: string;
+  /** Mutual following. */
+  friends: boolean;
+  following: boolean;
+  /** A follow request from the viewer is waiting on the owner's approval. */
+  requested: boolean;
+  privateAccount: boolean;
 }
 
 /** Who may comment on, or message, an account. `FRIENDS` is mutual followers. */

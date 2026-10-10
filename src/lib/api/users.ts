@@ -5,6 +5,7 @@ import { isApiError, isRetryable } from "@/lib/api/errors";
 import { isLastPage } from "@/lib/api/types";
 import type {
   FollowResponse,
+  FriendshipResponse,
   PageResponse,
   UserProfileResponse,
   UserSettingsResponse,
@@ -185,7 +186,8 @@ export async function follow(userId: string): Promise<FollowResponse> {
       method: "POST",
       auth: "required",
     });
-    setFollowState(userId, true);
+    // A private account only records a request: "Following" would be a lie.
+    setFollowState(userId, result.status === "FOLLOWING");
     return result;
   } catch (cause) {
     // `ALREADY_FOLLOWING` is the server saying it already agrees with where
@@ -196,6 +198,15 @@ export async function follow(userId: string): Promise<FollowResponse> {
     }
     throw cause;
   }
+}
+
+/** The viewer's relationship to one account — exact, unlike `isFollowing`'s capped walk. */
+export async function getFriendship(userId: string): Promise<FriendshipResponse> {
+  const result = await apiFetch<FriendshipResponse>(`/users/${userId}/friendship`, {
+    auth: "required",
+  });
+  setFollowState(userId, result.following);
+  return result;
 }
 
 export async function unfollow(userId: string): Promise<void> {
@@ -424,9 +435,9 @@ function walkFollowing(viewerId: string, maxPages: number): Promise<boolean> {
 /**
  * Whether the viewer follows `userId`.
  *
- * There is no `GET /users/{id}/relationship` endpoint and the profile response
- * carries no `isFollowing` flag, so the only way to answer the question the
- * Follow button asks is to walk the viewer's own following list. That costs up
+ * `getFriendship` answers this for one account, but there is no batch form of
+ * it, and a feed asks about every author on screen at once — one request each.
+ * So the cards answer from a walk of the viewer's own following list. That costs up
  * to `maxPages` requests against a gateway that allows 20 per second per IP —
  * and behind the Next proxy every viewer shares one IP — so the walk happens
  * at most once per tab:

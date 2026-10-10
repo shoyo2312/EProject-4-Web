@@ -42,7 +42,7 @@ export function ProfilePage({
   /** Persists an edit. Throwing leaves the modal open with the error shown. */
   onSaveProfile?: (draft: ProfileDraft) => Promise<void>;
   /** Persists a follow/unfollow. Throwing reverts the button. */
-  onToggleFollow?: (next: boolean) => Promise<void>;
+  onToggleFollow?: (next: boolean) => Promise<boolean>;
   /** The owner's rename locks, passed through to the Edit profile modal. */
   usernameChangeableAt?: string | null;
   nicknameChangeableAt?: string | null;
