@@ -38,18 +38,20 @@ export interface RequestOptions {
   auth?: AuthMode;
   query?: Record<string, string | number | boolean | undefined>;
   signal?: AbortSignal;
+  /** Lets the request outlive the page, for telemetry sent on the way out. */
+  keepalive?: boolean;
 }
 
 export async function apiFetch<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { method = "GET", body, auth = "optional", query, signal } = options;
+  const { method = "GET", body, auth = "optional", query, signal, keepalive } = options;
 
   const url = BASE + path + buildQuery(query);
   const token = auth === "none" ? null : getAccessToken();
 
-  let response = await send(url, method, body, token, signal);
+  let response = await send(url, method, body, token, signal, keepalive);
 
   /**
    * A 401 on an authenticated call means the 15-minute access token is gone.
@@ -71,7 +73,7 @@ export async function apiFetch<T>(
     if (!fresh) {
       throw new ApiError(401, "INVALID_REFRESH_TOKEN", "Session expired");
     }
-    response = await send(url, method, body, fresh, signal);
+    response = await send(url, method, body, fresh, signal, keepalive);
   }
 
   return unwrap<T>(response);
@@ -93,6 +95,7 @@ async function send(
   body: unknown,
   token: string | null,
   signal?: AbortSignal,
+  keepalive?: boolean,
 ): Promise<Response> {
   // FormData carries its own multipart boundary in the Content-Type the browser
   // writes, so setting the header here would produce a boundary-less type the
@@ -116,6 +119,7 @@ async function send(
             ? (body as FormData)
             : JSON.stringify(body),
       signal,
+      keepalive,
     });
   } catch (cause) {
     if (signal?.aborted) throw cause;

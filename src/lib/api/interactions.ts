@@ -43,6 +43,7 @@ export function recordWatch(
     method: "POST",
     body: { watchedMs: Math.round(watchedMs), durationMs: Math.round(durationMs) },
     auth: "required",
+    keepalive: true,
   });
 }
 
