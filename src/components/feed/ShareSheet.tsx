@@ -22,6 +22,7 @@ import { authorFromProfile } from "@/lib/api/adapters";
 import { isApiError } from "@/lib/api/errors";
 import { repostVideo } from "@/lib/api/interactions";
 import { setRepostedByMe } from "@/lib/repost-context";
+import { shareIntentUrl } from "@/lib/share";
 import { getFollowing, searchUsers } from "@/lib/api/users";
 import { SHARE_TARGETS } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
@@ -126,11 +127,11 @@ export function ShareSheet({
     setResults(null);
   };
 
+  const videoLink = () => new URL(`/video/${videoId}`, window.location.origin).href;
+
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(
-        new URL(`/video/${videoId}`, window.location.origin).href,
-      );
+      await navigator.clipboard.writeText(videoLink());
       toast.success("Link copied.");
       onClose();
     } catch {
@@ -160,6 +161,15 @@ export function ShareSheet({
   const targetActions: Partial<Record<string, () => void>> = {
     copy: copyLink,
     repost,
+  };
+
+  /** Hands the link to the service's own share page — a new tab, or the mail app. */
+  const shareTo = (targetId: string) => {
+    const href = shareIntentUrl(targetId, videoLink());
+    if (!href) return;
+    if (href.startsWith("mailto:")) window.location.assign(href);
+    else window.open(href, "_blank", "noopener,noreferrer");
+    onClose();
   };
 
   return (
@@ -229,7 +239,11 @@ export function ShareSheet({
 
           <ScrollRow>
             {SHARE_TARGETS.map((target) => (
-              <TargetTile key={target.id} target={target} onClick={targetActions[target.id]} />
+              <TargetTile
+                key={target.id}
+                target={target}
+                onClick={targetActions[target.id] ?? (() => shareTo(target.id))}
+              />
             ))}
           </ScrollRow>
         </div>
@@ -303,9 +317,9 @@ function FriendTile({ friend }: { friend: Author }) {
  * Lucide v1 dropped its brand icons (no `Facebook`, `Twitter`, `Linkedin`), so
  * substituting logos from the icon set was not an option regardless.
  *
- * `onClick` is only set for the tiles TikTok owns end to end here (Copy,
- * Repost) — the third-party targets have no share-intent wiring yet and stay
- * inert, same as before.
+ * Copy and Repost act here; the third-party tiles open the service's own share
+ * page (`lib/share.ts`). Embed has no embeddable player route to point at yet,
+ * so it stays inert.
  */
 function TargetTile({ target, onClick }: { target: ShareTarget; onClick?: () => void }) {
   const Glyph = NATIVE_GLYPHS[target.id];
