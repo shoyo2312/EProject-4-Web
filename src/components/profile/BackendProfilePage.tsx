@@ -39,10 +39,8 @@ const MAX_GRID_SKELETON = 10;
 /**
  * A profile page built from user-service and video-service.
  *
- * Addressed by id, or by `userId: undefined` for "whoever is signed in",
- * because user-service has no handle to look up by — see the note in
- * `lib/api/adapters.ts`. The signed-in viewer still reaches their own page
- * through their real handle, which the route resolves against the session.
+ * Addressed by id, or by `userId: undefined` for "whoever is signed in" —
+ * `ProfileRouter` resolves a `/@name` handle to one of the two first.
  *
  * The prop is a plain string rather than a `{ kind }` object on purpose: an
  * object literal from the parent would be a new value on every render, which

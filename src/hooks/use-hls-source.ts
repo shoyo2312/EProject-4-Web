@@ -21,10 +21,11 @@ const BUFFER_PREFETCH_SECONDS = 10;
 /**
  * Attaches an HLS manifest to a `<video>`.
  *
- * media-worker transcodes uploads to HLS, so a published video's `hlsUrl` is an
- * `.m3u8` playlist, which most browsers cannot hand to `<video src>` directly.
- * hls.js is loaded lazily, and only for manifests, and feeds the element through
- * Media Source Extensions instead.
+ * An `.m3u8` playlist is what most browsers cannot hand to `<video src>`
+ * directly. hls.js is loaded lazily, and only for manifests, and feeds the
+ * element through Media Source Extensions instead. media-worker currently
+ * publishes a progressive `source.mp4` as `hlsUrl`, so this only runs once it
+ * serves real playlists.
  *
  * Which path to take is decided by `Hls.isSupported()` — whether MSE exists —
  * and NOT by `canPlayType`. Chrome on macOS answers `"maybe"` for
@@ -34,7 +35,7 @@ const BUFFER_PREFETCH_SECONDS = 10;
  * Native HLS is therefore used only where MSE is missing, which in practice
  * means iOS — the one place it is the only thing that works.
  *
- * Progressive files — the mock feed's local .mp4s — take neither path: the
+ * Progressive files take neither path: the
  * element's own `src` attribute plays them, and this hook stays out of the way.
  *
  * `distance` is the card's offset from the one being watched, and decides
