@@ -148,6 +148,17 @@ export function useNotifications(): NotificationInbox {
     () => new Map(),
   );
 
+  // The sidebar never unmounts, so switching accounts keeps this hook alive.
+  // Cleared during render, as `useLikeStatuses` does, so no frame shows the
+  // previous account's inbox — or keeps it for good if the new fetch fails.
+  const [inboxViewerId, setInboxViewerId] = useState(viewerId);
+  if (inboxViewerId !== viewerId) {
+    setInboxViewerId(viewerId);
+    setItems([]);
+    setUnreadCount(0);
+    setLoaded(false);
+  }
+
   useEffect(() => {
     if (!viewerId) return;
     let cancelled = false;
