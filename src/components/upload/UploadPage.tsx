@@ -89,6 +89,22 @@ export function UploadPage() {
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
 
+  /**
+   * The bytes are still on their way to storage. Only this stretch can be
+   * cancelled or lost: once the post exists, transcoding carries on without
+   * the page, so leaving then costs nothing.
+   */
+  const uploading = progress !== null && !processing;
+
+  // A reload or a closed tab mid-upload throws the transfer away — ask first.
+  // In-app navigation unmounts the page, which aborts the upload above.
+  useEffect(() => {
+    if (!uploading) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [uploading]);
+
   // The object URL is the preview's source; letting it leak pins the whole file
   // in memory for as long as the tab lives.
   useEffect(() => {
@@ -308,14 +324,21 @@ export function UploadPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={form.submitting}
+                  disabled={form.submitting && !uploading}
                   onClick={() => {
+                    // Mid-upload this stops the transfer and keeps the file and
+                    // fields, so Post retries it; otherwise it drops the file.
+                    if (uploading) {
+                      abort.current?.abort();
+                      toast.success("Upload canceled.");
+                      return;
+                    }
                     setFile(null);
                     setPreviewUrl(null);
                   }}
                   className="h-11 w-28 rounded-[4px] bg-white/[0.12] text-[15px] font-semibold text-[var(--tt-text)] disabled:text-white/[0.34]"
                 >
-                  Discard
+                  {uploading ? "Cancel" : "Discard"}
                 </button>
               </div>
             </form>
