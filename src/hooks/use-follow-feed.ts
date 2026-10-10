@@ -71,8 +71,6 @@ export function useFollowFeed(source: FollowFeedSource = "following"): FollowFee
   const seenIds = useRef<Set<string>>(new Set());
   /** Resolved on the first page and reused for the rest — see above. */
   const followedIds = useRef<string[] | null>(null);
-  /** Which source those ids came from, so a switched `source` re-resolves. */
-  const resolvedFor = useRef<FollowFeedSource | null>(null);
   /** Position in the feed; undefined means "start at the newest". */
   const cursor = useRef<string | undefined>(undefined);
 
@@ -82,12 +80,11 @@ export function useFollowFeed(source: FollowFeedSource = "following"): FollowFee
       inFlight.current = true;
 
       try {
-        if (followedIds.current === null || resolvedFor.current !== source) {
+        if (followedIds.current === null) {
           followedIds.current =
             source === "friends"
               ? await getFriendIds(viewerId)
               : await getFollowingIds(viewerId);
-          resolvedFor.current = source;
           setEmptyGraph(followedIds.current.length === 0);
           setResolvedIds(followedIds.current);
         }
