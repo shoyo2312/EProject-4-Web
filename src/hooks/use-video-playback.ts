@@ -3,16 +3,13 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 interface UseVideoPlaybackOptions {
-  /**
-   * Timeline length used when no real media file is available. When a real
-   * `<video>` is present its own `duration` takes over once metadata loads.
-   */
+  /** Timeline length until the `<video>`'s own `duration` loads. */
   durationSeconds: number;
   /** Feed-wide mute preference — TikTok mutes the whole feed, not one card. */
   muted: boolean;
   /** Feed-wide volume, 0–1. Same reasoning as `muted`. */
   volume: number;
-  /** False when `videoUrl` is empty, i.e. the card renders a poster only. */
+  /** False when `videoUrl` is empty — still transcoding — and the card renders a poster only. */
   hasSource: boolean;
   /** Playback speed, as the overflow menu's "Speed" section sets it. */
   playbackRate?: number;
@@ -41,14 +38,8 @@ export interface VideoPlayback {
 /**
  * Scroll-driven playback, matching the feed's behaviour: the card that owns the
  * viewport plays, every other card is paused and rewound to 0. Tab-hidden
- * pauses; returning resumes the active card.
- *
- * Works in two modes so the clone stays faithful without vendoring TikTok's
- * copyrighted media (see docs/research/tiktok.com/ASSETS.md):
- *   - `hasSource` — drives a real `<video>` element and reads `timeupdate`.
- *   - poster-only — advances a simulated clock with rAF over `durationSeconds`.
- * Both expose the same surface, so dropping real files into `FEED_VIDEOS`
- * needs no component change.
+ * pauses; returning resumes the active card. A poster-only card has no clock:
+ * it stays at 0 until its file exists.
  */
 export function useVideoPlayback({
   durationSeconds,
@@ -147,38 +138,19 @@ export function useVideoPlayback({
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, []);
 
-  // Clock — real element events, or a simulated rAF timeline.
   useEffect(() => {
-    if (hasSource) {
-      const video = videoRef.current;
-      if (!video) return;
-      const onTimeUpdate = () => setCurrentTime(video.currentTime);
-      const onLoadedMetadata = () =>
-        setDuration(Number.isFinite(video.duration) ? video.duration : durationSeconds);
-      video.addEventListener("timeupdate", onTimeUpdate);
-      video.addEventListener("loadedmetadata", onLoadedMetadata);
-      return () => {
-        video.removeEventListener("timeupdate", onTimeUpdate);
-        video.removeEventListener("loadedmetadata", onLoadedMetadata);
-      };
-    }
-
-    // A backend video still transcoding has no duration and no HLS url, which
-    // lands it here with `durationSeconds: 0` — and `% 0` is `NaN`, which the
-    // card renders as `NaN:NaN` and reports as `aria-valuenow={NaN}`. Nothing
-    // to simulate against, so the clock simply does not start.
-    if (!isPlaying || durationSeconds <= 0) return;
-    let frame = 0;
-    let last = performance.now();
-    const tick = (now: number) => {
-      const delta = (now - last) / 1000;
-      last = now;
-      setCurrentTime((t) => (t + delta * playbackRate) % durationSeconds);
-      frame = requestAnimationFrame(tick);
+    const video = videoRef.current;
+    if (!hasSource || !video) return;
+    const onTimeUpdate = () => setCurrentTime(video.currentTime);
+    const onLoadedMetadata = () =>
+      setDuration(Number.isFinite(video.duration) ? video.duration : durationSeconds);
+    video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("loadedmetadata", onLoadedMetadata);
+    return () => {
+      video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("loadedmetadata", onLoadedMetadata);
     };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [hasSource, isPlaying, durationSeconds, playbackRate]);
+  }, [hasSource, durationSeconds]);
 
   const togglePlay = useCallback(() => setIsPlaying((playing) => !playing), []);
 

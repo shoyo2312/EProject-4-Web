@@ -32,7 +32,6 @@ export function ReplyThread({
   replyCount,
   parentId,
   videoId,
-  isBackend,
   justAddedId,
   onRepliesLoaded,
   renderReply,
@@ -43,7 +42,6 @@ export function ReplyThread({
   replyCount: number;
   parentId: string;
   videoId: string;
-  isBackend: boolean;
   justAddedId?: string | null;
   onRepliesLoaded?: (parentId: string, replies: Comment[]) => void;
   renderReply: (reply: Comment) => ReactNode;
@@ -52,8 +50,7 @@ export function ReplyThread({
   const [shownCount, setShownCount] = useState(0);
   const [revealedFor, setRevealedFor] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
-  /** Mock videos have no thread endpoint: their replies are all in the prop already. */
-  const [exhausted, setExhausted] = useState(!isBackend);
+  const [exhausted, setExhausted] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Posting a reply into a collapsed thread has to reveal it, or the comment

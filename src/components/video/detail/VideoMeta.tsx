@@ -46,7 +46,7 @@ export function VideoMeta({
         >
           {video.author.nickname}
         </Link>
-        {/* Mock videos carry no upload date; the separator goes with it. */}
+        {/* No upload date, no separator. */}
         {video.createdAt && (
           <span className="flex-none text-[15px] font-medium leading-5 text-[var(--tt-text-secondary)]">
             · {formatRelativeTime(video.createdAt)}

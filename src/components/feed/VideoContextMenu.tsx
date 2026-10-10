@@ -167,8 +167,8 @@ export function VideoContextMenu({
           trailing={<Switch on={autoScroll} />}
         />
 
-        {/* Nothing behind these two in the clone — no PiP surface, and the mock
-            feed carries no caption tracks — so they only dismiss. */}
+        {/* Nothing behind these two yet — no PiP surface, and videos carry
+            no caption tracks — so they only dismiss. */}
         <MenuRow
           icon={<FloatingPlayerIcon className="h-5 w-5" />}
           label="Floating Player"

@@ -21,8 +21,6 @@ import {
  * and only for ids not asked about yet: asking for the whole list on every
  * appended page grew the request by a page each time. Signed out there is
  * nothing to ask — the endpoint needs a token.
- *
- * @param videoIds backend ids only — mock videos have no like-status endpoint.
  */
 export function useLikeStatuses(videoIds: readonly string[], viewerId: string | undefined) {
   const [ledger, setLedger] = useState<LikeLedger>(EMPTY_LEDGER);

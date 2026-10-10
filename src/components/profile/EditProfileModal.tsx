@@ -59,8 +59,7 @@ export function EditProfileModal({
   /**
    * When the handle (once every 30 days) and the nickname (once every 7) open
    * again, as the server said. Until then the field is shown read-only with
-   * that date, rather than offered and then refused on Save. Absent for mock
-   * profiles, which have no limits.
+   * that date, rather than offered and then refused on Save.
    */
   usernameChangeableAt?: string | null;
   nicknameChangeableAt?: string | null;
@@ -174,7 +173,7 @@ export function EditProfileModal({
       <div aria-hidden className="absolute inset-0 bg-black/[0.68]" />
 
       <div
-        role="dialog"
+          role="dialog"
         aria-modal="true"
         aria-labelledby="edit-profile-title"
         className="relative flex h-[700px] max-h-full w-[700px] max-w-full flex-col overflow-hidden rounded-[8px] bg-[#121212] shadow-[0_2px_12px_rgba(0,0,0,0.12)]"

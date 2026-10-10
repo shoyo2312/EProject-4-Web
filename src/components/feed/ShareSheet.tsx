@@ -17,7 +17,7 @@ import { useEscapeKey } from "@/hooks/use-escape-key";
 import { CloseIcon } from "@/components/icons";
 import { toast } from "@/components/ui/toast";
 import { useSession } from "@/components/session/SessionProvider";
-import { authorFromProfile, isBackendVideoId } from "@/lib/api/adapters";
+import { authorFromProfile } from "@/lib/api/adapters";
 import { isApiError } from "@/lib/api/errors";
 import { repostVideo } from "@/lib/api/interactions";
 import { setRepostedByMe } from "@/lib/repost-context";
@@ -66,8 +66,6 @@ export function ShareSheet({
   shares,
   onClose,
 }: {
-  /** Mock video has no backend id to repost/share against — those tiles fall
-   *  back to a local toast rather than a request that has nothing to hit. */
   videoId: string;
   /** Rendered into the title row's count on the live sheet's parent button. */
   shares: number;
@@ -125,8 +123,6 @@ export function ShareSheet({
     setResults(null);
   };
 
-  const isMockVideo = !isBackendVideoId(videoId);
-
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(
@@ -142,11 +138,6 @@ export function ShareSheet({
   const repost = async () => {
     if (!user) {
       openLogin();
-      return;
-    }
-    if (isMockVideo) {
-      toast.success("Reposted.");
-      onClose();
       return;
     }
     try {

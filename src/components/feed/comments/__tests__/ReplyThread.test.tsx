@@ -1,12 +1,18 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { ReplyThread } from "@/components/feed/comments/ReplyThread";
 import type { Comment } from "@/types/tiktok";
 
+// The server has nothing past the replies already in hand.
+vi.mock("@/lib/api/interactions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/interactions")>()),
+  listReplies: async () => ({ items: [], nextCursor: null, hasMore: false }),
+}));
+
 const reply = (id: string): Comment => ({
   id,
-  author: { username: id, nickname: id, avatarUrl: "" },
+  author: { userId: id, username: id, nickname: id, avatarUrl: "" },
   text: `reply ${id}`,
   timestamp: "now",
   likes: 0,
@@ -22,8 +28,7 @@ const renderThread = (props: { replies: Comment[]; justAddedId?: string }) =>
       replies={props.replies}
       replyCount={props.replies.length}
       parentId="parent"
-      videoId="mock-video"
-      isBackend={false}
+      videoId="365050354607333376"
       justAddedId={props.justAddedId}
       renderReply={(item) => <p>{item.text}</p>}
     />,
@@ -54,8 +59,7 @@ describe("ReplyThread", () => {
         replies={replies.slice(0, 3)}
         replyCount={3}
         parentId="parent"
-        videoId="mock-video"
-        isBackend={false}
+        videoId="365050354607333376"
         justAddedId="r3"
         renderReply={(item) => <p>{item.text}</p>}
       />,

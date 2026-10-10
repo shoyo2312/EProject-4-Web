@@ -9,7 +9,6 @@ import { ReportControl } from "@/components/video/detail/ReportControl";
 import { VerticalVolumeControl } from "@/components/video/detail/VerticalVolumeControl";
 import { useSession } from "@/components/session/SessionProvider";
 import { useDismiss } from "@/hooks/use-dismiss";
-import { isBackendVideoId } from "@/lib/api/adapters";
 import { formatDuration } from "@/lib/format";
 import type { FeedVideo } from "@/types/tiktok";
 
@@ -163,8 +162,7 @@ function PauseGlyph({ className }: { className?: string }) {
 /**
  * The rightmost control in the player's bottom bar, beside volume. Which one it
  * is depends on who is watching: the owner gets their privacy/delete menu, and
- * everybody else gets Report. A mock video has no backend to call, so the owner
- * branch is skipped there and the viewer branch reports nothing.
+ * everybody else gets Report.
  */
 function VideoActionsControl({
   video,
@@ -177,8 +175,6 @@ function VideoActionsControl({
 }) {
   const { user } = useSession();
   const isSelf = user !== null && user.userId === video.author.userId;
-
-  if (!isBackendVideoId(video.id)) return null;
 
   return isSelf ? (
     <OwnerControls

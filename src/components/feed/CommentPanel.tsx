@@ -16,7 +16,6 @@ import { CloseIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
 import { useCommentRestriction } from "@/hooks/use-comment-restriction";
-import { isBackendVideoId } from "@/lib/api/adapters";
 import {
   COMMENT_FIRST_PAGE_SIZE,
   addComment,
@@ -94,14 +93,13 @@ export function CommentPanel({
   variant?: "sidebar" | "detail";
 }) {
   const isDetail = variant === "detail";
-  const isBackend = isBackendVideoId(videoId);
   const { user } = useSession();
   // The video carries both switches — its own and an account open to no one.
   // Friends-only depends on who is asking, so it is asked for; the owner is
   // exempt from it, so is not asked.
   const restriction = useCommentRestriction(
     videoId,
-    isBackend && !commentsDisabled && user?.userId !== videoOwnerId
+    !commentsDisabled && user?.userId !== videoOwnerId
       ? (user?.userId ?? null)
       : null,
   );
@@ -110,7 +108,6 @@ export function CommentPanel({
   const { comments, setComments, loading, hasMore, loadingMore, loadMore, appendReplies } =
     useCommentThread({
       videoId,
-      isBackend,
       commentsDisabled,
       realtime: user !== null,
     });
@@ -202,10 +199,6 @@ export function CommentPanel({
     const previous = comments;
     setComments((current) => removeCommentById(current, id));
     onCommentDeleted();
-    if (!isBackend) {
-      toast.success("Comment deleted.");
-      return;
-    }
     try {
       await deleteCommentApi(videoId, id);
       toast.success("Comment deleted.");
@@ -277,7 +270,6 @@ export function CommentPanel({
             key={comment.id}
             comment={comment}
             videoId={videoId}
-            isBackend={isBackend}
             onReply={lockMessage ? undefined : startReply}
             justAddedId={justAddedId}
             currentUserId={user?.userId}

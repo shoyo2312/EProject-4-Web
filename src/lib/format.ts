@@ -24,7 +24,7 @@ export function formatDuration(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-/** A backend comment's `createdAt` as "3d ago", matching the mock comments' style. */
+/** An ISO timestamp as "3d ago", the way TikTok dates comments and videos. */
 export function formatRelativeTime(iso: string): string {
   const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
   if (seconds < 60) return "now";

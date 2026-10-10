@@ -36,7 +36,7 @@ export function FeedVideoCard({
   activeIndex: number;
   /** True when this video's comment sidebar is the one currently open. */
   commentsOpen: boolean;
-  /** Mock count plus anything the viewer posted this session or the server broadcast. */
+  /** The server's count plus anything the viewer posted this session or the server broadcast. */
   commentCount: number;
   /** Latest `counts` realtime frame for this video, if one has arrived. */
   liveFrame?: VideoFrame;

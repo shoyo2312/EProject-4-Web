@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 import { useSession } from "@/components/session/SessionProvider";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { toast } from "@/components/ui/toast";
-import { isBackendVideoId } from "@/lib/api/adapters";
 import { resolveAuthor } from "@/lib/api/authors";
 import { unrepostVideo } from "@/lib/api/interactions";
 import {
@@ -41,15 +40,12 @@ export function RepostBadge({
   const [reposter, setReposter] = useState<Author | null>(null);
   const [removing, setRemoving] = useState(false);
 
-  // Mock videos have no backend id, so there is nothing to ask about.
-  const isBackendVideo = isBackendVideoId(videoId);
-
   useEffect(() => {
-    if (!isBackendVideo || !viewerId) return;
+    if (!viewerId) return;
     setContext(getRepostContext(videoId));
     loadRepostContext(videoId);
     return subscribeRepostContext(() => setContext(getRepostContext(videoId)));
-  }, [videoId, viewerId, isBackendVideo]);
+  }, [videoId, viewerId]);
 
   useEffect(() => {
     if (!context || !viewerId) {

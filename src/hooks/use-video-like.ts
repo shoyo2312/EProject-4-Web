@@ -4,7 +4,6 @@ import { useCallback } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import { useLikeDebounce } from "@/hooks/use-like-debounce";
-import { isBackendVideoId } from "@/lib/api/adapters";
 import { likeVideo, unlikeVideo } from "@/lib/api/interactions";
 import type { LikeStatusResponse } from "@/lib/api/types";
 import { displayLikeCount } from "@/lib/likes";
@@ -16,7 +15,7 @@ import { displayLikeCount } from "@/lib/likes";
  * `useLikeDebounce`. The reply goes to `onConfirmed`, because the server's
  * side lives with whoever seeded it (`useLikeStatuses`). Liking needs an
  * account: signed out, the live site swallows the tap and opens the login
- * modal instead. Mock videos have no backend and toggle locally.
+ * modal instead.
  */
 export function useVideoLike({
   videoId,
@@ -35,7 +34,6 @@ export function useVideoLike({
 
   const send = useCallback(
     async (liked: boolean) => {
-      if (!isBackendVideoId(videoId)) return;
       const status = liked ? await likeVideo(videoId) : await unlikeVideo(videoId);
       // The reply carries the true state and count — the debounced tap only
       // guessed, and is stale the moment anyone else likes the same video.

@@ -14,7 +14,6 @@ import {
 } from "@/components/icons";
 import { ShareSheet } from "@/components/feed/ShareSheet";
 import { useFollow } from "@/hooks/use-follow";
-import { isBackendVideoId } from "@/lib/api/adapters";
 import { shareVideo } from "@/lib/api/interactions";
 import { cn } from "@/lib/utils";
 import { formatCount } from "@/lib/format";
@@ -39,7 +38,7 @@ export function ActionRail({
   compact = false,
 }: {
   video: FeedVideo;
-  /** Mock count plus anything the viewer posted this session. */
+  /** The server's count plus anything the viewer posted this session. */
   commentCount: number;
   /** True when this video's comment sidebar is the one currently open. */
   commentsOpen?: boolean;
@@ -58,8 +57,8 @@ export function ActionRail({
   saved: boolean;
   /**
    * Authoritative total from the realtime counts frame — it already includes
-   * this viewer's own save. Undefined until the first frame lands, and on a
-   * mock video, where the static base plus the local toggle stands in.
+   * this viewer's own save. Undefined until the first frame lands, when the
+   * static base plus the local toggle stands in.
    */
   saveCount?: number;
   onToggleSave: () => void;
@@ -84,7 +83,6 @@ export function ActionRail({
   const recordShare = () => {
     setShareOpen(true);
     setExtraShares((n) => n + 1);
-    if (!isBackendVideoId(video.id)) return;
     shareVideo(video.id).catch(() => setExtraShares((n) => n - 1));
   };
 
@@ -166,7 +164,7 @@ export function ActionRail({
         <CommentIcon className="h-[21px] w-[21px]" />
       </RailButton>
 
-      {/* The count stays the mock figure plus this viewer's own bookmark:
+      {/* Until a counts frame lands, the base figure plus this viewer's own bookmark:
           video_counters has no save_count column, because a save is private
           and nothing public ever shows how many people made one. */}
       <RailButton

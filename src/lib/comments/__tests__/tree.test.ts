@@ -12,7 +12,7 @@ import {
 } from "@/lib/comments/tree";
 import type { Comment } from "@/types/tiktok";
 
-const author = { username: "a", nickname: "A", avatarUrl: "" };
+const author = { userId: "1", username: "a", nickname: "A", avatarUrl: "" };
 const comment = (id: string, replies?: Comment[]): Comment => ({
   id,
   author,

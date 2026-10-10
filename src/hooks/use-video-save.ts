@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { isBackendVideoId } from "@/lib/api/adapters";
 import { getSaveStatus, saveVideo, unsaveVideo } from "@/lib/api/interactions";
 
 /**
@@ -16,7 +15,7 @@ export function useVideoSave(videoId: string, signedIn: boolean) {
 
   // Signed out there is nothing to ask: the status endpoint needs a token.
   useEffect(() => {
-    if (!signedIn || !isBackendVideoId(videoId)) return;
+    if (!signedIn) return;
     let cancelled = false;
     getSaveStatus(videoId)
       .then((status) => {
@@ -36,7 +35,6 @@ export function useVideoSave(videoId: string, signedIn: boolean) {
   const toggleSave = useCallback(() => {
     const next = !saved;
     setSaved(next);
-    if (!isBackendVideoId(videoId)) return;
     (next ? saveVideo(videoId) : unsaveVideo(videoId)).catch(() => {
       setSaved(!next);
     });

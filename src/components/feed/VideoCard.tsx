@@ -17,7 +17,6 @@ import { useClampOverflow } from "@/hooks/use-clamp-overflow";
 import { useHlsSource, isHlsManifest } from "@/hooks/use-hls-source";
 import { useVideoPlayback, type VideoPlayback } from "@/hooks/use-video-playback";
 import { useWatchSession } from "@/hooks/use-watch-session";
-import { isBackendVideoId } from "@/lib/api/adapters";
 import { cn } from "@/lib/utils";
 import type { FeedVideo } from "@/types/tiktok";
 
@@ -166,8 +165,8 @@ export function VideoCard({
     if (isActive) onActiveRef.current?.();
   }, [isActive]);
 
-  // Backend videos arrive as HLS playlists, which need hls.js everywhere but
-  // Safari; the mock feed's .mp4 files keep using the plain `src` below.
+  // An HLS playlist needs hls.js everywhere but Safari; a progressive file
+  // plays from the plain `src` below.
   useHlsSource(videoRef, video.videoUrl, distance);
 
   /*
@@ -178,8 +177,7 @@ export function VideoCard({
    * Signed out it does nothing: the endpoint records per viewer and has no
    * identity to attach an anonymous session to. Poster-only cards are excluded
    * for the same reason the server rejects them: a video still transcoding has
-   * no length, and a fraction of an unknown duration means nothing. A mock
-   * video has no row to record against at all.
+   * no length, and a fraction of an unknown duration means nothing.
    */
   const { isSignedIn } = useSession();
   useWatchSession({
@@ -187,7 +185,7 @@ export function VideoCard({
     isActive,
     isPlaying,
     duration,
-    enabled: isSignedIn && hasSource && isBackendVideoId(video.id),
+    enabled: isSignedIn && hasSource,
   });
 
   const fraction = duration > 0 ? currentTime / duration : 0;

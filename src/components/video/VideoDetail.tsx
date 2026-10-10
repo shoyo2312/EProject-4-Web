@@ -21,7 +21,6 @@ import { useVideoLike } from "@/hooks/use-video-like";
 import type { VideoPlayback } from "@/hooks/use-video-playback";
 import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
 import { useVideoSave } from "@/hooks/use-video-save";
-import { isBackendVideoId } from "@/lib/api/adapters";
 import { COMMENT_PANEL_COOKIE } from "@/lib/comment-panel";
 import { getOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
@@ -113,11 +112,8 @@ export function VideoDetail({
     commentsSwitchOff === null
       ? video.commentsDisabled
       : commentsSwitchOff || (video.commentsDisabled && !video.commentsSwitchOff);
-  /** This video, when it has a backend to ask — the scope of the heart's seed and of realtime. */
-  const backendIds = useMemo(
-    () => (isBackendVideoId(video.id) ? [video.id] : []),
-    [video.id],
-  );
+  /** The scope of the heart's seed and of realtime. */
+  const backendIds = useMemo(() => [video.id], [video.id]);
   const { user: sessionUser, requireSignIn } = useSession();
   const signedIn = sessionUser !== null;
 
@@ -223,8 +219,6 @@ export function VideoDetail({
     panelOpenPreference = panelOpen;
     document.cookie = `${COMMENT_PANEL_COOKIE}=${panelOpen ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
   }, [panelOpen]);
-  /* Mock authors have no backend id, so there is no listing to build the tab
-     from — it is dropped rather than shown empty. */
   const creatorId = video.author.userId;
 
   const closePanel = useCallback(() => setPanelOpen(false), []);
@@ -432,14 +426,12 @@ export function VideoDetail({
               >
                 Comments
               </PanelTabButton>
-              {creatorId && (
-                <PanelTabButton
-                  active={tab === "creator"}
-                  onClick={() => setTab("creator")}
-                >
-                  Creator videos
-                </PanelTabButton>
-              )}
+              <PanelTabButton
+                active={tab === "creator"}
+                onClick={() => setTab("creator")}
+              >
+                Creator videos
+              </PanelTabButton>
               <span
                 aria-hidden
                 className="absolute bottom-0 h-0.5 rounded-full bg-[var(--tt-text)] transition-[left,width] duration-300 ease-out"
@@ -462,7 +454,7 @@ export function VideoDetail({
           {/* One tab at a time, each owning the column's whole remaining height —
               there is no summary block above it any more. */}
           <div className="min-h-0 flex-1">
-            {tab === "comments" || !creatorId ? (
+            {tab === "comments" ? (
               <CommentPanel
                 variant="detail"
                 videoId={video.id}

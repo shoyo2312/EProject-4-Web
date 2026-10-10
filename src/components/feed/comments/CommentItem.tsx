@@ -60,7 +60,6 @@ import type { Comment } from "@/types/tiktok";
  */export function CommentItem({
   comment,
   videoId,
-  isBackend,
   isReply = false,
   onReply,
   justAddedId,
@@ -74,8 +73,6 @@ import type { Comment } from "@/types/tiktok";
   comment: Comment;
   /** Backend video id — used to persist a like against this comment. */
   videoId: string;
-  /** A real video persists likes through interaction-service; a mock one toggles locally. */
-  isBackend: boolean;
   isReply?: boolean;
   onReply?: (target: ReplyTarget) => void;
   justAddedId?: string | null;
@@ -103,15 +100,15 @@ import type { Comment } from "@/types/tiktok";
   const menuRef = useRef<HTMLDivElement>(null);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
   // A comment still waiting on its POST has no real id to like against yet.
-  const canPersistLike = isBackend && /^\d+$/.test(comment.id);
+  const canPersistLike = /^\d+$/.test(comment.id);
 
   const toggleLike = async () => {
-    if (isBackend && !user) {
+    if (!user) {
       openLogin();
       return;
     }
     if (!canPersistLike) {
-      // Mock video, or an optimistic row not yet saved — keep the old local-only toggle.
+      // An optimistic row not yet saved — toggle locally until it has an id.
       setLiked((v) => !v);
       setLikeCount((n) => n + (liked ? -1 : 1));
       return;
@@ -136,15 +133,13 @@ import type { Comment } from "@/types/tiktok";
     }
   };
   const avatarSize = isReply ? 24 : 32;
-  // Mock authors carry no `userId`, so this is false for every mock comment —
-  // the "⋯" stays decorative there, same as before this was wired up.
   const canDelete =
     Boolean(currentUserId) && (comment.author.userId === currentUserId || canModerate);
   // Reporting stands beside Delete rather than replacing it: an owner who
   // clears a comment off their video still wants it in front of a moderator,
   // and the comment's own author is the one who notices when their account has
-  // been posting things they did not write. A mock comment, or an optimistic
-  // row not yet saved, has no id admin-service could act on.
+  // been posting things they did not write. An optimistic row not yet saved
+  // has no id admin-service could act on.
   const canReport = canPersistLike;
   const menuHasItems = canDelete || canReport;
 
@@ -346,14 +341,12 @@ import type { Comment } from "@/types/tiktok";
           replyCount={comment.replyCount ?? comment.replies?.length ?? 0}
           parentId={comment.id}
           videoId={videoId}
-          isBackend={isBackend}
           justAddedId={justAddedId}
           onRepliesLoaded={onRepliesLoaded}
           renderReply={(reply) => (
             <CommentItem
               comment={reply}
               videoId={videoId}
-              isBackend={isBackend}
               isReply
               parentId={comment.id}
               onReply={onReply}

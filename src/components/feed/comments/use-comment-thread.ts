@@ -32,12 +32,10 @@ import type { Comment } from "@/types/tiktok";
  */
 export function useCommentThread({
   videoId,
-  isBackend,
   commentsDisabled,
   realtime,
 }: {
   videoId: string;
-  isBackend: boolean;
   commentsDisabled: boolean;
   /** Subscribe to the video's comment frames; the socket needs a signed-in viewer. */
   realtime: boolean;
@@ -47,9 +45,7 @@ export function useCommentThread({
    * remounts it. Seeding from the cache — synchronously, during the first
    * render — is what makes a revisit paint its comments instead of a skeleton.
    */
-  const cached: CommentPage | undefined = isBackend
-    ? peekCommentPage(videoId)
-    : undefined;
+  const cached: CommentPage | undefined = peekCommentPage(videoId);
   /**
    * The list, plus the replies a realtime frame delivered before their parent's
    * page — held together so one pure updater can move a reply from one to the
@@ -72,7 +68,7 @@ export function useCommentThread({
       })),
     [],
   );
-  const [loading, setLoading] = useState(isBackend && !cached);
+  const [loading, setLoading] = useState(!cached);
   const [cursor, setCursor] = useState<string | null>(cached?.cursor ?? null);
   const [hasMore, setHasMore] = useState(cached?.hasMore ?? false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -80,7 +76,7 @@ export function useCommentThread({
   // Comments load once per video.
   useEffect(() => {
     // Comments off: the backend returns an empty list, so there is nothing to fetch.
-    if (!isBackend || commentsDisabled) {
+    if (commentsDisabled) {
       setLoading(false);
       return;
     }
@@ -115,7 +111,7 @@ export function useCommentThread({
     return () => {
       cancelled = true;
     };
-  }, [videoId, isBackend, commentsDisabled]);
+  }, [videoId, commentsDisabled]);
 
   /**
    * Folds one realtime frame into the list. Whatever the frame says, this
@@ -183,7 +179,7 @@ export function useCommentThread({
     [videoId, setComments],
   );
 
-  useCommentRealtime(videoId, isBackend && realtime, applyRealtimeFrame);
+  useCommentRealtime(videoId, realtime, applyRealtimeFrame);
 
   const loadMore = useCallback(async () => {
     if (!cursor || loadingMore) return;

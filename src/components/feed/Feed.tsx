@@ -9,7 +9,6 @@ import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { useLikeStatuses } from "@/hooks/use-like-statuses";
 import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
-import { isBackendVideoId } from "@/lib/api/adapters";
 import { isApiError } from "@/lib/api/errors";
 import { useSavedVideos } from "@/hooks/use-saved-videos";
 import { getVideo } from "@/lib/api/videos";
@@ -57,11 +56,8 @@ export function Feed({
   const { user } = useSession();
 
   // The scope of the hearts' batch and of the realtime subscriptions: the whole
-  // rendered feed, not just the playing card. Mock videos have neither.
-  const backendVideoIds = useMemo(
-    () => videos.filter((video) => isBackendVideoId(video.id)).map((video) => video.id),
-    [videos],
-  );
+  // rendered feed, not just the playing card.
+  const backendVideoIds = useMemo(() => videos.map((video) => video.id), [videos]);
 
   /**
    * The server's side of every heart, lifted here so one batch request seeds
@@ -260,7 +256,7 @@ export function Feed({
   useEffect(() => {
     if (!commentsOpen) return;
     const next = visibleVideos[activeIndex + 1];
-    if (!next || !isBackendVideoId(next.id) || next.commentsDisabled) return;
+    if (!next || next.commentsDisabled) return;
     loadFirstCommentPage(next.id).catch(() => {
       // A prefetch that fails changes nothing: the panel retries on open.
     });

@@ -51,17 +51,13 @@ export function ProfileHeader({
   /** Opens the Edit profile modal. Only the owner's header can reach it. */
   onEditProfile: () => void;
   /**
-   * Persists the follow state. Absent for mock profiles, where the toggle is
-   * only local. Rejecting puts the button back where it was.
+   * Persists the follow state. Rejecting puts the button back where it was.
    */
   /** Resolves to where the server settled — a private account only takes a request. */
-  onToggleFollow?: (next: boolean) => Promise<boolean>;
-  /**
-   * Opens the Followers/Following dialog on that stat. Absent for mock
-   * profiles — there is no backend account to list connections for.
-   */
-  onOpenFollowers?: () => void;
-  onOpenFollowing?: () => void;
+  onToggleFollow: (next: boolean) => Promise<boolean>;
+  /** Opens the Followers/Following dialog on that stat. */
+  onOpenFollowers: () => void;
+  onOpenFollowing: () => void;
 }) {
   const [following, setFollowing] = useState(profile.isFollowing);
   const [followPending, setFollowPending] = useState(false);
@@ -91,8 +87,6 @@ export function ProfileHeader({
 
     const next = !following;
     setFollowing(next);
-
-    if (!onToggleFollow) return;
 
     setFollowPending(true);
     try {

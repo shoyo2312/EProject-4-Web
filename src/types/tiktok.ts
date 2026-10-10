@@ -4,24 +4,18 @@ import type { VideoStatus } from "@/lib/api/types";
 
 export interface Author {
   /**
-   * The backend's account id, present only for authors that came from the API
-   * (mock authors have none). It is what every user-service and video-service
-   * call is keyed by — `username` cannot be used for that, because
-   * user-service stores no handle. A Snowflake, kept as a string: see
-   * `lib/api/json.ts`.
+   * The backend's account id — what every user-service and video-service call
+   * is keyed by. A Snowflake, kept as a string: see `lib/api/json.ts`.
    */
-  userId?: string;
+  userId: string;
   /**
-   * The `/@…` route segment. For backend accounts this is the numeric id, since
-   * user-service offers no lookup-by-username — see `handleFor`. Mock authors
-   * use a real handle like "sashtalk".
+   * The `/@…` route segment: the numeric id for other accounts — see
+   * `handleFor` — and the viewer's own handle for themself.
    */
   username: string;
   /**
-   * The real "@handle" from auth-service, for display only — null on backend
-   * accounts predating user-service copying it, and absent on mock authors
-   * (whose `username` already is the handle). Never route with this; use
-   * `username`.
+   * The real "@handle", for display only — absent on accounts predating
+   * user-service copying it. Never route with this; use `username`.
    */
   handle?: string;
   /** Display name shown next to the caption, e.g. "SASH TALK". */
@@ -80,9 +74,8 @@ export interface FeedVideo {
   /** Duration in seconds — drives the "00:02 / 01:39" progress label. */
   durationSeconds: number;
   /**
-   * When the video was posted, ISO-8601. Carried only for backend videos — the
-   * mock feed has no upload date — so the detail page's "· 3d ago" is dropped
-   * rather than invented when it is absent.
+   * When the video was posted, ISO-8601. The detail page's "· 3d ago" is
+   * dropped rather than invented when it is absent.
    */
   createdAt?: string;
   /** Whether the signed-in user already follows this author. */
@@ -90,8 +83,8 @@ export interface FeedVideo {
   /** Whether a "See translation" affordance appears under the caption. */
   hasTranslation: boolean;
   /**
-   * PUBLIC/FRIENDS/PRIVATE, carried only for backend videos — it seeds the
-   * owner's privacy select on the detail page. Undefined for mock feed videos.
+   * PUBLIC/FRIENDS/PRIVATE — it seeds the owner's privacy select on the
+   * detail page.
    */
   visibility?: "PUBLIC" | "FRIENDS" | "PRIVATE";
   /**
@@ -195,8 +188,8 @@ export interface ProfileVideo {
   /** `visibility: "PRIVATE"` — the grid marks it with a lock. Owner-only. */
   isPrivate?: boolean;
   /**
-   * video-service's status. Absent on mock profiles, and on someone else's
-   * grid every tile is PUBLISHED anyway — it is the owner's own grid that
+   * video-service's status. On someone else's grid every tile is PUBLISHED
+   * anyway — it is the owner's own grid that
    * carries videos still processing, waiting on a moderator, or removed.
    */
   status?: VideoStatus;

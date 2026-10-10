@@ -78,17 +78,4 @@ describe("useVideoLike", () => {
 
     expect(result.current.liked).toBe(true);
   });
-
-  it("toggles a mock video locally, with nothing to send", async () => {
-    // The mock feed's ids include plain numbers like this one.
-    const { result } = render("1");
-
-    act(() => result.current.toggleLike());
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(600);
-    });
-
-    expect(result.current.likeCount).toBe(6);
-    expect(likeVideo).not.toHaveBeenCalled();
-  });
 });
