@@ -22,6 +22,7 @@ import type { FeedVideo } from "@/types/tiktok";
 export function ControlBar({
   video,
   onDeleted,
+  onCommentsSwitchChange,
   isPlaying,
   currentTime,
   duration,
@@ -38,6 +39,7 @@ export function ControlBar({
   video: FeedVideo;
   /** Called once the owner's own video is deleted — closes the overlay. */
   onDeleted: () => void;
+  onCommentsSwitchChange?: (off: boolean) => void;
   isPlaying: boolean;
   currentTime: number;
   duration: number;
@@ -98,7 +100,11 @@ export function ControlBar({
           </div>
         </div>
 
-        <VideoActionsControl video={video} onDeleted={onDeleted} />
+        <VideoActionsControl
+          video={video}
+          onDeleted={onDeleted}
+          onCommentsSwitchChange={onCommentsSwitchChange}
+        />
       </div>
     </div>
   );
@@ -163,9 +169,11 @@ function PauseGlyph({ className }: { className?: string }) {
 function VideoActionsControl({
   video,
   onDeleted,
+  onCommentsSwitchChange,
 }: {
   video: FeedVideo;
   onDeleted: () => void;
+  onCommentsSwitchChange?: (off: boolean) => void;
 }) {
   const { isSelf } = useFollow(video.author.userId, video.isFollowing);
 
@@ -177,6 +185,7 @@ function VideoActionsControl({
       initialVisibility={video.visibility}
       initialCommentsDisabled={video.commentsSwitchOff}
       onDeleted={onDeleted}
+      onCommentsSwitchChange={onCommentsSwitchChange}
     />
   ) : (
     <ReportControl videoId={video.id} />

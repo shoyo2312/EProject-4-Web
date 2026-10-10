@@ -103,6 +103,16 @@ export function VideoDetail({
    * budged. Same source of truth as the feed's cards — see `Feed`.
    */
   const [liveFrame, setLiveFrame] = useState<VideoFrame | null>(null);
+  /**
+   * The owner's own comments switch, once they flip it here — `video` is the
+   * page-load copy. Turning it back on still leaves comments closed when the
+   * account-wide setting is what closed them.
+   */
+  const [commentsSwitchOff, setCommentsSwitchOff] = useState<boolean | null>(null);
+  const commentsDisabled =
+    commentsSwitchOff === null
+      ? video.commentsDisabled
+      : commentsSwitchOff || (video.commentsDisabled && !video.commentsSwitchOff);
   /** This video, when it has a backend to ask — the scope of the heart's seed and of realtime. */
   const backendIds = useMemo(
     () => (isBackendVideoId(video.id) ? [video.id] : []),
@@ -370,6 +380,7 @@ export function VideoDetail({
         <ControlBar
           video={video}
           onDeleted={close}
+          onCommentsSwitchChange={setCommentsSwitchOff}
           isPlaying={playback?.isPlaying ?? false}
           currentTime={playback?.currentTime ?? 0}
           duration={playback?.duration ?? video.durationSeconds}
@@ -456,7 +467,7 @@ export function VideoDetail({
                 variant="detail"
                 videoId={video.id}
                 videoOwnerId={video.author.userId}
-                commentsDisabled={video.commentsDisabled}
+                commentsDisabled={commentsDisabled}
                 commentCount={commentCount}
                 onClose={closePanel}
                 onCommentAdded={() => setExtraComments((n) => n + 1)}
