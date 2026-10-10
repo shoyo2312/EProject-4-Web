@@ -2,6 +2,7 @@
 
 import { ActionRail } from "@/components/feed/ActionRail";
 import { VideoCard } from "@/components/feed/VideoCard";
+import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useVideoLike } from "@/hooks/use-video-like";
 import type { VideoFrame } from "@/hooks/use-video-realtime";
 import type { LikeStatusResponse } from "@/lib/api/types";
@@ -19,6 +20,7 @@ export function FeedVideoCard({
   video,
   index,
   activeIndex,
+  isActive,
   commentsOpen,
   commentCount,
   liveFrame,
@@ -34,6 +36,8 @@ export function FeedVideoCard({
   video: FeedVideo;
   index: number;
   activeIndex: number;
+  /** The card on screen — the one L likes. */
+  isActive: boolean;
   /** True when this video's comment sidebar is the one currently open. */
   commentsOpen: boolean;
   /** The server's count plus anything the viewer posted this session or the server broadcast. */
@@ -57,6 +61,7 @@ export function FeedVideoCard({
     serverCount: serverLikeCount,
     onConfirmed: onLikeConfirmed,
   });
+  useHotkeys({ l: toggleLike }, isActive);
 
   const displayComments = liveFrame?.commentCount ?? commentCount;
 

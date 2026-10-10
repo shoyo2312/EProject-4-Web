@@ -7,6 +7,7 @@ import { FeedNavArrows } from "@/components/feed/list/FeedNavArrows";
 import { FeedVideoCard } from "@/components/feed/list/FeedVideoCard";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
+import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useLikeStatuses } from "@/hooks/use-like-statuses";
 import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
 import { isApiError } from "@/lib/api/errors";
@@ -51,7 +52,7 @@ export function Feed({
   const listRef = useRef<HTMLDivElement>(null);
 
   /** Set from the card's right-click menu; see `PlayerSettingsProvider`. */
-  const { autoScroll } = usePlayerSettings();
+  const { autoScroll, toggleMuted } = usePlayerSettings();
 
   const { user } = useSession();
 
@@ -270,6 +271,18 @@ export function Feed({
     list.scrollBy({ top: item.clientHeight * direction, behavior: "smooth" });
   }, []);
 
+  // TikTok's own: ↑/↓ step, M mutes, C opens comments. Space and L belong to
+  // the card on screen — see `VideoCard` and `FeedVideoCard`.
+  useHotkeys({
+    ArrowUp: () => scrollByItem(-1),
+    ArrowDown: () => scrollByItem(1),
+    m: toggleMuted,
+    c: () => {
+      const video = visibleVideos[activeIndex];
+      if (video) toggleComments(video);
+    },
+  });
+
   return (
     <main className="flex flex-1 flex-row">
       <div className="relative flex-1 overflow-hidden">
@@ -287,6 +300,7 @@ export function Feed({
               video={video}
               index={index}
               activeIndex={activeIndex}
+              isActive={video.id === activeId}
               commentsOpen={commentsOpen && commentVideo?.id === video.id}
               commentCount={video.stats.comments + (extraComments[video.id] ?? 0)}
               liveFrame={liveFrames[video.id]}

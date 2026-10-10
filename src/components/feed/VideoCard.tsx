@@ -15,6 +15,7 @@ import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { useClampOverflow } from "@/hooks/use-clamp-overflow";
 import { useHlsSource, isHlsManifest } from "@/hooks/use-hls-source";
+import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useVideoPlayback, type VideoPlayback } from "@/hooks/use-video-playback";
 import { useWatchSession } from "@/hooks/use-watch-session";
 import { cn } from "@/lib/utils";
@@ -84,9 +85,8 @@ interface VideoCardProps {
  * The overlay's top row holds the 48×48 volume control; the bottom section
  * (348×108 on the live site) holds author name, caption and "See translation".
  *
- * Playback is scroll-driven — see `useVideoPlayback`. An empty `videoUrl` falls
- * back to a still poster on the simulated clock; every current entry in
- * `FEED_VIDEOS` ships a real file.
+ * Playback is scroll-driven — see `useVideoPlayback`. An empty `videoUrl` — a
+ * video still transcoding — falls back to a still poster.
  */
 export function VideoCard({
   video,
@@ -164,6 +164,8 @@ export function VideoCard({
   useEffect(() => {
     if (isActive) onActiveRef.current?.();
   }, [isActive]);
+
+  useHotkeys({ " ": togglePlay }, isActive);
 
   // An HLS playlist needs hls.js everywhere but Safari; a progressive file
   // plays from the plain `src` below.

@@ -16,6 +16,8 @@ import { SeekBar } from "@/components/video/detail/SeekBar";
 import { VideoMeta } from "@/components/video/detail/VideoMeta";
 import { useWheelStep } from "@/components/video/detail/use-wheel-step";
 import { CreatorVideosPanel } from "@/components/video/CreatorVideosPanel";
+import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useLikeStatuses } from "@/hooks/use-like-statuses";
 import { useVideoLike } from "@/hooks/use-video-like";
 import type { VideoPlayback } from "@/hooks/use-video-playback";
@@ -236,6 +238,19 @@ export function VideoDetail({
     setTab("comments");
     setPanelOpen(true);
   }, [panelOpen, tab]);
+
+  // The feed's keys, with ↑/↓ stepping through the same list the wheel does.
+  // Escape leaves the overlay, but not from under a field the viewer is typing in.
+  useHotkeys({
+    ArrowUp: () => step("previous"),
+    ArrowDown: () => step("next"),
+    m: toggleMuted,
+    l: like.toggleLike,
+    c: togglePanel,
+  });
+  useEscapeKey(() => {
+    if (!document.activeElement?.closest("input, textarea")) close();
+  });
 
   useEffect(() => {
     const list = tablistRef.current;
