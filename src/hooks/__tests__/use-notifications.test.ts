@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 
 import { useNotifications } from "@/hooks/use-notifications";
+import type { NotificationFrame } from "@/hooks/use-notification-realtime";
 import type { NotificationResponse } from "@/lib/api/notifications";
 
 let user: { userId: string } | null = { userId: "1" };
@@ -21,8 +22,11 @@ vi.mock("@/lib/api/users", () => ({ getProfiles: async () => [], MAX_PROFILE_BAT
 vi.mock("@/lib/api/videos", () => ({ getVideosByIds: async () => [] }));
 vi.mock("@/lib/settings/browser-notifications", () => ({ showBrowserNotification: vi.fn() }));
 
+let relay: (frame: NotificationFrame) => void = () => {};
 vi.mock("@/hooks/use-notification-realtime", () => ({
-  useNotificationRealtime: () => {},
+  useNotificationRealtime: (_on: boolean, onFrame: (frame: NotificationFrame) => void) => {
+    relay = onFrame;
+  },
 }));
 
 const entry: NotificationResponse = {
@@ -55,5 +59,28 @@ describe("useNotifications", () => {
     expect(result.current.items).toEqual([]);
     expect(result.current.unreadCount).toBe(0);
     expect(result.current.loaded).toBe(false);
+  });
+
+  it("does not count a relayed copy of an entry the list already has", async () => {
+    listNotifications.mockResolvedValue([entry]);
+    getUnreadCount.mockResolvedValue(1);
+    const { result } = renderHook(() => useNotifications());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+
+    act(() =>
+      relay({
+        notificationId: "n1",
+        recipientId: "1",
+        actorId: null,
+        type: "SYSTEM",
+        title: "hi",
+        body: "",
+        referenceId: null,
+        createdAt: entry.createdAt,
+      }),
+    );
+
+    expect(result.current.items).toHaveLength(1);
+    expect(result.current.unreadCount).toBe(1);
   });
 });

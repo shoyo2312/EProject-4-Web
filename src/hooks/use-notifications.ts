@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import {
@@ -159,12 +159,17 @@ export function useNotifications(): NotificationInbox {
     setLoaded(false);
   }
 
+  /** Ids already counted in `unreadCount`, so a relayed copy is not counted twice. */
+  const countedIds = useRef(new Set<string>());
+
   useEffect(() => {
+    countedIds.current = new Set();
     if (!viewerId) return;
     let cancelled = false;
     Promise.all([listNotifications(), getUnreadCount()])
       .then(([inbox, unread]) => {
         if (cancelled) return;
+        for (const item of inbox) countedIds.current.add(item.id);
         setItems(inbox);
         setUnreadCount(unread);
       })
@@ -275,7 +280,10 @@ export function useNotifications(): NotificationInbox {
           ? current
           : [fromFrame(frame), ...current],
       );
-      setUnreadCount((count) => count + 1);
+      if (!countedIds.current.has(frame.notificationId)) {
+        countedIds.current.add(frame.notificationId);
+        setUnreadCount((count) => count + 1);
+      }
 
       // Gated inside — on the viewer's switch, the browser permission and
       // whether this tab is even hidden. Called for every frame rather than
