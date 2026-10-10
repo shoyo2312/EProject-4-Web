@@ -358,6 +358,9 @@ import type { Comment } from "@/types/tiktok";
               parentId={comment.id}
               onReply={onReply}
               justAddedId={justAddedId}
+              currentUserId={currentUserId}
+              canModerate={canModerate}
+              onDelete={onDelete}
             />
           )}
         />
