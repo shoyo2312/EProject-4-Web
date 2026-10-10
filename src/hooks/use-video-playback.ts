@@ -105,11 +105,15 @@ export function useVideoPlayback({
       return;
     }
 
-    void video.play().catch(() => {
-      // A rejection with sound on is almost always the autoplay policy, and the
-      // fix it wants is the same one the browser would have accepted: mute and
-      // try once more, rather than leaving the viewer on a frozen first frame.
-      if (video.muted) {
+    void video.play().catch((error: unknown) => {
+      // A pause() or a source swap cut this call short — the newer state already
+      // decided. Treating it as the autoplay policy would mute the whole feed and
+      // restart a card the reader scrolled past or just paused.
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      // Otherwise a rejection with sound on is almost always the autoplay policy,
+      // and the fix it wants is the same one the browser would have accepted:
+      // mute and try once more, rather than leaving a frozen first frame.
+      if (video.muted || !isActiveRef.current) {
         setIsPlaying(false);
         return;
       }
