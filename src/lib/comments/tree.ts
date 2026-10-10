@@ -112,3 +112,22 @@ export function mergeComments(
   }
   return { comments, pending: waiting };
 }
+
+/**
+ * A refetched first page over the list on screen. Top-level comments that were
+ * not in the list the fetch replaces (`replaced`) arrived in this tab after it
+ * was requested — the viewer's own post, a realtime frame — so the page cannot
+ * hold them yet; they stay on top instead of vanishing until the next open.
+ */
+export function refreshFirstPage(
+  current: Comment[],
+  replaced: ReadonlySet<string>,
+  incoming: CommentEntry[],
+  pending: PendingReply[],
+): { comments: Comment[]; pending: PendingReply[] } {
+  return mergeComments(
+    current.filter((comment) => !replaced.has(comment.id)),
+    incoming,
+    pending,
+  );
+}

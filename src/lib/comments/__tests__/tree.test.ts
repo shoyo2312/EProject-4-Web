@@ -4,6 +4,7 @@ import {
   addReply,
   hasCommentId,
   mergeComments,
+  refreshFirstPage,
   remapCommentId,
   removeCommentById,
   setCommentLikes,
@@ -98,5 +99,18 @@ describe("mergeComments", () => {
     const existing = [comment("2", [comment("2a")])];
     const next = mergeComments(existing, [], [{ ui: comment("2a"), parentId: "2" }]);
     expect(next.comments[0].replies).toHaveLength(1);
+  });
+});
+
+describe("refreshFirstPage", () => {
+  it("keeps comments this tab added after the page was requested", () => {
+    const next = refreshFirstPage(
+      [comment("new"), comment("1"), comment("gone")],
+      new Set(["1", "gone"]),
+      [{ ui: comment("1"), parentId: null }, { ui: comment("2"), parentId: null }],
+      [],
+    );
+    // "gone" was on the replaced page and the server no longer returns it.
+    expect(next.comments.map((c) => c.id)).toEqual(["new", "1", "2"]);
   });
 });

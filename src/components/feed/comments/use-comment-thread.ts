@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { CommentRealtimeFrame } from "@/components/feed/comments/types";
 import { useCommentRealtime } from "@/hooks/use-comment-realtime";
@@ -18,6 +18,7 @@ import {
   addReply,
   hasCommentId,
   mergeComments,
+  refreshFirstPage,
   removeCommentById,
   setCommentLikes,
 } from "@/lib/comments/tree";
@@ -61,6 +62,8 @@ export function useCommentThread({
     }),
   );
   const comments = thread.comments;
+  /** Top-level ids the last fetched (or cached) first page put on screen. */
+  const pageIds = useRef(new Set(cached?.entries.map((entry) => entry.ui.id)));
   const setComments = useCallback(
     (update: Comment[] | ((current: Comment[]) => Comment[])) =>
       setThread((current) => ({
@@ -93,7 +96,12 @@ export function useCommentThread({
     loadFirstCommentPage(videoId, true)
       .then((page) => {
         if (cancelled) return;
-        setThread((current) => mergeComments([], page.entries, current.pending));
+        // Read before the swap: React may run the updater later, after it.
+        const replaced = pageIds.current;
+        pageIds.current = new Set(page.entries.map((entry) => entry.ui.id));
+        setThread((current) =>
+          refreshFirstPage(current.comments, replaced, page.entries, current.pending),
+        );
         setCursor(page.cursor);
         setHasMore(page.hasMore);
       })
