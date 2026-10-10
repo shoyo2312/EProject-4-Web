@@ -29,7 +29,22 @@ export function ExploreGrid({
 }) {
   const [active, setActive] = useState(categories[0] ?? "All");
   const listRef = useRef<HTMLDivElement>(null);
-  const { items: visible, isLoading, error } = useExploreFeed(active);
+  const { items: visible, isLoading, error, loadMore } = useExploreFeed(active);
+
+  // Infinite scroll, a screen ahead of the last row.
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !loadMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+      },
+      { rootMargin: "600px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore, visible.length]);
   // Sound is a page-level setting, not a per-tile one: exactly one tile plays at
   // a time — whichever is hovered, falling back to the last one hovered while
   // the sound was on — and it is audible whenever `soundOn`.
@@ -131,6 +146,8 @@ export function ExploreGrid({
               />
             ))}
       </div>
+
+      {!isLoading && loadMore && <div ref={sentinelRef} aria-hidden className="h-px" />}
 
       {!isLoading && visible.length === 0 && (
         <p className="py-24 text-center text-[15px] text-[var(--tt-text-muted)]">
