@@ -76,8 +76,9 @@ export function useVideoPlayback({
     const el = containerRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        const active = entry.isIntersecting;
+      (entries) => {
+        // A fast scroll can batch an enter and a leave; the last one is current.
+        const active = entries[entries.length - 1].isIntersecting;
         isActiveRef.current = active;
         setIsActive(active);
         setIsPlaying(active);
