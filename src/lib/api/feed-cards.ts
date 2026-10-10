@@ -18,17 +18,28 @@ export async function toFeedCards(
   rows: VideoResponse[],
   seen: Set<string>,
 ): Promise<FeedVideo[]> {
-  const unseen = rows.filter((video) => !seen.has(video.id));
+  // Claimed before the await, not after: a second call landing while this one
+  // resolves authors (a page and a just-published video, say) would otherwise
+  // pass the same id and render two cards under one React key.
+  const unseen: VideoResponse[] = [];
+  for (const video of rows) {
+    if (seen.has(video.id)) continue;
+    seen.add(video.id);
+    unseen.push(video);
+  }
   if (unseen.length === 0) return [];
 
-  const authors = await resolveAuthors(unseen.map((video) => video.userId));
-  return unseen.map((video) => {
-    seen.add(video.id);
+  let authors: Awaited<ReturnType<typeof resolveAuthors>>;
+  try {
+    authors = await resolveAuthors(unseen.map((video) => video.userId));
+  } catch (cause) {
+    // Never shown, so a retry must be allowed to show them.
+    for (const video of unseen) seen.delete(video.id);
+    throw cause;
+  }
+  return unseen.map((video) =>
     // resolveAuthors already substitutes a placeholder for a profile it could
     // not read, so the fallback here only covers an id it never saw at all.
-    return videoToFeedVideo(
-      video,
-      authors.get(video.userId) ?? unknownAuthor(video.userId),
-    );
-  });
+    videoToFeedVideo(video, authors.get(video.userId) ?? unknownAuthor(video.userId)),
+  );
 }
