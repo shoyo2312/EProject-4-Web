@@ -166,6 +166,7 @@ export function setFollowState(userId: string, value: boolean): void {
 
 /** Called on sign-in/sign-out: one viewer's answers must not serve another. */
 export function clearFollowCache(): void {
+  followEpoch += 1;
   followState.clear();
   followingWalk = null;
   notifyFollowState();
@@ -409,13 +410,19 @@ async function collectIds(
  * gateway's per-IP limit spent on identical requests.
  */
 let followingWalk: { viewerId: string; complete: Promise<boolean> } | null = null;
+/** Bumped by `clearFollowCache`, so a walk still in flight knows its viewer is gone. */
+let followEpoch = 0;
 
 function walkFollowing(viewerId: string, maxPages: number): Promise<boolean> {
   if (followingWalk?.viewerId === viewerId) return followingWalk.complete;
 
+  const epoch = followEpoch;
   const complete = (async () => {
     for (let page = 0; page < maxPages; page += 1) {
       const result = await getFollowing(viewerId, page, 50);
+      // `clearFollowCache` (a sign-out, another account) dropped this walk while
+      // the page was in flight: its answers belong to the previous viewer.
+      if (epoch !== followEpoch) return false;
       for (const profile of result.content) followState.set(profile.userId, true);
       notifyFollowState();
       if (isLastPage(result.page)) return true;

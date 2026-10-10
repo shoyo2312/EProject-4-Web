@@ -98,3 +98,23 @@ describe("follow", () => {
     expect(peekFollowState("5")).toBe(true);
   });
 });
+
+describe("clearFollowCache", () => {
+  it("keeps a walk already in flight from writing the previous viewer's list back", async () => {
+    let release: () => void = () => {};
+    apiFetch.mockImplementation(
+      (path: string, options: { query: { page: number } }) =>
+        new Promise((resolve) => {
+          release = () => resolve(followingPages(path, options));
+        }),
+    );
+    const { clearFollowCache, isFollowing, peekFollowState } = await load();
+
+    const answer = isFollowing("old-viewer", "1");
+    clearFollowCache();
+    release();
+    await answer;
+
+    expect(peekFollowState("1")).toBeUndefined();
+  });
+});
