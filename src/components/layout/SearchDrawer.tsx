@@ -19,9 +19,11 @@ const SEARCH_DEBOUNCE_MS = 250;
 /**
  * Where the viewer's own recent searches live. The live site keeps this
  * server-side, per account; there is no such endpoint here, so it is the one
- * piece of this panel that is deliberately local to the browser.
+ * piece of this panel that is deliberately local to the browser — but still
+ * one list per account, so a shared browser does not show the last person's.
  */
-const HISTORY_KEY = "nowa:search-history";
+const historyKey = (userId: string | undefined) =>
+  `nowa:search-history:${userId ?? "guest"}`;
 const HISTORY_LIMIT = 8;
 
 /**
@@ -40,9 +42,9 @@ const SUGGESTIONS: readonly { term: string; trending?: boolean }[] = [
   { term: "one pan dinners" },
 ];
 
-function readHistory(): string[] {
+function readHistory(key: string): string[] {
   try {
-    const raw = localStorage.getItem(HISTORY_KEY);
+    const raw = localStorage.getItem(key);
     const parsed: unknown = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === "string") : [];
   } catch {
@@ -52,9 +54,9 @@ function readHistory(): string[] {
   }
 }
 
-function writeHistory(terms: string[]): void {
+function writeHistory(key: string, terms: string[]): void {
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(terms));
+    localStorage.setItem(key, JSON.stringify(terms));
   } catch {
     // Storage full or blocked — the in-memory list still drives this session.
   }
@@ -94,7 +96,9 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
   const signedIn = user !== null;
   const [query, setQuery] = useState("");
   const [history, setHistory] = useState<string[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const key = historyKey(user?.userId);
+  /** Whose list `history` holds; null until the first open. */
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [results, setResults] = useState<UserProfileResponse[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -104,9 +108,9 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
   // in an effect: `localStorage` does not exist in the server render, so the
   // list has to start empty on both sides of hydration and fill in only once a
   // click has proved we are in a browser.
-  if (open && !loaded) {
-    setLoaded(true);
-    setHistory(readHistory());
+  if (open && loadedKey !== key) {
+    setLoadedKey(key);
+    setHistory(readHistory(key));
   }
 
   useEffect(() => {
@@ -165,18 +169,18 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
     if (!entry) return;
     setHistory((current) => {
       const next = [entry, ...current.filter((t) => t !== entry)].slice(0, HISTORY_LIMIT);
-      writeHistory(next);
+      writeHistory(key, next);
       return next;
     });
-  }, []);
+  }, [key]);
 
   const forget = useCallback((value: string) => {
     setHistory((current) => {
       const next = current.filter((t) => t !== value);
-      writeHistory(next);
+      writeHistory(key, next);
       return next;
     });
-  }, []);
+  }, [key]);
 
   const showLists = term.length === 0;
 
