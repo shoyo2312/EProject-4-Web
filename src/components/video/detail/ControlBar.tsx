@@ -7,8 +7,8 @@ import { SpeedPills, Switch } from "@/components/player/PlayerMenu";
 import { OwnerControls } from "@/components/video/detail/OwnerControls";
 import { ReportControl } from "@/components/video/detail/ReportControl";
 import { VerticalVolumeControl } from "@/components/video/detail/VerticalVolumeControl";
+import { useSession } from "@/components/session/SessionProvider";
 import { useDismiss } from "@/hooks/use-dismiss";
-import { useFollow } from "@/hooks/use-follow";
 import { isBackendVideoId } from "@/lib/api/adapters";
 import { formatDuration } from "@/lib/format";
 import type { FeedVideo } from "@/types/tiktok";
@@ -175,7 +175,8 @@ function VideoActionsControl({
   onDeleted: () => void;
   onCommentsSwitchChange?: (off: boolean) => void;
 }) {
-  const { isSelf } = useFollow(video.author.userId, video.isFollowing);
+  const { user } = useSession();
+  const isSelf = user !== null && user.userId === video.author.userId;
 
   if (!isBackendVideoId(video.id)) return null;
 
