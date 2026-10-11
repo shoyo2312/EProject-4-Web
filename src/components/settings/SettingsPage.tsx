@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { BlockedAccountsModal } from "@/components/settings/BlockedAccountsModal";
+import { AccountListModal } from "@/components/settings/AccountListModal";
 import {
   AccountSwitchRow,
   AudienceRow,
@@ -265,7 +265,9 @@ function Row({ row, account }: { row: SettingsRow; account: AccountSettings }) {
 
   switch (row.action) {
     case "blocked-accounts":
-      return <BlockedAccountsRow row={row} />;
+      return <AccountListRow row={row} kind="blocked" />;
+    case "muted-accounts":
+      return <AccountListRow row={row} kind="muted" />;
     case "comment-audience":
       return <AudienceRow row={row} account={account} field="commentAudience" />;
     case "dm-audience":
@@ -355,8 +357,8 @@ function BrowserNotificationsRow({ row }: { row: SwitchSettingsRow }) {
   );
 }
 
-/** Privacy → "Blocked accounts". The dialog portals itself out of this row. */
-function BlockedAccountsRow({ row }: { row: SettingsRow }) {
+/** Privacy → "Blocked accounts" / "Muted accounts". The dialog portals itself out of this row. */
+function AccountListRow({ row, kind }: { row: SettingsRow; kind: "blocked" | "muted" }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -369,7 +371,7 @@ function BlockedAccountsRow({ row }: { row: SettingsRow }) {
         <RowBody row={row} />
         <Accessory row={row} />
       </button>
-      {open && <BlockedAccountsModal onClose={() => setOpen(false)} />}
+      {open && <AccountListModal kind={kind} onClose={() => setOpen(false)} />}
     </>
   );
 }

@@ -287,6 +287,7 @@ export type SettingsIconName =
  */
 export type SettingsAction =
   | "blocked-accounts"
+  | "muted-accounts"
   | "browser-notifications"
   | "high-contrast"
   | "private-account"

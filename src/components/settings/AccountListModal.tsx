@@ -15,24 +15,44 @@ import {
 import { isApiError, messageFor } from "@/lib/api/errors";
 import { isLastPage } from "@/lib/api/types";
 import type { UserProfileResponse } from "@/lib/api/types";
-import { getBlocked, unblock } from "@/lib/api/users";
+import { getBlocked, getMuted, unblock, unmute } from "@/lib/api/users";
 import { cn } from "@/lib/utils";
 
-/** One page of `GET /users/me/blocked`, and the ceiling on a skeleton run. */
+/** One page of `GET /users/me/blocked` or `/muted`, and the ceiling on a skeleton run. */
 const PAGE_SIZE = 20;
 
+type ListKind = "blocked" | "muted";
+
+/** What differs between the two lists: where they come from and how a row is lifted. */
+const KINDS = {
+  blocked: {
+    title: "Blocked accounts",
+    list: getBlocked,
+    release: unblock,
+    verb: ["Unblock", "Unblocking…"],
+    gone: "NOT_BLOCKED",
+    empty: "You haven’t blocked anyone.",
+  },
+  muted: {
+    title: "Muted accounts",
+    list: getMuted,
+    release: unmute,
+    verb: ["Unmute", "Unmuting…"],
+    gone: "NOT_MUTED",
+    empty: "You haven’t muted anyone.",
+  },
+} as const;
+
 /**
- * Privacy → "Blocked accounts".
- *
- * The one row on `/setting` that needed no backend work at all:
- * `GET /users/me/blocked` and `DELETE /users/{id}/block` were already there,
- * and `lib/api/users` already wrapped both with nothing calling them.
+ * Privacy → "Blocked accounts" and "Muted accounts": the viewer's own list of
+ * either, each row with the button that lifts it. user-service already had
+ * both lists and both undos; nothing called them.
  *
  * Styled as `FollowListModal` is — the same 500 × 640 sheet, the same paged
  * list — because it is the same kind of dialog and the live site draws it that
  * way.
  */
-export function BlockedAccountsModal({ onClose }: { onClose: () => void }) {
+export function AccountListModal({ kind, onClose }: { kind: ListKind; onClose: () => void }) {
   useEscapeKey(onClose);
   const mounted = useMounted();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -53,12 +73,12 @@ export function BlockedAccountsModal({ onClose }: { onClose: () => void }) {
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Blocked accounts"
+        aria-label={KINDS[kind].title}
         className="relative flex h-[640px] max-h-[calc(100vh-2rem)] w-[500px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-[8px] bg-[#121212] shadow-[0_2px_12px_rgba(0,0,0,0.12)]"
       >
         <div className="flex flex-none items-center border-b border-white/20 px-4">
           <h2 className="flex-1 py-4 text-[18px] leading-[27px] font-semibold text-[var(--tt-text)]">
-            Blocked accounts
+            {KINDS[kind].title}
           </h2>
           <button
             type="button"
@@ -70,13 +90,13 @@ export function BlockedAccountsModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <BlockedList />
+        <AccountList kind={kind} />
       </div>
     </div>
   );
 }
 
-function BlockedList() {
+function AccountList({ kind }: { kind: ListKind }) {
   const [rows, setRows] = useState<UserProfileResponse[]>([]);
   const [page, setPage] = useState(0);
   const [done, setDone] = useState(false);
@@ -87,7 +107,7 @@ function BlockedList() {
     setLoading(true);
     setError(null);
     try {
-      const result = await getBlocked(pageToLoad, PAGE_SIZE);
+      const result = await KINDS[kind].list(pageToLoad, PAGE_SIZE);
       setRows((current) => [...current, ...result.content]);
       setDone(isLastPage(result.page));
       setPage(pageToLoad + 1);
@@ -96,7 +116,7 @@ function BlockedList() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [kind]);
 
   const startedRef = useRef(false);
   useEffect(() => {
@@ -149,7 +169,7 @@ function BlockedList() {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center px-6">
         <p className="text-center text-[14px] text-[var(--tt-text-secondary)]">
-          You haven’t blocked anyone.
+          {KINDS[kind].empty}
         </p>
       </div>
     );
@@ -159,14 +179,16 @@ function BlockedList() {
     <div className="min-h-0 flex-1 overflow-y-auto py-2">
       {/* The contract is explicit that unblocking does not restore the follow
           edges blocking tore down, and that a UI which stays quiet about it
-          gets read as a bug. */}
-      <p className="px-4 pt-1 pb-3 text-[12px] leading-[16px] text-[var(--tt-text-muted)]">
-        Unblocking doesn’t restore a follow. If you followed each other before,
-        you’ll both need to follow again.
-      </p>
+          gets read as a bug. Muting never touched them. */}
+      {kind === "blocked" && (
+        <p className="px-4 pt-1 pb-3 text-[12px] leading-[16px] text-[var(--tt-text-muted)]">
+          Unblocking doesn’t restore a follow. If you followed each other before,
+          you’ll both need to follow again.
+        </p>
+      )}
 
       {rows.map((row) => (
-        <BlockedRow key={row.userId} profile={row} onUnblocked={remove} />
+        <AccountRow key={row.userId} kind={kind} profile={row} onReleased={remove} />
       ))}
 
       {error && (
@@ -187,29 +209,32 @@ function BlockedList() {
   );
 }
 
-function BlockedRow({
+function AccountRow({
+  kind,
   profile,
-  onUnblocked,
+  onReleased,
 }: {
+  kind: ListKind;
   profile: UserProfileResponse;
-  onUnblocked: (userId: string) => void;
+  onReleased: (userId: string) => void;
 }) {
+  const { release, verb, gone } = KINDS[kind];
   const author = authorFromProfile(profile);
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
-  const onUnblock = async () => {
+  const onRelease = async () => {
     setPending(true);
     setFailed(null);
     try {
-      await unblock(profile.userId);
-      onUnblocked(profile.userId);
+      await release(profile.userId);
+      onReleased(profile.userId);
     } catch (cause) {
-      // `NOT_BLOCKED` is the server agreeing the row should not be here —
-      // unblocked on another device, most likely. Drop it rather than report a
-      // failure the viewer cannot act on.
-      if (isApiError(cause) && cause.is("NOT_BLOCKED")) {
-        onUnblocked(profile.userId);
+      // `NOT_BLOCKED`/`NOT_MUTED` is the server agreeing the row should not be
+      // here — lifted on another device, most likely. Drop it rather than
+      // report a failure the viewer cannot act on.
+      if (isApiError(cause) && cause.is(gone)) {
+        onReleased(profile.userId);
         return;
       }
       setFailed(messageFor(cause));
@@ -248,7 +273,7 @@ function BlockedRow({
 
       <button
         type="button"
-        onClick={onUnblock}
+        onClick={onRelease}
         disabled={pending}
         className={cn(
           "h-8 flex-none rounded-[4px] px-4 text-[14px] font-semibold transition-colors",
@@ -256,7 +281,7 @@ function BlockedRow({
           "disabled:opacity-60",
         )}
       >
-        {pending ? "Unblocking…" : "Unblock"}
+        {pending ? verb[1] : verb[0]}
       </button>
     </div>
   );

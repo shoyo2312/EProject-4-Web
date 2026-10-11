@@ -239,6 +239,11 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             title: "Blocked accounts",
             action: "blocked-accounts",
           },
+          {
+            kind: "link",
+            title: "Muted accounts",
+            action: "muted-accounts",
+          },
         ],
       },
       {
