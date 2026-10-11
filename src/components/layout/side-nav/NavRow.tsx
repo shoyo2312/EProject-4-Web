@@ -83,6 +83,7 @@ export function NavRow({
             <img
               src={avatarUrl}
               alt=""
+              referrerPolicy="no-referrer"
               width={32}
               height={32}
               className="h-8 w-8 rounded-full object-cover"

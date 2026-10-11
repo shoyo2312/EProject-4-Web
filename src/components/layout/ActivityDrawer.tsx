@@ -395,6 +395,7 @@ function NotificationItem({
           <img
             src={actor?.avatarUrl ?? DEFAULT_AVATAR}
             alt=""
+            referrerPolicy="no-referrer"
             width={48}
             height={48}
             className="h-12 w-12 rounded-3xl object-cover"

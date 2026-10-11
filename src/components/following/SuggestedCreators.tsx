@@ -121,6 +121,7 @@ function CreatorCard({ creator }: { creator: SuggestedCreator }) {
         <img
           src={creator.author.avatarUrl}
           alt=""
+          referrerPolicy="no-referrer"
           className="mb-[14px] h-12 w-12 rounded-full bg-[rgb(136_136_136/0.5)] object-cover"
         />
 

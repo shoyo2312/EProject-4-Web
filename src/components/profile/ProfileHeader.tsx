@@ -111,6 +111,7 @@ export function ProfileHeader({
       <img
         src={profile.author.avatarUrl}
         alt=""
+        referrerPolicy="no-referrer"
         className="h-[172px] w-[172px] flex-none rounded-full object-cover tt-840:h-24 tt-840:w-24"
       />
 

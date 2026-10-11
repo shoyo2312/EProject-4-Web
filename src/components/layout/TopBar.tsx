@@ -117,6 +117,7 @@ function AccountMenu() {
         <img
           src={user.avatarUrl}
           alt="Your profile"
+          referrerPolicy="no-referrer"
           width={32}
           height={32}
           className="h-8 w-8 rounded-full object-cover"

@@ -209,6 +209,7 @@ export function EditProfileModal({
               <img
                 src={draft.avatarUrl || DEFAULT_AVATAR}
                 alt=""
+                referrerPolicy="no-referrer"
                 className="ml-32 h-24 w-24 rounded-full bg-white/[0.12] object-cover"
               />
               <button

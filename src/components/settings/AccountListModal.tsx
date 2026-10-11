@@ -251,6 +251,7 @@ function AccountRow({
       <img
         src={author.avatarUrl || DEFAULT_AVATAR}
         alt=""
+        referrerPolicy="no-referrer"
         className="h-11 w-11 flex-none rounded-full object-cover"
       />
 

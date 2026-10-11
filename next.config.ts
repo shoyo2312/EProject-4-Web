@@ -20,9 +20,15 @@ const MEDIA_CDN_HOST = process.env.MEDIA_CDN_HOST ?? "cdn.tiktok-clone.local";
  * Where the identity providers host the picture a social signup arrives with.
  * user-service stores that URL as-is on the new profile — it is not our media,
  * so it is not on the CDN and deliberately not on the `avatarUrl` allow-list —
- * which leaves this the only place deciding whether such an avatar renders.
- * Without it a Google or Facebook signup shows a broken image instead of the
- * default avatar, which is worse than the problem the picture was to solve.
+ * which leaves this the only place deciding whether such an avatar renders
+ * through `next/image`. Without it a Google or Facebook signup shows a broken
+ * image instead of the default avatar, which is worse than the problem the
+ * picture was to solve.
+ *
+ * The avatars drawn with a plain `<img>` never pass through here, so they carry
+ * `referrerPolicy="no-referrer"` instead: Google answers a hotlinked picture
+ * that arrives with our page as its `Referer` with an error (a 503) rather
+ * than the image.
  */
 const PROVIDER_AVATAR_HOSTS = [
   "lh3.googleusercontent.com",

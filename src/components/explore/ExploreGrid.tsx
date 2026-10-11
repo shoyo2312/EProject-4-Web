@@ -306,6 +306,7 @@ function ExploreTile({
         <img
           src={item.author.avatarUrl}
           alt=""
+          referrerPolicy="no-referrer"
           className="h-6 w-6 flex-none rounded-full"
         />
         <span className="truncate">{item.author.nickname}</span>

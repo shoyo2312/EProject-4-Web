@@ -115,6 +115,7 @@ export function FollowRequestsModal({
                 <img
                   src={author.avatarUrl}
                   alt=""
+                  referrerPolicy="no-referrer"
                   className="h-11 w-11 flex-none rounded-full object-cover"
                 />
                 <span className="min-w-0">
