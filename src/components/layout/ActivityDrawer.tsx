@@ -1,18 +1,21 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useEscapeKey } from "@/hooks/use-escape-key";
-import { CloseIcon } from "@/components/icons";
+import { AddFriendIcon, ChevronRightIcon, CloseIcon } from "@/components/icons";
+import { FollowRequestsModal } from "@/components/layout/FollowRequestsModal";
+import { useSession } from "@/components/session/SessionProvider";
 import {
   NOTIFICATION_FILTERS,
   groupByDay,
   type NotificationInbox,
 } from "@/hooks/use-notifications";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
-import type { NotificationResponse } from "@/lib/api/notifications";
+import { referencesUser, type NotificationResponse } from "@/lib/api/notifications";
 import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
+import { getFollowRequests } from "@/lib/api/users";
 import { formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +59,25 @@ export function ActivityDrawer({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const signedIn = useSession().user !== null;
   const [filter, setFilter] = useState<string>(NOTIFICATION_FILTERS[0].label);
+  /** Follow requests waiting on this (private) account; a public one has none. */
+  const [requestCount, setRequestCount] = useState(0);
+  const [requestsOpen, setRequestsOpen] = useState(false);
+
+  const countRequests = useCallback(() => {
+    getFollowRequests(0, 1).then(
+      (page) => setRequestCount(page.page.totalElements),
+      () => {
+        // Unreadable — the entry keeps whatever it last showed.
+      },
+    );
+  }, []);
+
+  // On every open: requests arrive while the panel is shut.
+  useEffect(() => {
+    if (open && signedIn) countRequests();
+  }, [open, signedIn, countRequests]);
 
   const groups = useMemo(() => {
     const selected = NOTIFICATION_FILTERS.find((chip) => chip.label === filter);
@@ -87,10 +108,10 @@ export function ActivityDrawer({
     inbox.markRead(item.id);
     if (!item.referenceId) return;
 
-    // A NEW_FOLLOWER's referenceId is the follower's userId, and `/@{id}` is a
+    // The follow types' referenceId is an account's userId, and `/@{id}` is a
     // profile URL in its own right (see ProfileRouter) — no lookup needed to
     // turn it into a handle first.
-    if (item.type === "NEW_FOLLOWER") {
+    if (referencesUser(item.type)) {
       navigate(`/@${item.referenceId}`);
       return;
     }
@@ -184,6 +205,38 @@ export function ActivityDrawer({
         {/* `.DivInboxContentContainer` — flex 1 1 auto, overflow auto, with an
             8px negative end margin so the scrollbar sits outside the padding. */}
         <div className="no-scrollbar -me-2 flex-1 overflow-auto pe-2">
+          {/* Shaped like the live system-notification row: 72px, a 48px round
+              icon field, a title line over a one-line description. */}
+          {requestCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setRequestsOpen(true)}
+              className="mb-4 flex h-[72px] w-full items-center rounded-[8px] px-2 text-start transition-colors hover:bg-[rgb(37,37,37)]"
+            >
+              <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-[rgb(50,54,75)] text-white">
+                <AddFriendIcon className="h-6 w-6" />
+              </span>
+              <span className="min-w-0 flex-1 px-2">
+                <span className="block truncate text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
+                  Follow requests
+                </span>
+                <span className="block truncate text-[13px] leading-[17px] text-[rgb(255_255_255_/_0.5)]">
+                  {requestCount === 1 ? "1 person wants" : `${requestCount} people want`} to follow you
+                </span>
+              </span>
+              <ChevronRightIcon className="h-4 w-4 flex-none text-[rgb(255_255_255_/_0.5)]" />
+            </button>
+          )}
+          {requestsOpen && (
+            <FollowRequestsModal
+              onClose={() => setRequestsOpen(false)}
+              onLeave={() => {
+                setRequestsOpen(false);
+                onClose();
+              }}
+              onSettled={countRequests}
+            />
+          )}
           {groups.length === 0 && inbox.loaded && (
             <p className="px-2 py-6 text-[14px] leading-[18px] text-[rgb(255_255_255_/_0.5)]">
               No notifications yet.
@@ -276,6 +329,10 @@ function describe(item: NotificationResponse): string {
       return "shared your video";
     case "NEW_FOLLOWER":
       return "started following you";
+    case "FOLLOW_REQUEST":
+      return "requested to follow you";
+    case "FOLLOW_REQUEST_ACCEPTED":
+      return "accepted your follow request";
     case "COMMENT":
       return `commented: ${item.body}`;
     case "SYSTEM":

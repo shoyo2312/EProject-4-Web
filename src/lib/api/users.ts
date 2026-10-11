@@ -318,6 +318,36 @@ export function getBlocked(
   });
 }
 
+/**
+ * `GET /api/v1/users/me/follow-requests` — who is waiting on the viewer's
+ * approval, newest first. Only a private account collects any.
+ */
+export function getFollowRequests(
+  page = 0,
+  size = 20,
+): Promise<PageResponse<UserProfileResponse>> {
+  return apiFetch<PageResponse<UserProfileResponse>>("/users/me/follow-requests", {
+    auth: "required",
+    query: { page, size },
+  });
+}
+
+/** `POST …/follow-requests/{requesterId}/approve` — the requester now follows the viewer. */
+export function approveFollowRequest(requesterId: string): Promise<FollowResponse> {
+  return apiFetch<FollowResponse>(`/users/me/follow-requests/${requesterId}/approve`, {
+    method: "POST",
+    auth: "required",
+  });
+}
+
+/** `DELETE …/follow-requests/{requesterId}` — declined, and the requester is not told. */
+export function declineFollowRequest(requesterId: string): Promise<void> {
+  return apiFetch<void>(`/users/me/follow-requests/${requesterId}`, {
+    method: "DELETE",
+    auth: "required",
+  });
+}
+
 export function getMySettings(): Promise<UserSettingsResponse> {
   return apiFetch<UserSettingsResponse>("/users/me/settings", {
     auth: "required",

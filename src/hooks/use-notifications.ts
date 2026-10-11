@@ -8,6 +8,7 @@ import {
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  referencesUser,
   type NotificationResponse,
   type NotificationType,
 } from "@/lib/api/notifications";
@@ -29,7 +30,7 @@ export const NOTIFICATION_FILTERS = [
   { label: "All activity", types: null },
   { label: "Likes", types: ["LIKE", "COMMENT_LIKE"] },
   { label: "Comments", types: ["COMMENT"] },
-  { label: "Followers", types: ["NEW_FOLLOWER"] },
+  { label: "Followers", types: ["NEW_FOLLOWER", "FOLLOW_REQUEST", "FOLLOW_REQUEST_ACCEPTED"] },
 ] as const satisfies readonly {
   label: string;
   types: readonly NotificationType[] | null;
@@ -113,7 +114,7 @@ export interface NotificationInbox {
   actors: Map<string, UserProfileResponse>;
   /**
    * The referenced video, keyed by `NotificationResponse.referenceId`, for every type
-   * except NEW_FOLLOWER (its `referenceId` is a userId) and SYSTEM (it has none).
+   * except the follow ones (their `referenceId` is a userId) and SYSTEM (it has none).
    */
   videos: Map<string, VideoResponse>;
   markRead: (notificationId: string) => void;
@@ -230,13 +231,13 @@ export function useNotifications(): NotificationInbox {
   }, [unresolvedActorIds]);
 
   // Same batching as actors above, keyed by referenceId instead of actorId —
-  // NEW_FOLLOWER and SYSTEM are the only types that do not name a video.
+  // The follow types and SYSTEM are the only ones that do not name a video.
   const unresolvedVideoIds = useMemo(() => {
     const ids = new Set<string>();
     for (const item of items) {
       if (
         item.referenceId &&
-        item.type !== "NEW_FOLLOWER" &&
+        !referencesUser(item.type) &&
         item.type !== "SYSTEM" &&
         !videos.has(item.referenceId)
       ) {
