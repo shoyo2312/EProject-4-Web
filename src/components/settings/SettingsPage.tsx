@@ -5,10 +5,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BlockedAccountsModal } from "@/components/settings/BlockedAccountsModal";
 import {
+  AccountSwitchRow,
   AudienceRow,
   ScreenTimeLimitRow,
   SleepHoursRow,
-  WeeklyDigestRow,
 } from "@/components/settings/rows/AccountRows";
 import {
   Accessory,
@@ -254,8 +254,10 @@ function Row({ row, account }: { row: SettingsRow; account: AccountSettings }) {
         return <HighContrastRow row={row} />;
       case "browser-notifications":
         return <BrowserNotificationsRow row={row} />;
+      case "private-account":
+        return <AccountSwitchRow row={row} account={account} field="privateAccount" />;
       case "weekly-screen-time":
-        return <WeeklyDigestRow row={row} account={account} />;
+        return <AccountSwitchRow row={row} account={account} field="weeklyScreenTimeDigest" />;
       default:
         return <SessionSwitchRow row={row} />;
     }
@@ -283,9 +285,9 @@ function Row({ row, account }: { row: SettingsRow; account: AccountSettings }) {
 }
 
 /**
- * The unwired switches — private account and business verification. They hold
- * their position for the session and are forgotten on reload, which is the
- * honest rendering of a control with nowhere to save to.
+ * The unwired switch — business verification. It holds its position for the
+ * session and is forgotten on reload, which is the honest rendering of a
+ * control with nowhere to save to.
  */
 function SessionSwitchRow({ row }: { row: SwitchSettingsRow }) {
   const [on, setOn] = useState(row.on);

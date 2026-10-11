@@ -214,6 +214,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             description:
               "With a private account, only users you approve can follow you and watch your videos. Your existing followers won’t be affected.",
             on: false,
+            action: "private-account",
           },
         ],
       },

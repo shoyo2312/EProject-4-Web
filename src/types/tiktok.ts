@@ -284,6 +284,7 @@ export type SettingsAction =
   | "blocked-accounts"
   | "browser-notifications"
   | "high-contrast"
+  | "private-account"
   | "comment-audience"
   | "dm-audience"
   | "screen-time-limit"

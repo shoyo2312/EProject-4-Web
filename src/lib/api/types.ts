@@ -152,6 +152,11 @@ export interface UserSettingsResponse {
   sleepHoursStart: string | null;
   sleepHoursEnd: string | null;
   weeklyScreenTimeDigest: boolean;
+  /**
+   * Kept on the profile, switched here. On, only approved followers see the
+   * videos; turning it off approves every request still waiting.
+   */
+  privateAccount: boolean;
 }
 
 /* --- api-gateway aggregate ----------------------------------------------- */

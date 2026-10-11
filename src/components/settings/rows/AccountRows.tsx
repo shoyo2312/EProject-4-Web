@@ -147,24 +147,26 @@ export function SleepHoursRow({ row, account }: AccountRowProps) {
   );
 }
 
-/** Screen time → Weekly screen time updates. */
-export function WeeklyDigestRow({
+/** Privacy → Private account, and Screen time → Weekly screen time updates. */
+export function AccountSwitchRow({
   row,
   account,
+  field,
 }: {
   row: Extract<SettingsRow, { kind: "switch" }>;
   account: AccountSettings;
+  field: "privateAccount" | "weeklyScreenTimeDigest";
 }) {
   const { requireSignIn } = useSession();
   /** Where the switch is headed while its save is in flight. */
   const [target, setTarget] = useState<boolean | null>(null);
-  const on = target ?? account.settings?.weeklyScreenTimeDigest ?? row.on;
+  const on = target ?? account.settings?.[field] ?? row.on;
 
   const onToggle = () => {
     if (!requireSignIn() || !account.settings || target !== null) return;
     setTarget(!on);
     account
-      .update({ weeklyScreenTimeDigest: !on })
+      .update({ [field]: !on })
       .catch((cause) => toast.error(messageFor(cause)))
       .finally(() => setTarget(null));
   };
