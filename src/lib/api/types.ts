@@ -376,6 +376,21 @@ export interface ShareResponse {
   shareCount: number;
 }
 
+/**
+ * `GET /interactions/videos/counts/batch` — interaction-service's counters, the
+ * source of truth for all of them, and the only place shares and saves are
+ * counted at all: `VideoResponse` carries neither.
+ */
+export interface InteractionCountResponse {
+  videoId: string;
+  likeCount: number;
+  commentCount: number;
+  shareCount: number;
+  viewCount: number;
+  saveCount: number;
+  repostCount: number;
+}
+
 /** Repost is a toggle, like a like — not an event log like a share. */
 export interface RepostStatusResponse {
   videoId: string;

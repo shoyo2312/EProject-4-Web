@@ -31,6 +31,7 @@ export function FeedVideoCard({
   onEnded,
   onCommentClick,
   saved,
+  savedAtLoad,
   onToggleSave,
 }: {
   video: FeedVideo;
@@ -53,6 +54,7 @@ export function FeedVideoCard({
   onEnded?: () => void;
   onCommentClick: () => void;
   saved: boolean;
+  savedAtLoad: boolean;
   onToggleSave: () => void;
 }) {
   const { liked, likeCount, toggleLike, likeOnly } = useVideoLike({
@@ -131,6 +133,7 @@ export function FeedVideoCard({
           likes={likeCount}
           onToggleLike={toggleLike}
           saved={saved}
+          savedAtLoad={savedAtLoad}
           saveCount={liveFrame?.saveCount}
           onToggleSave={onToggleSave}
         />

@@ -7,6 +7,11 @@ import { listSavedVideos, saveVideo, unsaveVideo } from "@/lib/api/interactions"
 
 interface SavedVideos {
   isSaved: (videoId: string) => boolean;
+  /**
+   * Whether it was a favourite when the list was first read. A card's save
+   * count is read at about that moment, so this is the save it already holds.
+   */
+  wasSaved: (videoId: string) => boolean;
   /** Optimistic, with a silent rollback on failure — same contract as the heart. */
   toggleSave: (videoId: string) => void;
 }
@@ -33,6 +38,7 @@ export function useSavedVideos(): SavedVideos {
   // profile edit, and each rebuild re-read up to ten pages of favourites.
   const viewerId = user?.userId;
   const [savedIds, setSavedIds] = useState<ReadonlySet<string>>(new Set());
+  const [loadedIds, setLoadedIds] = useState<ReadonlySet<string>>(new Set());
 
   // Signed out there is nothing to ask: every save endpoint needs a token, so
   // the bookmarks start empty and the tap opens the login modal.
@@ -50,7 +56,10 @@ export function useSavedVideos(): SavedVideos {
         if (!reply.hasMore || !reply.nextCursor) break;
         cursor = reply.nextCursor;
       }
-      if (!cancelled) setSavedIds(new Set(ids));
+      if (cancelled) return;
+      const loaded = new Set(ids);
+      setSavedIds(loaded);
+      setLoadedIds(loaded);
     })().catch(() => {
       // Unreadable list — the bookmarks just start empty.
     });
@@ -66,6 +75,11 @@ export function useSavedVideos(): SavedVideos {
   const isSaved = useCallback(
     (videoId: string) => viewerId !== undefined && savedIds.has(videoId),
     [savedIds, viewerId],
+  );
+
+  const wasSaved = useCallback(
+    (videoId: string) => viewerId !== undefined && loadedIds.has(videoId),
+    [loadedIds, viewerId],
   );
 
   const toggleSave = useCallback(
@@ -92,5 +106,5 @@ export function useSavedVideos(): SavedVideos {
     [requireSignIn, savedIds],
   );
 
-  return { isSaved, toggleSave };
+  return { isSaved, wasSaved, toggleSave };
 }

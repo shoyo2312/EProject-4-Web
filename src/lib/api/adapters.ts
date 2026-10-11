@@ -1,4 +1,9 @@
-import type { MeResponse, UserProfileResponse, VideoResponse } from "@/lib/api/types";
+import type {
+  InteractionCountResponse,
+  MeResponse,
+  UserProfileResponse,
+  VideoResponse,
+} from "@/lib/api/types";
 import type { Author, ExploreItem, FeedVideo, ProfileVideo, UserProfile } from "@/types/tiktok";
 
 /**
@@ -17,11 +22,10 @@ import type { Author, ExploreItem, FeedVideo, ProfileVideo, UserProfile } from "
  *     the file has been probed. `width`/`height` are real once transcoding
  *     finishes; portrait 1080×1920 is only the fallback before that, or for
  *     videos uploaded before video-service measured them.
- *  3. **No music, no bookmark counter, no baseline share counter.** A save is
- *     private, so nothing counts them publicly. Sharing is recorded by
- *     interaction-service, but `VideoResponse` carries no denormalized share count the way it
- *     does like/comment counts, so `shares` starts at 0 here and the UI adds
- *     this-session's shares on top (`ActionRail`, `VideoDetail`).
+ *  3. **No music, and no share or save counts on the video.** interaction-service
+ *     counts both, but `VideoResponse` carries neither the way it carries likes
+ *     and comments, so a card built without that service's counts
+ *     (`getVideoCounts`) shows 0 for them.
  */
 
 /** The route segment for a backend account: its id, since there is no handle. */
@@ -102,7 +106,7 @@ export function unknownAuthor(userId: string): Author {
 export function videoToFeedVideo(
   video: VideoResponse,
   author: Author,
-  options: { isFollowing?: boolean } = {},
+  options: { isFollowing?: boolean; counts?: InteractionCountResponse } = {},
 ): FeedVideo {
   return {
     id: video.id,
@@ -118,10 +122,9 @@ export function videoToFeedVideo(
       likes: video.likeCount,
       // Null when comments are off — `commentsDisabled` is what the UI reads then.
       comments: video.commentCount ?? 0,
-      // See the module doc: bookmarks have no source at all; shares does,
-      // but not as a count on this DTO — the UI tracks it from a 0 baseline.
-      bookmarks: 0,
-      shares: 0,
+      // See the module doc: these two come from interaction-service, or not at all.
+      bookmarks: options.counts?.saveCount ?? 0,
+      shares: options.counts?.shareCount ?? 0,
     },
     // Empty until transcoding produces the HLS manifest — VideoCard falls back
     // to a poster-only card, which is exactly the PROCESSING state.

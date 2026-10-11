@@ -12,6 +12,8 @@ import { getSaveStatus, saveVideo, unsaveVideo } from "@/lib/api/interactions";
  */
 export function useVideoSave(videoId: string, signedIn: boolean) {
   const [saved, setSaved] = useState(false);
+  /** The save as first read — the one the page's save count already holds. */
+  const [savedAtLoad, setSavedAtLoad] = useState(false);
 
   // Signed out there is nothing to ask: the status endpoint needs a token.
   useEffect(() => {
@@ -19,7 +21,9 @@ export function useVideoSave(videoId: string, signedIn: boolean) {
     let cancelled = false;
     getSaveStatus(videoId)
       .then((status) => {
-        if (!cancelled) setSaved(status.saved);
+        if (cancelled) return;
+        setSaved(status.saved);
+        setSavedAtLoad(status.saved);
       })
       .catch(() => {
         // The call failed — the bookmark starts unfilled.
@@ -40,5 +44,5 @@ export function useVideoSave(videoId: string, signedIn: boolean) {
     });
   }, [videoId, saved]);
 
-  return { saved, toggleSave };
+  return { saved, savedAtLoad, toggleSave };
 }

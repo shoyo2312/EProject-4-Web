@@ -372,6 +372,7 @@ export function VideoDetail({
                 likes={like.likeCount}
                 onToggleLike={like.toggleLike}
                 saved={save.saved}
+                savedAtLoad={save.savedAtLoad}
                 onToggleSave={toggleSave}
               />
             </div>

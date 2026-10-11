@@ -6,6 +6,7 @@ import type {
   CommentPageResponse,
   CommentPermissionResponse,
   CommentResponse,
+  InteractionCountResponse,
   LikeStatusResponse,
   RepostContextResponse,
   RepostStatusResponse,
@@ -128,6 +129,23 @@ export function getRepostContexts(videoIds: string[]): Promise<RepostContextResp
   return apiFetch<RepostContextResponse[]>("/interactions/videos/repost-context/batch", {
     auth: "required",
     query: { ids: videoIds.join(",") },
+  });
+}
+
+/**
+ * `GET /interactions/videos/counts/batch` — every counter for a page of videos
+ * in one hop. Public. The server answers for at most 50 distinct ids, which a
+ * feed page stays under; an id with no interactions comes back as zeros.
+ */
+export function getVideoCounts(
+  videoIds: string[],
+  signal?: AbortSignal,
+): Promise<InteractionCountResponse[]> {
+  if (videoIds.length === 0) return Promise.resolve([]);
+  return apiFetch<InteractionCountResponse[]>("/interactions/videos/counts/batch", {
+    auth: "none",
+    query: { videoIds: videoIds.join(",") },
+    signal,
   });
 }
 

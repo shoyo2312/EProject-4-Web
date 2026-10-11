@@ -33,6 +33,7 @@ export function ActionRail({
   likes,
   onToggleLike,
   saved,
+  savedAtLoad,
   saveCount,
   onToggleSave,
   compact = false,
@@ -55,6 +56,11 @@ export function ActionRail({
   onToggleLike: () => void;
   /** Controlled by `Feed` so one saved-set answers every card on the page. */
   saved: boolean;
+  /**
+   * `saved` as it was first read. `video.stats.bookmarks` was read alongside
+   * it, so that save is already in the count; only a toggle since moves it.
+   */
+  savedAtLoad: boolean;
   /**
    * Authoritative total from the realtime counts frame — it already includes
    * this viewer's own save. Undefined until the first frame lands, when the
@@ -164,11 +170,12 @@ export function ActionRail({
         <CommentIcon className="h-[21px] w-[21px]" />
       </RailButton>
 
-      {/* Until a counts frame lands, the base figure plus this viewer's own bookmark:
-          video_counters has no save_count column, because a save is private
-          and nothing public ever shows how many people made one. */}
+      {/* Until a counts frame lands: the count read with the card, moved by
+          whatever this viewer has toggled since. */}
       <RailButton
-        label={formatCount(saveCount ?? video.stats.bookmarks + (saved ? 1 : 0))}
+        label={formatCount(
+          saveCount ?? video.stats.bookmarks + Number(saved) - Number(savedAtLoad),
+        )}
         onClick={onToggleSave}
         active={saved}
         activeColor="text-[#facc15]"

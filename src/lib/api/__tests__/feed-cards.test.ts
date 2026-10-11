@@ -7,6 +7,11 @@ vi.mock("@/lib/api/authors", () => ({
   resolveAuthors: (ids: string[]) => resolveAuthors(ids),
 }));
 
+const getVideoCounts = vi.fn().mockResolvedValue([]);
+vi.mock("@/lib/api/interactions", () => ({
+  getVideoCounts: (ids: string[]) => getVideoCounts(ids),
+}));
+
 const { toFeedCards } = await import("@/lib/api/feed-cards");
 
 const row = (id: string) => ({ id, userId: "1" }) as VideoResponse;
@@ -30,5 +35,17 @@ describe("toFeedCards", () => {
 
     await expect(toFeedCards([row("a")], seen)).rejects.toThrow("down");
     await expect(toFeedCards([row("a")], seen)).resolves.toHaveLength(1);
+  });
+
+  it("carries the share and save counts, and shows the cards without them", async () => {
+    resolveAuthors.mockResolvedValue(new Map());
+    getVideoCounts.mockResolvedValueOnce([{ videoId: "a", shareCount: 4, saveCount: 2 }]);
+
+    const [card] = await toFeedCards([row("a")], new Set());
+    expect(card.stats).toMatchObject({ shares: 4, bookmarks: 2 });
+
+    getVideoCounts.mockRejectedValueOnce(new Error("down"));
+    const [bare] = await toFeedCards([row("b")], new Set());
+    expect(bare.stats).toMatchObject({ shares: 0, bookmarks: 0 });
   });
 });

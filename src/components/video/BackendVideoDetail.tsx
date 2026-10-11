@@ -12,6 +12,7 @@ import {
 import { videoToFeedVideo } from "@/lib/api/adapters";
 import { resolveAuthor } from "@/lib/api/authors";
 import { messageFor } from "@/lib/api/errors";
+import { getVideoCounts } from "@/lib/api/interactions";
 import { getUserVideos, getVideo, pollUntilReady } from "@/lib/api/videos";
 import { getOverlayCollection } from "@/lib/overlay-origin";
 import type { VideoStatus } from "@/lib/api/types";
@@ -59,9 +60,13 @@ export function BackendVideoDetail({
     (async () => {
       try {
         const raw = await getVideo(videoId, controller.signal);
-        const author = await resolveAuthor(raw.userId);
+        const [author, [counts]] = await Promise.all([
+          resolveAuthor(raw.userId),
+          // Shares and saves only — a failure must not cost the page.
+          getVideoCounts([videoId], controller.signal).catch(() => []),
+        ]);
         setStatus(raw.status);
-        setVideo(videoToFeedVideo(raw, author));
+        setVideo(videoToFeedVideo(raw, author, { counts }));
         rendered = true;
 
         /**
@@ -76,7 +81,7 @@ export function BackendVideoDetail({
             videoId,
             (latest) => {
               setStatus(latest.status);
-              setVideo(videoToFeedVideo(latest, author));
+              setVideo(videoToFeedVideo(latest, author, { counts }));
             },
             controller.signal,
           ).catch(() => {

@@ -72,7 +72,7 @@ export function Feed({
    * Bookmarks — the viewer's whole saved set, fetched once and shared by every
    * card; see `useSavedVideos`.
    */
-  const { isSaved, toggleSave } = useSavedVideos();
+  const { isSaved, wasSaved, toggleSave } = useSavedVideos();
 
   /**
    * Snapshot of the latest `counts` realtime frame per video id — a video not
@@ -314,6 +314,7 @@ export function Feed({
               onEnded={autoScroll ? () => scrollByItem(1) : undefined}
               onCommentClick={() => toggleComments(video)}
               saved={isSaved(video.id)}
+              savedAtLoad={wasSaved(video.id)}
               onToggleSave={() => toggleSave(video.id)}
             />
           ))}
