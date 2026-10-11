@@ -310,6 +310,16 @@ export interface FeedItemResponse {
   reasons: string[];
 }
 
+/**
+ * `GET /api/v1/recommendations/trending` — the last 24 hours' chart, the same
+ * for every viewer. Ids in rank order, hydrated like the feed; `score` decays
+ * by the hour and means something only against the other rows it came with.
+ */
+export interface TrendingVideoResponse {
+  videoId: string;
+  score: number;
+}
+
 /* --- interaction-service -------------------------------------------------- */
 
 /**
