@@ -338,7 +338,8 @@ function UserRowSkeletonList({ count }: { count: number }) {
   );
 }
 
-function UserRow({
+/** One account with its Follow button; the search page's Accounts tab uses it too. */
+export function UserRow({
   author,
   initialFollowing = false,
 }: {
