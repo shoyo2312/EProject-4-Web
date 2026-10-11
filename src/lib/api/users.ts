@@ -276,11 +276,14 @@ export function getFollowing(
   );
 }
 
-export function block(userId: string): Promise<void> {
-  return apiFetch<void>(`/users/${userId}/block`, {
+export async function block(userId: string): Promise<void> {
+  await apiFetch<void>(`/users/${userId}/block`, {
     method: "POST",
     auth: "required",
   });
+  // The server ends the follows both ways, a pending request included.
+  setFollowState(userId, false);
+  setFollowRequested(userId, false);
 }
 
 export function unblock(userId: string): Promise<void> {

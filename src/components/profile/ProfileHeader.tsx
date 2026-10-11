@@ -6,11 +6,11 @@ import { useState } from "react";
 import {
   AddFriendIcon,
   BioLinkIcon,
-  MoreHorizontalIcon,
   SettingsIcon,
   ShareIcon,
   VerifiedBadgeIcon,
 } from "@/components/icons";
+import { ProfileMoreMenu } from "@/components/profile/ProfileMoreMenu";
 import { displayHandle } from "@/lib/api/adapters";
 import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -181,9 +181,7 @@ export function ProfileHeader({
           </IconButton>
 
           {!isOwner && (
-            <IconButton label="More" onClick={requireSignIn}>
-              <MoreHorizontalIcon className="h-5 w-5" />
-            </IconButton>
+            <ProfileMoreMenu userId={profile.author.userId} name={profile.author.nickname} />
           )}
         </div>
 
