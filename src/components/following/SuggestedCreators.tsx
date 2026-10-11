@@ -78,7 +78,7 @@ export function SuggestedCreators({
  */
 function CreatorCard({ creator }: { creator: SuggestedCreator }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { following, toggle } = useFollow(creator.author.userId, creator.isFollowing);
+  const { following, requested, toggle } = useFollow(creator.author.userId, creator.isFollowing);
 
   const preview = (playing: boolean) => {
     const video = videoRef.current;
@@ -148,12 +148,12 @@ function CreatorCard({ creator }: { creator: SuggestedCreator }) {
           aria-pressed={following}
           className={cn(
             "mt-2 h-[37px] w-[164px] rounded-[4px] text-[18px] leading-[25px] font-semibold transition-colors",
-            following
+            following || requested
               ? "bg-[var(--tt-field)] text-white hover:bg-[var(--tt-shape-neutral-3)]"
               : "bg-[var(--tt-red-active)] text-white hover:bg-[var(--tt-red)]",
           )}
         >
-          {following ? "Following" : "Follow"}
+          {following ? "Following" : requested ? "Requested" : "Follow"}
         </button>
       </div>
     </Link>

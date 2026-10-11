@@ -346,7 +346,7 @@ export function UserRow({
   author: Author;
   initialFollowing?: boolean;
 }) {
-  const { isSelf, following, toggle } = useFollow(author.userId, initialFollowing);
+  const { isSelf, following, requested, toggle } = useFollow(author.userId, initialFollowing);
 
   return (
     <Link
@@ -378,12 +378,12 @@ export function UserRow({
           }}
           className={cn(
             "h-8 flex-none rounded-[4px] px-4 text-[14px] font-semibold transition-colors",
-            following
+            following || requested
               ? "bg-[var(--tt-field)] text-[var(--tt-text)] hover:bg-[var(--tt-shape-neutral-3)]"
               : "bg-[var(--tt-red-active)] text-white hover:bg-[var(--tt-red)]",
           )}
         >
-          {following ? "Following" : "Follow"}
+          {following ? "Following" : requested ? "Requested" : "Follow"}
         </button>
       )}
     </Link>

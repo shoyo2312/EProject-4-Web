@@ -14,7 +14,7 @@ import {
 import { displayHandle } from "@/lib/api/adapters";
 import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { UserProfile } from "@/types/tiktok";
+import type { FollowStatus, UserProfile } from "@/types/tiktok";
 
 /**
  * `.CreatorPageHeader` — the 172px avatar beside the identity column.
@@ -54,12 +54,17 @@ export function ProfileHeader({
    * Persists the follow state. Rejecting puts the button back where it was.
    */
   /** Resolves to where the server settled — a private account only takes a request. */
-  onToggleFollow: (next: boolean) => Promise<boolean>;
+  onToggleFollow: (next: boolean) => Promise<FollowStatus>;
   /** Opens the Followers/Following dialog on that stat. */
   onOpenFollowers: () => void;
   onOpenFollowing: () => void;
 }) {
-  const [following, setFollowing] = useState(profile.isFollowing);
+  const fromServer: FollowStatus = profile.isFollowing
+    ? "FOLLOWING"
+    : profile.followRequested
+      ? "REQUESTED"
+      : "NONE";
+  const [status, setStatus] = useState(fromServer);
   const [followPending, setFollowPending] = useState(false);
 
   /**
@@ -71,10 +76,10 @@ export function ProfileHeader({
    * (rather than assigning on each render) keeps a click from being undone by
    * the next re-render.
    */
-  const [lastFromServer, setLastFromServer] = useState(profile.isFollowing);
-  if (profile.isFollowing !== lastFromServer) {
-    setLastFromServer(profile.isFollowing);
-    setFollowing(profile.isFollowing);
+  const [lastFromServer, setLastFromServer] = useState(fromServer);
+  if (fromServer !== lastFromServer) {
+    setLastFromServer(fromServer);
+    setStatus(fromServer);
   }
 
   /**
@@ -85,14 +90,16 @@ export function ProfileHeader({
   const toggleFollow = async () => {
     if (!requireSignIn() || followPending) return;
 
-    const next = !following;
-    setFollowing(next);
+    // "Requested" is undone like "Following": the same call withdraws it.
+    const previous = status;
+    const next = previous === "NONE";
+    setStatus(next ? "FOLLOWING" : "NONE");
 
     setFollowPending(true);
     try {
-      setFollowing(await onToggleFollow(next));
+      setStatus(await onToggleFollow(next));
     } catch {
-      setFollowing(!next);
+      setStatus(previous);
     } finally {
       setFollowPending(false);
     }
@@ -159,8 +166,8 @@ export function ProfileHeader({
             </>
           ) : (
             <>
-              <PillButton primary={!following} onClick={toggleFollow}>
-                {following ? "Following" : "Follow"}
+              <PillButton primary={status === "NONE"} onClick={toggleFollow}>
+                {status === "FOLLOWING" ? "Following" : status === "REQUESTED" ? "Requested" : "Follow"}
               </PillButton>
               <PillButton onClick={requireSignIn}>Message</PillButton>
               <IconButton label="Suggest friends" onClick={requireSignIn}>

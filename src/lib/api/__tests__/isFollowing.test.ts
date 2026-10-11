@@ -97,6 +97,28 @@ describe("follow", () => {
 
     expect(peekFollowState("5")).toBe(true);
   });
+
+  it("remembers a request a private account took, until it is withdrawn", async () => {
+    apiFetch.mockResolvedValueOnce({ followerId: "viewer", followingId: "5", status: "REQUESTED" });
+    const { follow, peekRequested, unfollow } = await load();
+
+    await follow("5");
+    expect(peekRequested("5")).toBe(true);
+
+    apiFetch.mockResolvedValueOnce(undefined);
+    await unfollow("5");
+    expect(peekRequested("5")).toBe(false);
+  });
+
+  it("learns of a request the server already holds", async () => {
+    const { follow, peekRequested } = await load();
+    // After `load`: the reset registry has its own ApiError for `instanceof`.
+    const { ApiError } = await import("@/lib/api/errors");
+    apiFetch.mockRejectedValueOnce(new ApiError(409, "ALREADY_REQUESTED", "pending"));
+
+    await expect(follow("5")).rejects.toThrow();
+    expect(peekRequested("5")).toBe(true);
+  });
 });
 
 describe("clearFollowCache", () => {

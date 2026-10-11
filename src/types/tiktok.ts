@@ -196,6 +196,9 @@ export interface ProfileVideo {
 }
 
 /** The header of `/@handle` plus the content behind each of its tabs. */
+/** Where the viewer stands with an account — "Requested" only exists for a private one. */
+export type FollowStatus = "FOLLOWING" | "REQUESTED" | "NONE";
+
 export interface UserProfile {
   author: Author;
   /** Renders the `#20D5EC` tick after the handle. */
@@ -207,6 +210,8 @@ export interface UserProfile {
   stats: { following: number; followers: number; likes: number };
   /** Whether the viewer already follows them; the button's initial state. */
   isFollowing: boolean;
+  /** A follow request from the viewer is waiting on this private account. */
+  followRequested?: boolean;
   /**
    * Tiles per tab. Each list is in **Latest** order — the sort control derives
    * its other two options from it (Oldest reverses, Popular sorts by views),

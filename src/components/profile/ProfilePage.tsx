@@ -14,7 +14,7 @@ import { ProfileBody } from "@/components/profile/ProfileBody";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
-import type { ProfileTab, UserProfile } from "@/types/tiktok";
+import type { FollowStatus, ProfileTab, UserProfile } from "@/types/tiktok";
 
 /**
  * `.StyledShareLayoutV2` — the profile's content column.
@@ -44,7 +44,7 @@ export function ProfilePage({
    */
   onSaveProfile?: (draft: ProfileDraft) => Promise<void>;
   /** Persists a follow/unfollow. Throwing reverts the button. */
-  onToggleFollow: (next: boolean) => Promise<boolean>;
+  onToggleFollow: (next: boolean) => Promise<FollowStatus>;
   /** The owner's rename locks, passed through to the Edit profile modal. */
   usernameChangeableAt?: string | null;
   nicknameChangeableAt?: string | null;

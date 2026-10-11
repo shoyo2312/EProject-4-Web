@@ -200,7 +200,7 @@ export function profileToUserProfile(
   profile: UserProfileResponse,
   author: Author,
   videos: ProfileVideo[],
-  options: { isFollowing?: boolean; totalLikes?: number } = {},
+  options: { isFollowing?: boolean; followRequested?: boolean; totalLikes?: number } = {},
 ): UserProfile {
   return {
     author,
@@ -214,6 +214,7 @@ export function profileToUserProfile(
       likes: options.totalLikes ?? 0,
     },
     isFollowing: options.isFollowing ?? false,
+    followRequested: options.followRequested ?? false,
     posts: {
       videos,
       reposts: [],

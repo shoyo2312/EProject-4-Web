@@ -24,7 +24,7 @@ import { appendUnique } from "@/lib/paging";
 import { changedProfileFields } from "@/lib/profile/changed-fields";
 import { toast } from "@/components/ui/toast";
 import { useUserRealtime } from "@/hooks/use-user-realtime";
-import type { ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
+import type { FollowStatus, ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
 
 /** How many videos the grid asks for in one page. */
 const VIDEO_PAGE = 30;
@@ -94,10 +94,10 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
        */
       const videosLoading = getUserVideos(raw.userId, 0, VIDEO_PAGE);
 
-      const [isFollowing, stats] = await Promise.all([
+      const [friendship, stats] = await Promise.all([
         viewerId !== undefined && !isOwnPage
-          ? usersApi.getFriendship(raw.userId).then((f) => f.following, () => false)
-          : Promise.resolve(false),
+          ? usersApi.getFriendship(raw.userId).catch(() => null)
+          : Promise.resolve(null),
         // The header's "Likes" and video totals. Not fatal if it fails — the
         // profile still renders, with a zero, rather than the whole page
         // becoming an error over one number.
@@ -106,7 +106,8 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
 
       const withVideos = (videos: ProfileVideo[]) =>
         profileToUserProfile(raw, author, videos, {
-          isFollowing,
+          isFollowing: friendship?.following ?? false,
+          followRequested: friendship?.requested ?? false,
           totalLikes: stats?.totalLikes,
         });
 
@@ -412,33 +413,27 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
     }
   };
 
-  const toggleFollow = async (next: boolean): Promise<boolean> => {
-    if (targetId === undefined || isOwner) return false;
+  /** `next` false unfollows, or withdraws a request — the same DELETE. */
+  const toggleFollow = async (next: boolean): Promise<FollowStatus> => {
+    if (targetId === undefined || isOwner) return "NONE";
 
     try {
       if (!next) {
         await usersApi.unfollow(targetId);
-        return false;
+        return "NONE";
       }
       const { status } = await usersApi.follow(targetId);
       if (status === "REQUESTED") toast.success("Follow request sent.");
-      return status === "FOLLOWING";
+      return status;
     } catch (cause) {
       /**
-       * `ALREADY_FOLLOWING` / `NOT_FOLLOWING` mean the server already agrees
-       * with where the button just moved — a stale view, not a failure, so the
-       * optimistic state stands. Everything else propagates and reverts it.
+       * These three mean the server already knows where things stand — a
+       * stale view, not a failure — so the button goes there. Everything else
+       * propagates and reverts it.
        */
-      if (
-        isApiError(cause) &&
-        (cause.is("ALREADY_FOLLOWING") || cause.is("NOT_FOLLOWING"))
-      ) {
-        return next;
-      }
-      if (isApiError(cause) && cause.is("ALREADY_REQUESTED")) {
-        toast.success("Your follow request is still pending.");
-        return false;
-      }
+      if (isApiError(cause) && cause.is("ALREADY_FOLLOWING")) return "FOLLOWING";
+      if (isApiError(cause) && cause.is("ALREADY_REQUESTED")) return "REQUESTED";
+      if (isApiError(cause) && cause.is("NOT_FOLLOWING")) return "NONE";
       throw cause;
     } finally {
       /**

@@ -164,10 +164,31 @@ export function setFollowState(userId: string, value: boolean): void {
   notifyFollowState();
 }
 
+/**
+ * Private accounts the viewer has a follow request waiting on. Beside
+ * `followState` rather than in it: the following-list walk can only answer
+ * yes or no, and a request is neither. Known from a follow's answer or a
+ * friendship read, never walked — so "not in here" means "not known".
+ */
+const requestedState = new Set<string>();
+
+/** Writes the request half of the cache, waking the buttons like `setFollowState`. */
+export function setFollowRequested(userId: string, value: boolean): void {
+  if (requestedState.has(userId) === value) return;
+  if (value) requestedState.add(userId);
+  else requestedState.delete(userId);
+  notifyFollowState();
+}
+
+export function peekRequested(userId: string): boolean {
+  return requestedState.has(userId);
+}
+
 /** Called on sign-in/sign-out: one viewer's answers must not serve another. */
 export function clearFollowCache(): void {
   followEpoch += 1;
   followState.clear();
+  requestedState.clear();
   followingWalk = null;
   notifyFollowState();
 }
@@ -189,6 +210,7 @@ export async function follow(userId: string): Promise<FollowResponse> {
     });
     // A private account only records a request: "Following" would be a lie.
     setFollowState(userId, result.status === "FOLLOWING");
+    setFollowRequested(userId, result.status === "REQUESTED");
     return result;
   } catch (cause) {
     // `ALREADY_FOLLOWING` is the server saying it already agrees with where
@@ -196,6 +218,9 @@ export async function follow(userId: string): Promise<FollowResponse> {
     // with the stale value that made the call redundant in the first place.
     if (isApiError(cause) && cause.is("ALREADY_FOLLOWING")) {
       setFollowState(userId, true);
+    }
+    if (isApiError(cause) && cause.is("ALREADY_REQUESTED")) {
+      setFollowRequested(userId, true);
     }
     throw cause;
   }
@@ -207,9 +232,11 @@ export async function getFriendship(userId: string): Promise<FriendshipResponse>
     auth: "required",
   });
   setFollowState(userId, result.following);
+  setFollowRequested(userId, result.requested);
   return result;
 }
 
+/** Unfollows — or, to a private account still deciding, withdraws the request. */
 export async function unfollow(userId: string): Promise<void> {
   try {
     await apiFetch<void>(`/users/${userId}/follow`, {
@@ -217,9 +244,11 @@ export async function unfollow(userId: string): Promise<void> {
       auth: "required",
     });
     setFollowState(userId, false);
+    setFollowRequested(userId, false);
   } catch (cause) {
     if (isApiError(cause) && cause.is("NOT_FOLLOWING")) {
       setFollowState(userId, false);
+      setFollowRequested(userId, false);
     }
     throw cause;
   }
