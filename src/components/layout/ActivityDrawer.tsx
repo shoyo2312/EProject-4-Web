@@ -118,7 +118,7 @@ export function ActivityDrawer({
 
   return (
     <div
-      aria-hidden={!open}
+      inert={!open || undefined}
       className={cn(
         // Under the sidebar's animation cover — see `SearchDrawer`.
         "fixed top-0 z-[1] h-screen w-80 overscroll-contain bg-[var(--tt-page)]",

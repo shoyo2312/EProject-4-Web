@@ -198,7 +198,7 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
       )}
 
       <div
-        aria-hidden={!open}
+        inert={!open || undefined}
         className={cn(
           // z-1 puts the panel *under* the sidebar's animation cover. That is what
           // keeps the slide from reading as a pane flying across the search
