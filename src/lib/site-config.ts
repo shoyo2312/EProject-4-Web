@@ -112,6 +112,17 @@ export const FOOTER_SECTIONS: FooterSection[] = [
  * trademarks and are not TikTok's assets either, so the clone does not
  * reproduce them — see `ShareSheet` for what is drawn instead.
  */
+/** What `useHotkeys` answers on the feed and `/video/[id]`, as More lists it. */
+export const KEYBOARD_SHORTCUTS: { keys: string[]; action: string }[] = [
+  { keys: ["↑"], action: "Previous video" },
+  { keys: ["↓"], action: "Next video" },
+  { keys: ["Space"], action: "Play or pause" },
+  { keys: ["M"], action: "Mute or unmute" },
+  { keys: ["L"], action: "Like video" },
+  { keys: ["C"], action: "Open comments" },
+  { keys: ["Esc"], action: "Close the video page" },
+];
+
 export const SHARE_TARGETS: ShareTarget[] = [
   { id: "repost", label: "Repost" },
   { id: "copy", label: "Copy" },

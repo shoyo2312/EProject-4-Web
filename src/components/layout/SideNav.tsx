@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 
 import { LoginIcon } from "@/components/icons";
 import { ActivityDrawer } from "@/components/layout/ActivityDrawer";
+import { MoreDrawer } from "@/components/layout/MoreDrawer";
 import { SearchDrawer } from "@/components/layout/SearchDrawer";
 import { NowaWordmark } from "@/components/layout/NowaWordmark";
 import { NavRow } from "@/components/layout/side-nav/NavRow";
@@ -60,9 +61,10 @@ export function SideNav({
   const inbox = useNotifications();
   const [activityOpen, setActivityOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  // Both drawers sit in the same slot beside the rail, so opening one closes
-  // the other, and either one collapses the rail the same way.
-  const collapsed = activityOpen || searchOpen;
+  const [moreOpen, setMoreOpen] = useState(false);
+  // The drawers sit in the same slot beside the rail, so opening one closes
+  // the others, and any one collapses the rail the same way.
+  const collapsed = activityOpen || searchOpen || moreOpen;
   // The reader's own collapse, from the toggle beside the logo. The rows and
   // the header read it exactly as they read an open drawer — icons only — but
   // unlike a drawer it keeps the rows on screen, so the rail gets the 1024px
@@ -242,6 +244,7 @@ export function SideNav({
             iconOnly={iconOnly}
             onOpen={() => {
               setActivityOpen(false);
+              setMoreOpen(false);
               setSearchOpen(true);
             }}
           />
@@ -283,16 +286,26 @@ export function SideNav({
               collapsed={narrow}
               iconOnly={iconOnly}
               active={item.href === pathname}
-              selected={item.label === "Activity" && activityOpen}
+              selected={
+                (item.label === "Activity" && activityOpen) ||
+                (item.label === "More" && moreOpen)
+              }
               onClick={
                 item.label === "Activity"
                   ? () => {
                       setSearchOpen(false);
+                      setMoreOpen(false);
                       setActivityOpen((v) => !v);
                     }
-                  : item.label === "Profile" && showGuest
-                    ? openLogin
-                    : undefined
+                  : item.label === "More"
+                    ? () => {
+                        setSearchOpen(false);
+                        setActivityOpen(false);
+                        setMoreOpen((v) => !v);
+                      }
+                    : item.label === "Profile" && showGuest
+                      ? openLogin
+                      : undefined
               }
             />
           ))}
@@ -350,6 +363,8 @@ export function SideNav({
       />
 
       <SearchDrawer open={searchOpen} onClose={() => setSearchOpen(false)} />
+
+      <MoreDrawer open={moreOpen} onClose={() => setMoreOpen(false)} />
     </div>
   );
 }
