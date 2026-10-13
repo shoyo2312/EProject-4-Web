@@ -248,6 +248,9 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* Thumb, then track: every scrollbar sits on the page black. `.no-scrollbar` still wins. */
+    scrollbar-color: rgb(255 255 255 / 0.3) var(--tt-page);
+    scrollbar-width: thin;
   }
   body {
     background-color: var(--tt-page);
