@@ -192,7 +192,7 @@ export function SearchResults() {
 }
 
 /**
- * The Accounts tab. user-service has no public read, so a signed-out viewer
+ * The Accounts tab. Account search needs a token, so a signed-out viewer
  * gets the login prompt instead of an empty list that looks like no matches.
  */
 function AccountResults({ term }: { term: string }) {

@@ -52,10 +52,10 @@ export function useFollow(
   const [answered, setAnswered] = useState(cached !== undefined);
   const [requested, setRequested] = useState(() => peekRequested(authorId));
 
-  // Signed out there is nothing to ask — every user-service endpoint needs a
-  // token — so the button starts on "Follow" and the tap opens the login modal.
-  // A warm cache already answered through the state initialisers above; this
-  // only runs the following-list walk when it did not.
+  // Signed out there is nothing to ask — the follow state is the viewer's own
+  // and needs a token — so the button starts on "Follow" and the tap opens the
+  // login modal. A warm cache already answered through the state initialisers
+  // above; this only runs the following-list walk when it did not.
   useEffect(() => {
     if (answered || !viewerId || isSelf) return;
 

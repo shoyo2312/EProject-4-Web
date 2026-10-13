@@ -134,7 +134,7 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
   }, [open]);
 
   useEffect(() => {
-    // user-service has no public read, so there is nothing to ask for signed out.
+    // Account search needs a token, so there is nothing to ask for signed out.
     if (!signedIn || term.length === 0) return;
 
     const controller = new AbortController();

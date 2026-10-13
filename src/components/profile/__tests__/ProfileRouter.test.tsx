@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 
 import { ProfileRouter } from "@/components/profile/ProfileRouter";
 
-const openLogin = vi.fn();
 vi.mock("@/components/session/SessionProvider", () => ({
-  useSession: () => ({ user: null, isLoading: false, openLogin }),
+  useSession: () => ({ user: null, isLoading: false }),
 }));
 
 const getProfileByUsername = vi.fn();
@@ -14,19 +13,28 @@ vi.mock("@/lib/api/users", () => ({
 }));
 
 vi.mock("@/components/profile/BackendProfilePage", () => ({
-  BackendProfilePage: () => <p>profile</p>,
+  BackendProfilePage: ({ userId }: { userId?: string }) => <p>profile {userId}</p>,
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  getProfileByUsername.mockReset();
+});
 
 describe("ProfileRouter for a guest", () => {
-  it.each(["365050354607333376", "someone"])("asks %s's visitor to log in", (handle) => {
-    render(<ProfileRouter handle={handle} />);
+  it("opens a profile addressed by id without a lookup", () => {
+    render(<ProfileRouter handle="365050354607333376" />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
-
-    expect(openLogin).toHaveBeenCalled();
-    expect(screen.queryByText("profile")).toBeNull();
+    expect(screen.getByText("profile 365050354607333376")).toBeTruthy();
     expect(getProfileByUsername).not.toHaveBeenCalled();
+  });
+
+  it("resolves a handle to its account", async () => {
+    getProfileByUsername.mockResolvedValue({ userId: "42" });
+
+    render(<ProfileRouter handle="someone" />);
+
+    expect(await screen.findByText("profile 42")).toBeTruthy();
+    expect(getProfileByUsername).toHaveBeenCalledWith("someone");
   });
 });

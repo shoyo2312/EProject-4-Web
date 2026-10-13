@@ -26,7 +26,7 @@ export function ProfileRouter({
   /** The URL segment, with its leading "@" already stripped. */
   handle: string;
 }) {
-  const { user, isLoading, openLogin } = useSession();
+  const { user, isLoading } = useSession();
   /**
    * What the last lookup answered, tagged with the handle it answered for —
    * a bare id would still be on screen for one render after the URL changed
@@ -41,8 +41,7 @@ export function ProfileRouter({
   const isOwnHandle = Boolean(user && user.username === handle);
   // Skipped for an id (nothing to resolve) and for the viewer's own handle
   // (the session already holds it), so the lookup only pays for other people.
-  // A guest is skipped too: user-service answers every profile read with a 401.
-  const needsLookup = !isBackendHandle(handle) && !isLoading && Boolean(user) && !isOwnHandle;
+  const needsLookup = !isBackendHandle(handle) && !isLoading && !isOwnHandle;
 
   useEffect(() => {
     if (!needsLookup) return;
@@ -52,7 +51,7 @@ export function ProfileRouter({
         if (!cancelled) setResolved({ handle, id: profile.userId });
       })
       .catch(() => {
-        // 404, or signed out: no account to show behind this handle.
+        // 404: no account to show behind this handle.
         if (!cancelled) setResolved({ handle, id: null });
       });
     return () => {
@@ -64,23 +63,6 @@ export function ProfileRouter({
   // handle up as a stranger's and then swap the page out under them.
   if (isLoading) {
     return <ProfileSkeleton />;
-  }
-
-  // user-service only serves profiles to a signed-in reader. Without this the
-  // 401 surfaced as "session expired" (by id) or "couldn't find" (by handle).
-  if (!user) {
-    return (
-      <main className="flex h-screen flex-1 flex-col items-center justify-center gap-4">
-        <p className="text-[16px] text-[var(--tt-text)]">Log in to view this profile.</p>
-        <button
-          type="button"
-          onClick={openLogin}
-          className="h-10 rounded-[4px] bg-[var(--tt-red-active)] px-4 text-[15px] font-semibold text-white"
-        >
-          Log in
-        </button>
-      </main>
-    );
   }
 
   if (isBackendHandle(handle)) {

@@ -92,8 +92,13 @@ export function ProfilePage({
           requireSignIn={requireSignIn}
           onEditProfile={() => setEditing(true)}
           onToggleFollow={onToggleFollow}
-          onOpenFollowers={() => setFollowTab("followers")}
-          onOpenFollowing={() => setFollowTab("following")}
+          // The lists themselves still need a token, so a guest is asked to log in.
+          onOpenFollowers={() => {
+            if (requireSignIn()) setFollowTab("followers");
+          }}
+          onOpenFollowing={() => {
+            if (requireSignIn()) setFollowTab("following");
+          }}
         />
 
         <ProfileBody

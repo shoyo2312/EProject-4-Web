@@ -12,8 +12,8 @@ import type {
 } from "@/lib/api/types";
 
 /**
- * user-service. Every endpoint here needs a token — there is no public read,
- * not even for somebody else's profile.
+ * user-service. Reading a profile — by id, by handle, or a batch of them — is
+ * public, like the videos on it; everything else here needs a token.
  */
 
 export function getMyProfile(): Promise<UserProfileResponse> {
@@ -26,7 +26,7 @@ export function getMyProfile(): Promise<UserProfileResponse> {
  * of you blocked the other" on purpose, so the UI must not guess between them.
  */
 export function getProfile(userId: string): Promise<UserProfileResponse> {
-  return apiFetch<UserProfileResponse>(`/users/${userId}`, { auth: "required" });
+  return apiFetch<UserProfileResponse>(`/users/${userId}`, { auth: "optional" });
 }
 
 /**
@@ -39,7 +39,7 @@ export function getProfileByUsername(
 ): Promise<UserProfileResponse> {
   return apiFetch<UserProfileResponse>(
     `/users/by-username/${encodeURIComponent(username)}`,
-    { auth: "required" },
+    { auth: "optional" },
   );
 }
 
@@ -61,7 +61,7 @@ export function getProfiles(
 ): Promise<UserProfileResponse[]> {
   return apiFetch<UserProfileResponse[]>("/users", {
     query: { ids: userIds.join(",") },
-    auth: "required",
+    auth: "optional",
   });
 }
 
