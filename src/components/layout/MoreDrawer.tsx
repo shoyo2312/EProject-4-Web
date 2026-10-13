@@ -15,7 +15,8 @@ import { cn } from "@/lib/utils";
  * The sidebar's More panel, in the slot beside the rail that Activity and
  * Search use. TikTok's carries creator tools, language and theme rows the
  * clone has nothing behind; this one holds what it does: Settings, the
- * keyboard shortcuts, and Log out.
+ * keyboard shortcuts, and Log out. A guest gets the shortcuts alone — the
+ * other two are about an account they do not have.
  */
 export function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
@@ -66,14 +67,16 @@ export function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => vo
           </h2>
 
           <nav className="flex flex-col">
-            <Row
-              icon={<SettingsIcon className="h-6 w-6" />}
-              label="Settings"
-              onClick={() => {
-                onClose();
-                router.push("/setting");
-              }}
-            />
+            {user && (
+              <Row
+                icon={<SettingsIcon className="h-6 w-6" />}
+                label="Settings"
+                onClick={() => {
+                  onClose();
+                  router.push("/setting");
+                }}
+              />
+            )}
             <Row
               icon={<Keyboard className="h-6 w-6" strokeWidth={1.75} />}
               label="Keyboard shortcuts"
