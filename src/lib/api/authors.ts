@@ -2,7 +2,6 @@
 
 import { authorFromProfile, unknownAuthor } from "@/lib/api/adapters";
 import { MAX_PROFILE_BATCH, getProfile, getProfiles } from "@/lib/api/users";
-import { hasSession } from "@/lib/api/tokens";
 import type { Author } from "@/types/tiktok";
 
 /**
@@ -11,16 +10,10 @@ import type { Author } from "@/types/tiktok";
  * memoises those lookups for the life of the tab: a feed page of 20 videos from
  * five creators costs five requests, not twenty, and scrolling back over them
  * costs none.
- *
- * Signed-out viewers get placeholders instead. That is not a shortcut — every
- * user-service endpoint requires a token, including reading a public profile,
- * so there is genuinely nothing to fetch until someone logs in.
  */
 const cache = new Map<string, Promise<Author>>();
 
 export function resolveAuthor(userId: string): Promise<Author> {
-  if (!hasSession()) return Promise.resolve(unknownAuthor(userId));
-
   const cached = cache.get(userId);
   if (cached) return cached;
 
@@ -55,10 +48,6 @@ export async function resolveAuthors(
   userIds: string[],
 ): Promise<Map<string, Author>> {
   const unique = [...new Set(userIds)];
-  if (!hasSession()) {
-    return new Map(unique.map((userId) => [userId, unknownAuthor(userId)]));
-  }
-
   const missing = unique.filter((userId) => !cache.has(userId));
   for (let i = 0; i < missing.length; i += MAX_PROFILE_BATCH) {
     const chunk = missing.slice(i, i + MAX_PROFILE_BATCH);
@@ -96,7 +85,7 @@ export async function resolveAuthors(
   return new Map(unique.map((userId, index) => [userId, authors[index]]));
 }
 
-/** Called on sign-in/sign-out: the placeholders must not outlive the session. */
+/** Called on sign-in/sign-out: a block hides an author from one viewer, not the next. */
 export function clearAuthorCache(): void {
   cache.clear();
 }

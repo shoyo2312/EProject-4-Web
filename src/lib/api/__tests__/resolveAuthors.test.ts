@@ -10,7 +10,6 @@ vi.mock("@/lib/api/users", () => ({
   getProfile: (id: string) => getProfile(id),
   getProfiles: (ids: string[]) => getProfiles(ids),
 }));
-vi.mock("@/lib/api/tokens", () => ({ hasSession: () => true }));
 
 const profile = (userId: string): UserProfileResponse => ({
   userId,
