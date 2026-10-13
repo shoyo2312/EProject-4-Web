@@ -138,137 +138,150 @@ export function ActivityDrawer({
   useEscapeKey(onClose, open);
 
   return (
-    <div
-      inert={!open || undefined}
-      className={cn(
-        // Under the sidebar's animation cover — see `SearchDrawer`.
-        "fixed top-0 z-[1] h-screen w-80 overscroll-contain bg-[var(--tt-page)]",
-        "left-18 border-x border-[var(--tt-divider)]",
-        // `transform`, not Tailwind's `translate-x-*`: in v4 those compile to the
-        // `translate` property, which `transition-[transform]` does not cover —
-        // the slide snapped instantly while opacity eased.
-        "transition-[transform,opacity,visibility] duration-[400ms] ease-[ease]",
-        open
-          ? "visible opacity-100 [transform:translateX(0)]"
-          : "invisible opacity-30 [transform:translateX(-24rem)] [pointer-events:none]",
-      )}
-    >
-      {/* `.DivDrawerCloseButtonContainer` — absolute, top 1.5rem, end 1rem.
-          The button itself is 28×28, rgba(255,255,255,.13), radius 999px. */}
-      <div className="absolute end-4 top-6 z-[1] flex items-center justify-center">
+    <>
+      {/* Beside the panel, not over it, like `SearchDrawer`'s mask: a press
+          anywhere in the feed closes the panel. */}
+      {open && (
         <button
           type="button"
-          onClick={onClose}
           aria-label="Close notifications"
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--tt-field)] text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-shape-neutral-3)]"
-        >
-          <CloseIcon className="h-3.5 w-3.5" />
-        </button>
-      </div>
+          onClick={onClose}
+          className="fixed top-0 left-[calc(20rem+4.5rem)] z-[99] h-screen w-screen cursor-default"
+        />
+      )}
 
-      {/* `.DivInboxContainer` — height 100%, flex column, padding 20px 8px 0, gap 16 */}
-      <div className="flex h-full flex-col gap-4 px-2 pb-0 pt-5">
-        {/* `.DivInboxHeaderContainer` — flex column, gap 16, flex 0 0 auto */}
-        <div className="flex flex-none flex-col gap-4 px-2">
-          {/* `.H2InboxTitle` — NowaDisplayFont 20px/25px/600 */}
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="flex text-[20px] font-semibold leading-[25px] text-[var(--tt-text)]">
-              Notifications
-            </h2>
-            {/* Not on the live drawer, which marks read per row only. Kept
-                because the inbox here is unpaginated: with nothing to open,
-                an old unread row would hold the badge up forever. */}
-            {inbox.unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={inbox.markAllRead}
-                className="me-9 shrink-0 cursor-pointer text-[13px] font-semibold leading-[17px] text-[var(--tt-text-tertiary,rgb(255_255_255_/_0.5))] transition-colors hover:text-[var(--tt-text)]"
-              >
-                Mark all read
-              </button>
-            )}
+      <div
+        inert={!open || undefined}
+        className={cn(
+          // Under the sidebar's animation cover — see `SearchDrawer`.
+          "fixed top-0 z-[1] h-screen w-80 overscroll-contain bg-[var(--tt-page)]",
+          "left-18 border-x border-[var(--tt-divider)]",
+          // `transform`, not Tailwind's `translate-x-*`: in v4 those compile to the
+          // `translate` property, which `transition-[transform]` does not cover —
+          // the slide snapped instantly while opacity eased.
+          "transition-[transform,opacity,visibility] duration-[400ms] ease-[ease]",
+          open
+            ? "visible opacity-100 [transform:translateX(0)]"
+            : "invisible opacity-30 [transform:translateX(-24rem)] [pointer-events:none]",
+        )}
+      >
+        {/* `.DivDrawerCloseButtonContainer` — absolute, top 1.5rem, end 1rem.
+            The button itself is 28×28, rgba(255,255,255,.13), radius 999px. */}
+        <div className="absolute end-4 top-6 z-[1] flex items-center justify-center">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close notifications"
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--tt-field)] text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-shape-neutral-3)]"
+          >
+            <CloseIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* `.DivInboxContainer` — height 100%, flex column, padding 20px 8px 0, gap 16 */}
+        <div className="flex h-full flex-col gap-4 px-2 pb-0 pt-5">
+          {/* `.DivInboxHeaderContainer` — flex column, gap 16, flex 0 0 auto */}
+          <div className="flex flex-none flex-col gap-4 px-2">
+            {/* `.H2InboxTitle` — NowaDisplayFont 20px/25px/600 */}
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex text-[20px] font-semibold leading-[25px] text-[var(--tt-text)]">
+                Notifications
+              </h2>
+              {/* Not on the live drawer, which marks read per row only. Kept
+                  because the inbox here is unpaginated: with nothing to open,
+                  an old unread row would hold the badge up forever. */}
+              {inbox.unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={inbox.markAllRead}
+                  className="me-9 shrink-0 cursor-pointer text-[13px] font-semibold leading-[17px] text-[var(--tt-text-tertiary,rgb(255_255_255_/_0.5))] transition-colors hover:text-[var(--tt-text)]"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+
+            {/* `.DivGroupContainer` — flex wrap, gap 12px 8px */}
+            <div className="flex flex-wrap gap-x-2 gap-y-3">
+              {NOTIFICATION_FILTERS.map((chip) => (
+                <FilterChip
+                  key={chip.label}
+                  label={chip.label}
+                  selected={filter === chip.label}
+                  onSelect={() => setFilter(chip.label)}
+                />
+              ))}
+            </div>
           </div>
 
-          {/* `.DivGroupContainer` — flex wrap, gap 12px 8px */}
-          <div className="flex flex-wrap gap-x-2 gap-y-3">
-            {NOTIFICATION_FILTERS.map((chip) => (
-              <FilterChip
-                key={chip.label}
-                label={chip.label}
-                selected={filter === chip.label}
-                onSelect={() => setFilter(chip.label)}
+          {/* `.DivInboxContentContainer` — flex 1 1 auto, overflow auto, with an
+              8px negative end margin so the scrollbar sits outside the padding. */}
+          <div className="no-scrollbar -me-2 flex-1 overflow-auto pe-2">
+            {/* Shaped like the live system-notification row: 72px, a 48px round
+                icon field, a title line over a one-line description. */}
+            {requestCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setRequestsOpen(true)}
+                className="mb-4 flex h-[72px] w-full items-center rounded-[8px] px-2 text-start transition-colors hover:bg-[rgb(37,37,37)]"
+              >
+                <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-[rgb(50,54,75)] text-white">
+                  <AddFriendIcon className="h-6 w-6" />
+                </span>
+                <span className="min-w-0 flex-1 px-2">
+                  <span className="block truncate text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
+                    Follow requests
+                  </span>
+                  <span className="block truncate text-[13px] leading-[17px] text-[rgb(255_255_255_/_0.5)]">
+                    {requestCount === 1 ? "1 person wants" : `${requestCount} people want`} to follow you
+                  </span>
+                </span>
+                <ChevronRightIcon className="h-4 w-4 flex-none text-[rgb(255_255_255_/_0.5)]" />
+              </button>
+            )}
+            {requestsOpen && (
+              <FollowRequestsModal
+                onClose={() => setRequestsOpen(false)}
+                onLeave={() => {
+                  setRequestsOpen(false);
+                  onClose();
+                }}
+                onSettled={countRequests}
               />
+            )}
+            {groups.length === 0 && inbox.loaded && (
+              <p className="px-2 py-6 text-[14px] leading-[18px] text-[rgb(255_255_255_/_0.5)]">
+                No notifications yet.
+              </p>
+            )}
+            {groups.map((group) => (
+              <div key={group.title}>
+                {/* `.PTimeGroupTitle` — 14px/600/18px, padding 0 8px 4px */}
+                <p className="px-2 pb-1 text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
+                  {group.title}
+                </p>
+                <ul>
+                  {group.items.map((item) => {
+                    const actor = item.actorId ? inbox.actors.get(item.actorId) : undefined;
+                    return (
+                      <li key={item.id} className="mb-4 last:mb-0">
+                        <NotificationItem
+                          item={item}
+                          actor={actor}
+                          video={item.referenceId ? inbox.videos.get(item.referenceId) : undefined}
+                          onOpen={() => openNotification(item)}
+                          onOpenActor={() => openActor(item, actor)}
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             ))}
           </div>
         </div>
-
-        {/* `.DivInboxContentContainer` — flex 1 1 auto, overflow auto, with an
-            8px negative end margin so the scrollbar sits outside the padding. */}
-        <div className="no-scrollbar -me-2 flex-1 overflow-auto pe-2">
-          {/* Shaped like the live system-notification row: 72px, a 48px round
-              icon field, a title line over a one-line description. */}
-          {requestCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setRequestsOpen(true)}
-              className="mb-4 flex h-[72px] w-full items-center rounded-[8px] px-2 text-start transition-colors hover:bg-[rgb(37,37,37)]"
-            >
-              <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-[rgb(50,54,75)] text-white">
-                <AddFriendIcon className="h-6 w-6" />
-              </span>
-              <span className="min-w-0 flex-1 px-2">
-                <span className="block truncate text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
-                  Follow requests
-                </span>
-                <span className="block truncate text-[13px] leading-[17px] text-[rgb(255_255_255_/_0.5)]">
-                  {requestCount === 1 ? "1 person wants" : `${requestCount} people want`} to follow you
-                </span>
-              </span>
-              <ChevronRightIcon className="h-4 w-4 flex-none text-[rgb(255_255_255_/_0.5)]" />
-            </button>
-          )}
-          {requestsOpen && (
-            <FollowRequestsModal
-              onClose={() => setRequestsOpen(false)}
-              onLeave={() => {
-                setRequestsOpen(false);
-                onClose();
-              }}
-              onSettled={countRequests}
-            />
-          )}
-          {groups.length === 0 && inbox.loaded && (
-            <p className="px-2 py-6 text-[14px] leading-[18px] text-[rgb(255_255_255_/_0.5)]">
-              No notifications yet.
-            </p>
-          )}
-          {groups.map((group) => (
-            <div key={group.title}>
-              {/* `.PTimeGroupTitle` — 14px/600/18px, padding 0 8px 4px */}
-              <p className="px-2 pb-1 text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
-                {group.title}
-              </p>
-              <ul>
-                {group.items.map((item) => {
-                  const actor = item.actorId ? inbox.actors.get(item.actorId) : undefined;
-                  return (
-                    <li key={item.id} className="mb-4 last:mb-0">
-                      <NotificationItem
-                        item={item}
-                        actor={actor}
-                        video={item.referenceId ? inbox.videos.get(item.referenceId) : undefined}
-                        onOpen={() => openNotification(item)}
-                        onOpenActor={() => openActor(item, actor)}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
       </div>
-    </div>
+    </>
   );
 }
 
