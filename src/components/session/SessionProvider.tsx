@@ -24,6 +24,7 @@ import { resetRealtime } from "@/lib/realtime/stompClient";
 import * as authApi from "@/lib/api/auth";
 import { isApiError } from "@/lib/api/errors";
 import { getAccessToken, getRefreshToken, onSessionEnded } from "@/lib/api/tokens";
+import { awaitProfile } from "@/lib/auth/await-profile";
 import type { SocialProvider } from "@/lib/auth/social";
 import * as usersApi from "@/lib/api/users";
 import type { MeResponse } from "@/lib/api/types";
@@ -292,6 +293,9 @@ export function SessionProvider({
   const signUp = useCallback(
     async (input: { signupToken: string; username: string; password: string }) => {
       await authApi.completeSignup(input);
+      // The profile is built off a Kafka event; leaving now would let a quick
+      // tap on "Profile" hit an account that is not there yet.
+      await awaitProfile();
       await settleSignIn();
       toast.success("Welcome to Nowa!");
     },
@@ -301,6 +305,9 @@ export function SessionProvider({
   const signInWithProvider = useCallback(
     async (provider: SocialProvider, providerToken: string) => {
       const result = await authApi.socialLogin(provider, providerToken);
+      // A first sign-in with Google or Facebook creates the account too; for a
+      // returning one the profile is already there and this answers at once.
+      await awaitProfile();
       await settleSignIn(!result.requiresEmail);
       if (!result.requiresEmail) toast.success("You’re logged in.");
       return { requiresEmail: result.requiresEmail };
