@@ -39,8 +39,9 @@ export function TopBar() {
   // The single-video view carries the owner's own controls (Follow, or Delete /
   // Private for your own upload) in its right column, so the floating avatar bar
   // is redundant there and is hidden — matching the request to drop this chrome
-  // on `/video/{id}`.
-  if (pathname.startsWith("/video/")) {
+  // on `/video/{id}`. Settings is the same: the page has its own back button
+  // and the avatar would float over the panel's top-right corner.
+  if (pathname.startsWith("/video/") || pathname === "/setting") {
     return null;
   }
 
