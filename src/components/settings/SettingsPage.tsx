@@ -179,7 +179,7 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
 
         <div
           ref={panelRef}
-          className="min-w-0 flex-1 overflow-y-auto rounded-t-[8px] bg-[#252525] px-6 pt-4 pb-6"
+          className="no-scrollbar min-w-0 flex-1 overflow-y-auto rounded-t-[8px] bg-[#252525] px-6 pt-4 pb-6"
         >
           {sections.map((section, index) => (
             <section
