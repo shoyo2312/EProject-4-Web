@@ -282,30 +282,3 @@ export function PillButton({
     </button>
   );
 }
-
-/** `.DivCheckboxWrapper` — a 22px box, then 12/16 text at .75. */
-export function ConsentCheckbox({
-  checked,
-  onChange,
-  children,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="flex cursor-pointer items-start pl-2">
-      <span className="w-8 flex-none">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(event) => onChange(event.target.checked)}
-          className="block h-[22px] w-[22px] cursor-pointer appearance-none rounded-[2px] border border-[rgb(255_255_255/0.5)] bg-[#121212] checked:border-[var(--tt-red)] checked:bg-[var(--tt-red)]"
-        />
-      </span>
-      <span className="text-[12px] leading-4 text-[rgb(255_255_255/0.75)]">
-        {children}
-      </span>
-    </label>
-  );
-}

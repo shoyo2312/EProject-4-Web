@@ -17,7 +17,6 @@ import { useForm } from "@/lib/forms/use-form";
 
 import { Dropdown } from "./Dropdown";
 import {
-  ConsentCheckbox,
   FieldHeading,
   ModalTitle,
   PasswordField,
@@ -37,7 +36,6 @@ export interface SignupDraft {
   birthDay: string;
   birthYear: string;
   email: string;
-  marketing: boolean;
   password: string;
   /** Proof the mailbox was verified, from `/auth/register/verify`. */
   signupToken: string;
@@ -48,7 +46,6 @@ export const EMPTY_DRAFT: SignupDraft = {
   birthDay: "",
   birthYear: "",
   email: "",
-  marketing: false,
   password: "",
   signupToken: "",
 };
@@ -159,16 +156,6 @@ export function SignupDetailsStep({
               placeholder="Email address"
               autoComplete="email"
             />
-          </div>
-
-          <div className="mt-[38px] mb-4">
-            <ConsentCheckbox
-              checked={draft.marketing}
-              onChange={(marketing) => onChange({ marketing })}
-            >
-              Get trending content, newsletters, promotions, recommendations,
-              and account updates sent to your email
-            </ConsentCheckbox>
           </div>
 
           <div className="mt-5 flex min-h-[71px] justify-center">
