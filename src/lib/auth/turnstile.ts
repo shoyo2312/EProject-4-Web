@@ -3,9 +3,9 @@
 /**
  * Cloudflare Turnstile, loaded from its own CDN like the Google/Facebook SDKs
  * in `social.ts` — no npm package to install, vendor's only supported
- * distribution. Only ever mounted when the backend has already rejected a
- * request with `TURNSTILE_VERIFICATION_FAILED` (see auth-service
- * `OtpRateLimiter.requiresTurnstile`), so most viewers never load this script.
+ * distribution. Loaded once a form that mails a code is on screen, since
+ * auth-service gates every first send on it; a resend goes on a ticket
+ * instead (`CodeStep`).
  */
 
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";

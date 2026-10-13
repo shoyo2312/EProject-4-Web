@@ -5,6 +5,7 @@ import { clearTokens, getRefreshToken, storeTokens } from "@/lib/api/tokens";
 import type {
   AccountResponse,
   MeResponse,
+  OtpSentResponse,
   SignupTicketResponse,
   SocialLoginResponse,
   TokenResponse,
@@ -12,20 +13,34 @@ import type {
 import type { SocialProvider } from "@/lib/auth/social";
 
 /**
+ * What a call that mails a code needs to be let through: a solved Turnstile
+ * token, or the `resendTicket` the previous send to the same address answered
+ * with (auth-service `OtpSendGate`).
+ */
+export type SendProof = { turnstileToken: string } | { resendTicket: string };
+
+/** `data` is null from an auth-service that predates the ticket, which is no ticket. */
+function codeSent(sent: OtpSentResponse | null): OtpSentResponse {
+  return { resendTicket: sent?.resendTicket ?? null };
+}
+
+/**
  * `POST /api/v1/auth/register/start` — the email-first signup the modal uses.
  * Mails a code to an address that has no account yet; nothing is created.
  * 409 `EMAIL_ALREADY_EXISTS` for a taken address. Calling it again resends,
  * and the previous code stops working.
  *
- * `turnstileToken` is required — auth-service verifies it before doing
- * anything else, on every call, not just suspicious ones.
+ * The first send needs a Turnstile token — auth-service checks it before doing
+ * anything else — and a resend can carry the ticket instead.
  */
-export function startSignup(email: string, turnstileToken: string): Promise<void> {
-  return apiFetch<void>("/auth/register/start", {
-    method: "POST",
-    body: { email, turnstileToken },
-    auth: "none",
-  });
+export async function startSignup(email: string, proof: SendProof): Promise<OtpSentResponse> {
+  return codeSent(
+    await apiFetch<OtpSentResponse | null>("/auth/register/start", {
+      method: "POST",
+      body: { email, ...proof },
+      auth: "none",
+    }),
+  );
 }
 
 /**
@@ -143,19 +158,22 @@ export async function confirmSocialLink(
 }
 
 /**
- * `POST /api/v1/auth/email` — 204, and authenticated, unlike the rest of the
- * email flow: the account being given an address is the one holding the token,
- * and it has no address to name itself by. An OTP follows, spent at
- * `verify-email` like any other.
+ * `POST /api/v1/auth/email` — authenticated, unlike the rest of the email
+ * flow: the account being given an address is the one holding the token, and
+ * it has no address to name itself by. An OTP follows, spent at `verify-email`
+ * like any other; its resends go through `resendVerification`, with the ticket
+ * this answers.
  *
- * `turnstileToken` is required, same as every other OTP-issuing call.
+ * `turnstileToken` is required, as on every first send of a code.
  */
-export function addEmail(email: string, turnstileToken: string): Promise<void> {
-  return apiFetch<void>("/auth/email", {
-    method: "POST",
-    body: { email, turnstileToken },
-    auth: "required",
-  });
+export async function addEmail(email: string, turnstileToken: string): Promise<OtpSentResponse> {
+  return codeSent(
+    await apiFetch<OtpSentResponse | null>("/auth/email", {
+      method: "POST",
+      body: { email, turnstileToken },
+      auth: "required",
+    }),
+  );
 }
 
 /** `POST /api/v1/auth/verify-email` — 204. Six digits, 15-minute lifetime. */
@@ -171,35 +189,37 @@ export function verifyEmail(input: {
 }
 
 /**
- * `POST /api/v1/auth/resend-verification` — 204 even for unknown emails.
- *
- * `turnstileToken` is required, same as every other OTP-issuing call.
+ * `POST /api/v1/auth/resend-verification` — the same answer even for unknown
+ * emails. Takes a Turnstile token, or the ticket of the previous send.
  */
-export function resendVerification(
+export async function resendVerification(
   email: string,
-  turnstileToken: string,
-): Promise<void> {
-  return apiFetch<void>("/auth/resend-verification", {
-    method: "POST",
-    body: { email, turnstileToken },
-    auth: "none",
-  });
+  proof: SendProof,
+): Promise<OtpSentResponse> {
+  return codeSent(
+    await apiFetch<OtpSentResponse | null>("/auth/resend-verification", {
+      method: "POST",
+      body: { email, ...proof },
+      auth: "none",
+    }),
+  );
 }
 
 /**
- * `POST /api/v1/auth/forgot-password` — 204 whether or not the email exists.
- *
- * `turnstileToken` is required, same as every other OTP-issuing call.
+ * `POST /api/v1/auth/forgot-password` — the same answer whether or not the
+ * email exists. Takes a Turnstile token, or the ticket of the previous send.
  */
-export function forgotPassword(
+export async function forgotPassword(
   email: string,
-  turnstileToken: string,
-): Promise<void> {
-  return apiFetch<void>("/auth/forgot-password", {
-    method: "POST",
-    body: { email, turnstileToken },
-    auth: "none",
-  });
+  proof: SendProof,
+): Promise<OtpSentResponse> {
+  return codeSent(
+    await apiFetch<OtpSentResponse | null>("/auth/forgot-password", {
+      method: "POST",
+      body: { email, ...proof },
+      auth: "none",
+    }),
+  );
 }
 
 /**

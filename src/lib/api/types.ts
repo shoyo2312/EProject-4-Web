@@ -72,6 +72,16 @@ export interface SignupTicketResponse {
 }
 
 /**
+ * What every call that mails a code answers. `resendTicket` goes in place of
+ * the Turnstile token on the next send to the same address in the same flow,
+ * for 15 minutes from the check that earned it. Null when the server gave
+ * none, and the next send needs Turnstile again.
+ */
+export interface OtpSentResponse {
+  resendTicket: string | null;
+}
+
+/**
  * `POST /auth/oauth/{google,facebook}`. `requiresEmail` means the account has
  * no email address yet — the session works, but it cannot reset a password or
  * be reached until one is added.

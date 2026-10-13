@@ -19,6 +19,7 @@ import {
   verifySignup,
 } from "@/lib/api/auth";
 import { isApiError, messageFor } from "@/lib/api/errors";
+import type { OtpSentResponse } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import type { LoginOption } from "@/types/tiktok";
 
@@ -42,15 +43,21 @@ import { SocialLinkStep } from "./auth-modal/SocialLinkStep";
 
 type Flow = "login" | "signup";
 
+/**
+ * Where a code went, and the ticket its code step resends with instead of a
+ * Turnstile check — null when the send answered none.
+ */
+type CodeSent = { email: string; resendTicket: string | null };
+
 /** One screen of the modal. Each keeps what the screens after it need. */
 type AuthStep =
   | { name: "options" }
   | { name: "login-form"; identifier?: string }
   | { name: "reset-email" }
-  | { name: "reset-code"; email: string }
+  | ({ name: "reset-code" } & CodeSent)
   | { name: "reset-password"; email: string; otp: string }
   | { name: "signup-details" }
-  | { name: "signup-code"; email: string }
+  | ({ name: "signup-code" } & CodeSent)
   | { name: "signup-password" }
   | { name: "signup-username" }
   /**
@@ -64,7 +71,7 @@ type AuthStep =
    * They start a fresh stack: the login before them is finished.
    */
   | { name: "add-email" }
-  | { name: "add-email-code"; email: string };
+  | ({ name: "add-email-code" } & CodeSent);
 
 type SetFieldError = (name: string, message: string) => void;
 
@@ -186,12 +193,18 @@ export function AuthModal({
 
   /**
    * `send` mails a code — to a signup's address, or one a social account is
-   * adding — and the code step follows. An address another account already
-   * holds is marked on the field, since the field is what has to change.
+   * adding — and the code step follows, holding the ticket for its resends. An
+   * address another account already holds is marked on the field, since the
+   * field is what has to change.
    */
-  const mailCode = async (send: Promise<void>, setFieldError: SetFieldError, next: AuthStep) => {
+  const mailCode = async (
+    send: Promise<OtpSentResponse>,
+    setFieldError: SetFieldError,
+    next: (resendTicket: string | null) => AuthStep,
+  ) => {
+    let sent: OtpSentResponse;
     try {
-      await send;
+      sent = await send;
     } catch (cause) {
       if (isApiError(cause) && cause.is("EMAIL_ALREADY_EXISTS")) {
         setFieldError("email", messageFor(cause));
@@ -199,7 +212,7 @@ export function AuthModal({
       }
       throw cause;
     }
-    go(next);
+    go(next(sent.resendTicket));
   };
 
   /** Back to the email, for a signup whose ticket expired or whose address was taken meanwhile. */
@@ -284,11 +297,11 @@ export function AuthModal({
         return (
           <ResetEmailStep
             onSent={async (email, token) => {
-              await forgotPassword(email, token);
-              // 204 whether or not the address has an account, so the copy
-              // must not imply one.
+              const { resendTicket } = await forgotPassword(email, { turnstileToken: token });
+              // The same answer whether or not the address has an account, so
+              // the copy must not imply one.
               toast.success("If that address has an account, a reset code is on its way.");
-              go({ name: "reset-code", email });
+              go({ name: "reset-code", email, resendTicket });
             }}
           />
         );
@@ -297,10 +310,11 @@ export function AuthModal({
         return (
           <CodeStep
             email={step.email}
+            resendTicket={step.resendTicket}
             // The server checks the code together with the new password, so
             // it is only carried forward here.
             onSubmit={async (code) => go({ name: "reset-password", email: step.email, otp: code })}
-            onResend={(token) => forgotPassword(step.email, token)}
+            onResend={(proof) => forgotPassword(step.email, proof)}
           />
         );
 
@@ -331,7 +345,11 @@ export function AuthModal({
             draft={draft}
             onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
             onSendCode={(email, token, setFieldError) =>
-              mailCode(startSignup(email, token), setFieldError, { name: "signup-code", email })
+              mailCode(startSignup(email, { turnstileToken: token }), setFieldError, (resendTicket) => ({
+                name: "signup-code",
+                email,
+                resendTicket,
+              }))
             }
           />
         );
@@ -340,6 +358,7 @@ export function AuthModal({
         return (
           <CodeStep
             email={step.email}
+            resendTicket={step.resendTicket}
             onSubmit={async (code) => {
               const { signupToken } = await verifySignup(step.email, code);
               setDraft((current) => ({ ...current, signupToken }));
@@ -347,7 +366,7 @@ export function AuthModal({
               // email — which mails a fresh one — not to a dead code screen.
               setStack((steps) => [...steps.slice(0, -1), { name: "signup-password" }]);
             }}
-            onResend={(token) => startSignup(step.email, token)}
+            onResend={(proof) => startSignup(step.email, proof)}
           />
         );
 
@@ -370,7 +389,7 @@ export function AuthModal({
           <CodeStep
             email={step.email}
             onSubmit={(code) => verify(step.email, step.password, code)}
-            onResend={(token) => resendVerification(step.email, token)}
+            onResend={(proof) => resendVerification(step.email, proof)}
           />
         );
 
@@ -378,7 +397,11 @@ export function AuthModal({
         return (
           <AddEmailStep
             onSubmit={(email, token, setFieldError) =>
-              mailCode(addEmail(email, token), setFieldError, { name: "add-email-code", email })
+              mailCode(addEmail(email, token), setFieldError, (resendTicket) => ({
+                name: "add-email-code",
+                email,
+                resendTicket,
+              }))
             }
             onSkip={onClose}
           />
@@ -388,8 +411,9 @@ export function AuthModal({
         return (
           <CodeStep
             email={step.email}
+            resendTicket={step.resendTicket}
             onSubmit={(code) => confirmAddedEmail(step.email, code)}
-            onResend={(token) => resendVerification(step.email, token)}
+            onResend={(proof) => resendVerification(step.email, proof)}
           />
         );
     }
