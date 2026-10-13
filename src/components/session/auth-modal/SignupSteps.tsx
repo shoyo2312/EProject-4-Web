@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 
 import { TurnstileWidget } from "@/components/auth/TurnstileWidget";
+import { useTurnstileToken } from "@/lib/auth/use-turnstile-token";
 import { toast } from "@/components/ui/toast";
 import { messageFor } from "@/lib/api/errors";
 import { meetsPasswordRules } from "@/lib/auth/password-rules";
@@ -69,9 +70,9 @@ const YEARS = Array.from({ length: 100 }, (_, index) => String(THIS_YEAR - index
  * the age gate is still enforced here — it is a promise the form makes either
  * way.
  *
- * Mailing a code is gated on Turnstile server-side, but the live step has no
- * widget on it. So the widget takes the button's place only once "Send code"
- * is pressed, and the code goes out by itself as soon as it is solved.
+ * Mailing a code is gated on Turnstile server-side. The widget mounts with the
+ * step and solves while the form is filled in, above the button, so "Send code"
+ * has a token ready when pressed.
  */
 export function SignupDetailsStep({
   draft,
@@ -82,8 +83,7 @@ export function SignupDetailsStep({
   onSendCode: (email: string, turnstileToken: string, setFieldError: SetFieldError) => Promise<void>;
 }) {
   const emailId = useId();
-  /** The address waiting on Turnstile, while the widget is up. */
-  const [checking, setChecking] = useState<string | null>(null);
+  const turnstile = useTurnstileToken();
   const form = useForm({
     schema: signupDetailsSchema,
     toastFieldErrors: true,
@@ -93,27 +93,27 @@ export function SignupDetailsStep({
       birthYear: draft.birthYear,
       email: draft.email,
     },
-    onSubmit: (values) => {
-      onChange({ ...values, email: values.email.trim() });
-      setChecking(values.email.trim());
+    onSubmit: async (values) => {
+      const email = values.email.trim();
+      onChange({ ...values, email });
+      try {
+        await onSendCode(email, turnstile.token ?? "", form.setFieldError);
+      } catch (cause) {
+        toast.error(messageFor(cause));
+      } finally {
+        // The token is single-use, so a retry mounts a fresh widget.
+        turnstile.consume();
+      }
     },
   });
 
-  const send = async (token: string) => {
-    if (!checking) return;
-    try {
-      await onSendCode(checking, token, form.setFieldError);
-    } catch (cause) {
-      toast.error(messageFor(cause));
-    } finally {
-      // The token is single-use, so a retry mounts a fresh widget.
-      setChecking(null);
-    }
-  };
-
   const birthdayInvalid = Boolean(form.errors.birthday);
   const complete =
-    form.values.birthMonth && form.values.birthDay && form.values.birthYear && form.values.email.trim();
+    form.values.birthMonth &&
+    form.values.birthDay &&
+    form.values.birthYear &&
+    form.values.email.trim() &&
+    turnstile.token;
 
   return (
     <>
@@ -171,18 +171,16 @@ export function SignupDetailsStep({
             </ConsentCheckbox>
           </div>
 
-          {checking ? (
-            <div
-              ref={(node) => node?.scrollIntoView({ block: "nearest" })}
-              className="mt-1.5 mb-4 flex min-h-[71px] justify-center"
-            >
-              <TurnstileWidget onVerify={send} className="my-0" />
-            </div>
-          ) : (
-            <PillButton disabled={!complete} className="mt-1.5 mb-4">
-              Send code
-            </PillButton>
-          )}
+          <div className="mt-5 flex min-h-[71px] justify-center">
+            <TurnstileWidget
+              key={turnstile.widgetKey}
+              onVerify={turnstile.setToken}
+              className="my-0"
+            />
+          </div>
+          <PillButton disabled={!complete || form.submitting} className="mt-4 mb-4">
+            {form.submitting ? "Sending…" : "Send code"}
+          </PillButton>
         </div>
       </form>
     </>
