@@ -24,7 +24,9 @@ const RESEND_COOLDOWN = 60;
  * Turnstile check and the screen has no widget on it, as live. One is mounted
  * only when there is no ticket (the verify step starts without one) or the
  * server refuses it, 15 minutes on, and the resend goes out by itself once it
- * is solved.
+ * is solved. It mounts `interaction-only`: the check almost always passes on
+ * its own, and a widget that appears only to vanish a second later as the
+ * resend goes out reads as a glitch, so it shows only if a click is needed.
  *
  * Measured live: column padding 72px 40px, the caption 13/16.9 at .5 with 8px
  * under it, the boxes with 24px under them, then "Resend code" 15/22.5/600 in
@@ -110,6 +112,10 @@ export function CodeStep({
     }
   };
 
+  // The hidden check takes a few seconds before the request even starts, so
+  // the button says so for both, rather than only greying out.
+  const sending = resending || needsTurnstile;
+
   const requestResend = () => {
     if (ticket) void resend({ resendTicket: ticket });
     else setNeedsTurnstile(true);
@@ -138,11 +144,11 @@ export function CodeStep({
         <div className="mb-6 flex items-center gap-1">
           <button
             type="button"
-            disabled={cooldown > 0 || resending || needsTurnstile}
+            disabled={cooldown > 0 || sending}
             onClick={requestResend}
             className="py-2 text-[15px] leading-[22.5px] font-semibold text-[var(--tt-red-active)] disabled:cursor-not-allowed disabled:text-[rgb(255_255_255/0.34)]"
           >
-            Resend code
+            {sending ? "Sending…" : "Resend code"}
           </button>
           {cooldown > 0 && (
             <span className="text-[15px] leading-[22.5px] text-[rgb(255_255_255/0.34)]">
@@ -154,6 +160,7 @@ export function CodeStep({
         {needsTurnstile && (
           <TurnstileWidget
             onVerify={(token) => resend({ turnstileToken: token })}
+            appearance="interaction-only"
             className="my-0"
           />
         )}

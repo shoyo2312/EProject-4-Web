@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { removeTurnstile, renderTurnstile } from "@/lib/auth/turnstile";
+import { removeTurnstile, renderTurnstile, type TurnstileAppearance } from "@/lib/auth/turnstile";
 import { cn } from "@/lib/utils";
 
 /**
@@ -12,9 +12,11 @@ import { cn } from "@/lib/utils";
  */
 export function TurnstileWidget({
   onVerify,
+  appearance,
   className,
 }: {
   onVerify: (token: string) => void;
+  appearance?: TurnstileAppearance;
   /** Replaces the default vertical margin — the modal places it in a fixed gap. */
   className?: string;
 }) {
@@ -36,6 +38,7 @@ export function TurnstileWidget({
         onError: () => undefined,
       },
       () => cancelled,
+      appearance,
     ).then((id) => {
       widgetId = id;
     });

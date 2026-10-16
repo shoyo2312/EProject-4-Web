@@ -86,4 +86,20 @@ describe("CodeStep resend", () => {
     expect(onResend).toHaveBeenLastCalledWith({ resendTicket: "ticket-2" });
     expect(check()).toBeNull();
   });
+
+  it("reads Sending… through the check and the request, then Resend code again", async () => {
+    let answer: (sent: OtpSentResponse) => void = () => undefined;
+    const onResend = vi.fn<Resend>(() => new Promise((resolve) => (answer = resolve)));
+    renderStep({ onResend });
+
+    fireEvent.click(resendButton());
+    expect(screen.getByRole("button", { name: "Sending…" })).toHaveProperty("disabled", true);
+
+    fireEvent.click(check()!);
+    expect(screen.getByRole("button", { name: "Sending…" })).toHaveProperty("disabled", true);
+
+    await act(async () => answer({ resendTicket: "ticket-2" }));
+    expect(resendButton()).toHaveProperty("disabled", true);
+    expect(screen.queryByRole("button", { name: "Sending…" })).toBeNull();
+  });
 });
