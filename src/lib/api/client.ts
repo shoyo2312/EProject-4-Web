@@ -1,6 +1,6 @@
 "use client";
 
-import { ApiError } from "@/lib/api/errors";
+import { ApiError, parseRetryAfter } from "@/lib/api/errors";
 import {
   clearTokens,
   getAccessToken,
@@ -133,9 +133,11 @@ async function unwrap<T>(response: Response): Promise<T> {
   if (response.status === 204) return null as T;
 
   const text = await response.text();
+  // A rate limit says when to try again; the send button waits exactly that long.
+  const retryAfter = parseRetryAfter(response.headers.get("Retry-After"));
   if (!text) {
     if (response.ok) return null as T;
-    throw new ApiError(response.status, null, response.statusText);
+    throw new ApiError(response.status, null, response.statusText, retryAfter);
   }
 
   let envelope: ApiEnvelope<T>;
@@ -143,7 +145,7 @@ async function unwrap<T>(response: Response): Promise<T> {
     envelope = parseJsonPreservingIds<ApiEnvelope<T>>(text);
   } catch {
     // Not our envelope — a gateway-level error page, most likely.
-    throw new ApiError(response.status, null, response.statusText);
+    throw new ApiError(response.status, null, response.statusText, retryAfter);
   }
 
   if (!response.ok || envelope.success === false) {
@@ -151,6 +153,7 @@ async function unwrap<T>(response: Response): Promise<T> {
       response.status,
       envelope.code ?? null,
       envelope.message ?? response.statusText,
+      retryAfter,
     );
   }
 

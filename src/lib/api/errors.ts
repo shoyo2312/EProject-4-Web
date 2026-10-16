@@ -7,12 +7,20 @@ export class ApiError extends Error {
   readonly status: number;
   /** e.g. "EMAIL_NOT_VERIFIED". Null for bare 401s, which carry no code. */
   readonly code: string | null;
+  /** Seconds until the server takes the request again — a rate limit's `Retry-After`. */
+  readonly retryAfter: number | null;
 
-  constructor(status: number, code: string | null, message: string) {
+  constructor(
+    status: number,
+    code: string | null,
+    message: string,
+    retryAfter: number | null = null,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.retryAfter = retryAfter;
   }
 
   is(code: string): boolean {
@@ -22,6 +30,20 @@ export class ApiError extends Error {
 
 export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError;
+}
+
+/** `Retry-After` in whole seconds — the header is either a delay or an HTTP date. */
+export function parseRetryAfter(header: string | null, now = Date.now()): number | null {
+  if (!header) return null;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) return Math.max(0, Math.ceil(seconds));
+  const date = Date.parse(header);
+  return Number.isNaN(date) ? null : Math.max(0, Math.ceil((date - now) / 1000));
+}
+
+/** When a refused request may go again — its `Retry-After` put on the clock. */
+export function retryAt(error: ApiError, now = Date.now()): Date | null {
+  return error.retryAfter === null ? null : new Date(now + error.retryAfter * 1000);
 }
 
 /**
