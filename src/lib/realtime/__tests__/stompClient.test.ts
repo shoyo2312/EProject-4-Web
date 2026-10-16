@@ -107,15 +107,17 @@ describe("subscribeTopic", () => {
     expect(instances[0].brokerURL).toContain("token=rotated");
   });
 
-  it("does not connect without a token", async () => {
+  it("connects as a guest without a token", async () => {
     const { subscribeTopic } = await load();
     tokens.access = null;
     tokens.refresh = null;
-    subscribeTopic("/topic/a", vi.fn());
+    subscribeTopic("/topic/videos.1", vi.fn());
 
-    await instances[0].beforeConnect();
+    await instances[0].connect();
 
-    expect(instances[0].deactivate).toHaveBeenCalled();
+    expect(instances[0].brokerURL).toMatch(/\/ws$/);
+    expect(instances[0].deactivate).not.toHaveBeenCalled();
+    expect(instances[0].handlers.has("/topic/videos.1")).toBe(true);
   });
 });
 

@@ -120,7 +120,7 @@ export function Feed({
       });
   }, [syncLikeCount]);
 
-  useVideoRealtime(backendVideoIds, user !== null, handleRealtimeFrame);
+  useVideoRealtime(backendVideoIds, handleRealtimeFrame);
 
   const visibleVideos = useMemo(
     () => videos.filter((video) => !hiddenIds.has(video.id)),

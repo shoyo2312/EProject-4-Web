@@ -198,9 +198,7 @@ export function useVideoFeed(): VideoFeedState {
    * chat-service broadcasts only the id (`/topic/feed`, on an APPROVED
    * moderation verdict); hydrating it here runs the normal read path, so a
    * PRIVATE video the owner happens to be subscribed for is filtered out by the
-   * status/visibility check rather than by trusting the frame. Signed-out
-   * viewers get no socket at all — the handshake needs a token — so for them
-   * the feed stays as it was.
+   * status/visibility check rather than by trusting the frame.
    */
   const appendPublished = useCallback(
     async (videoId: string) => {
@@ -216,7 +214,7 @@ export function useVideoFeed(): VideoFeedState {
     [toCards],
   );
 
-  useStompTopic<{ videoId?: string }>(isSignedIn ? "/topic/feed" : null, (frame) => {
+  useStompTopic<{ videoId?: string }>("/topic/feed", (frame) => {
     if (frame.videoId) void appendPublished(frame.videoId);
   });
 

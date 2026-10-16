@@ -33,12 +33,9 @@ import type { Comment } from "@/types/tiktok";
 export function useCommentThread({
   videoId,
   commentsDisabled,
-  realtime,
 }: {
   videoId: string;
   commentsDisabled: boolean;
-  /** Subscribe to the video's comment frames; the socket needs a signed-in viewer. */
-  realtime: boolean;
 }) {
   /**
    * The panel is keyed by video id, so every pass over a video in the feed
@@ -179,7 +176,7 @@ export function useCommentThread({
     [videoId, setComments],
   );
 
-  useCommentRealtime(videoId, realtime, applyRealtimeFrame);
+  useCommentRealtime(videoId, applyRealtimeFrame);
 
   const loadMore = useCallback(async () => {
     if (!cursor || loadingMore) return;

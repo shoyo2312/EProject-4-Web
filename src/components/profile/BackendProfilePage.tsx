@@ -274,7 +274,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
    * the focus/visibility listener below is the only thing that updates the
    * numbers.
    */
-  useUserRealtime(targetId ?? null, session.user !== null, (frame) => {
+  useUserRealtime(targetId ?? null, (frame) => {
     setProfile((current) =>
       current
         ? {

@@ -139,7 +139,6 @@ export function VideoDetail({
 
   useVideoRealtime(
     backendIds,
-    signedIn,
     useCallback(
       (frame: VideoFrame) => {
         // `state` frames carry no counters; only the counts ones say anything here.

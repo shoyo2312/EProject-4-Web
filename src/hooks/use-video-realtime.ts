@@ -21,11 +21,7 @@ export type VideoFrame = {
  * ids are strings and must stay strings: they are Snowflakes, and JSON.parse rounds a 64-bit
  * integer into a different video.
  */
-export function useVideoRealtime(
-  videoIds: string[],
-  enabled: boolean,
-  onFrame: (frame: VideoFrame) => void,
-) {
+export function useVideoRealtime(videoIds: string[], onFrame: (frame: VideoFrame) => void) {
   /** Video id → its unsubscribe. Reconnects are re-subscribed by `stompClient` itself. */
   const subscriptions = useRef(new Map<string, () => void>());
   const handler = useRef(onFrame);
@@ -36,7 +32,7 @@ export function useVideoRealtime(
     handler.current = onFrame;
   });
 
-  // Teardown lives on its own effect, keyed on `enabled` only: on the diffing
+  // Teardown lives on its own effect, run on unmount only: on the diffing
   // effect below it would drop and re-subscribe every video each time a page
   // of the feed was appended.
   useEffect(() => {
@@ -45,10 +41,9 @@ export function useVideoRealtime(
       live.forEach((unsubscribe) => unsubscribe());
       live.clear();
     };
-  }, [enabled]);
+  }, []);
 
   useEffect(() => {
-    if (!enabled) return;
     const live = subscriptions.current;
     const wanted = new Set(videoIds);
 
@@ -67,5 +62,5 @@ export function useVideoRealtime(
       unsubscribe();
       live.delete(id);
     }
-  }, [videoIds, enabled]);
+  }, [videoIds]);
 }

@@ -41,12 +41,11 @@ function connection(): Client {
   // `services/chat-service/.../websocket/JwtHandshakeInterceptor.java`.
   next.beforeConnect = async () => {
     const token = await handshakeToken();
-    if (!token) {
-      // Signed out: nothing to connect as. The next `subscribeTopic` reactivates.
-      void next.deactivate();
-      return;
-    }
-    next.brokerURL = `${WS_BASE}/ws?token=${encodeURIComponent(token)}`;
+    // Signed out the socket still opens, as a guest: chat-service lets it listen to the public
+    // topics — counts and comments — and nothing else.
+    next.brokerURL = token
+      ? `${WS_BASE}/ws?token=${encodeURIComponent(token)}`
+      : `${WS_BASE}/ws`;
   };
 
   // Every connection starts with no subscriptions — the broker forgot the old
@@ -101,7 +100,7 @@ export function subscribeTopic(destination: string, onMessage: (body: string) =>
 }
 
 /**
- * Drops the connection and reopens it as whoever holds the tokens now — or not at all, signed
+ * Drops the connection and reopens it as whoever holds the tokens now — as a guest, signed
  * out. Called whenever the viewer changes: the handshake fixed the identity behind
  * `/user/queue/**`, and the old one must not keep receiving on the new viewer's behalf.
  */

@@ -106,11 +106,7 @@ export function CommentPanel({
   /** Set when the viewer may read this thread but not add to it. */
   const lockMessage = commentLockMessage(commentsDisabled, restriction);
   const { comments, setComments, loading, hasMore, loadingMore, loadMore, appendReplies } =
-    useCommentThread({
-      videoId,
-      commentsDisabled,
-      realtime: user !== null,
-    });
+    useCommentThread({ videoId, commentsDisabled });
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   /** Newest locally-posted comment — drives the slide-in and the auto-expand. */
   const [justAddedId, setJustAddedId] = useState<string | null>(null);

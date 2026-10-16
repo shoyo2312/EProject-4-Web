@@ -18,10 +18,6 @@ export type UserStatsFrame = {
  * Single id, unlike `useVideoRealtime`: a profile page only ever watches the
  * one account it is showing.
  */
-export function useUserRealtime(
-  userId: string | null,
-  enabled: boolean,
-  onFrame: (frame: UserStatsFrame) => void,
-) {
-  useStompTopic(enabled && userId ? `/topic/users.${userId}` : null, onFrame);
+export function useUserRealtime(userId: string | null, onFrame: (frame: UserStatsFrame) => void) {
+  useStompTopic(userId ? `/topic/users.${userId}` : null, onFrame);
 }
