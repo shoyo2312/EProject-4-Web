@@ -245,6 +245,12 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
           },
           {
             kind: "link",
+            title: "Comment filters",
+            description: "Hold comments for your review before they appear",
+            action: "comment-filters",
+          },
+          {
+            kind: "link",
             title: "Direct messages",
             description: "Who can send you messages",
             action: "dm-audience",

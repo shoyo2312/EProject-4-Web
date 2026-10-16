@@ -293,10 +293,11 @@ export type SettingsAction =
   | "high-contrast"
   | "private-account"
   | "comment-audience"
+  | "comment-filters"
   | "dm-audience"
   | "screen-time-limit"
-  | "sleep-hours"
   | "password"
+  | "sleep-hours"
   | "weekly-screen-time";
 
 /**

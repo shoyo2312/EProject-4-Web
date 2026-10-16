@@ -89,7 +89,7 @@ with the muted, unindented headings noted above.
 - **One switch size**, the 44 × 24 majority.
 - `Business verification`'s nav glyph is redrawn on the 48 grid; the live one is a 3.2KB
   multi-part mark on a 20 viewBox. Every other nav glyph is the live path.
-- **Eight rows are live; the rest are inert.** A row is only wired when the backend has
+- **Only some rows are live; the rest are inert.** A row is only wired when the backend has
   somewhere to keep its answer:
   - *Privacy → Comments* and *Direct messages*, and *Screen time → Daily screen time*,
     *Sleep hours* and *Weekly screen time updates* read and write user-service's
@@ -97,6 +97,10 @@ with the muted, unindented headings noted above.
     audiences are enforced server-side; the screen-time fields are stored only — nothing,
     client or server, acts on them yet. The pickers are the app's own dialogs, not
     measured off the live site.
+  - *Privacy → Comment filters* is not a row on the live panel; its place and its dialog are
+    the app's own. It writes the same settings (`filterAllComments`, `filterSpamOffensive`,
+    `commentKeywords`), which interaction-service applies to each new comment under the
+    viewer's videos, holding a match for their review.
   - *Privacy → Blocked accounts* opens a list backed by `GET /users/me/blocked` and
     `DELETE /users/{id}/block`, both of which already existed.
   - *Push notifications → Allow in browser* asks for the browser's Notification permission and

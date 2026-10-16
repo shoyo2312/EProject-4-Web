@@ -173,6 +173,16 @@ export interface UserSettingsResponse {
    * videos; turning it off approves every request still waiting.
    */
   privateAccount: boolean;
+  /**
+   * The owner's comment filters, applied by interaction-service to each new
+   * comment under their videos: a match is held for their review, never
+   * refused. Spam and offensive off lets through what is only profane,
+   * insulting or spammy — never hate, threats or scams.
+   */
+  filterSpamOffensive: boolean;
+  filterAllComments: boolean;
+  /** Replaced whole by a PATCH. At most 50, each 1–30 code points. */
+  commentKeywords: string[];
 }
 
 /* --- api-gateway aggregate ----------------------------------------------- */

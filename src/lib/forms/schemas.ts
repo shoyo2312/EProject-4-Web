@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { codePointLength } from "@/lib/code-points";
+import { keywordKey } from "@/lib/comments/keyword-key";
+
 /**
  * Every field rule the app enforces, in one place.
  *
@@ -245,6 +248,31 @@ export function editProfileSchemaFor(currentUsername: string) {
 /**
  * `/setting` → Sleep hours: two `<input type="time">` values, already the
  * server's "HH:mm". Mirrors user-service — both ends, and not the same minute.
+/** user-service's cap on `commentKeywords`. */
+export const COMMENT_KEYWORDS_MAX = 50;
+
+/**
+ * `/setting` → Comment filters: one more keyword for `existing`. Mirrors
+ * user-service — 1–30 code points with a letter or digit in them, 50 at most.
+ * The server drops a repeat without a word, so a repeat is caught here instead.
+ */
+export function commentKeywordSchemaFor(existing: readonly string[]) {
+  const taken = new Set(existing.map(keywordKey));
+  return z.object({
+    keyword: z
+      .string()
+      .trim()
+      .min(1, "Enter a keyword.")
+      .refine((value) => codePointLength(value) <= 30, "Keywords can be at most 30 characters.")
+      .refine((value) => keywordKey(value) !== "", "Keywords need a letter or a number.")
+      .refine((value) => !taken.has(keywordKey(value)), "You already filter this keyword.")
+      .refine(
+        () => existing.length < COMMENT_KEYWORDS_MAX,
+        `You can filter up to ${COMMENT_KEYWORDS_MAX} keywords.`,
+      ),
+  });
+}
+
  * Start after end is not an error: that is a night crossing midnight.
  */
 export const sleepHoursSchema = z

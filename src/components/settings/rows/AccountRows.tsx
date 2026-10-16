@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
+import { CommentFiltersModal } from "@/components/settings/rows/CommentFiltersModal";
 import {
   Accessory,
   ROW_CLASS,
@@ -76,6 +77,33 @@ export function AudienceRow({
                 : { dmAudience: audience },
             )
           }
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * Privacy → Comment filters, which interaction-service applies to each new
+ * comment under the viewer's videos.
+ */
+export function CommentFiltersRow({ row, account }: AccountRowProps) {
+  const [open, setOpen] = useState(false);
+  const settings = account.settings;
+
+  return (
+    <>
+      {/* A link row shows no value; "" only says the settings are in. */}
+      <DialogRowButton
+        row={row}
+        value={settings ? "" : undefined}
+        onOpen={() => setOpen(true)}
+      />
+      {open && settings && (
+        <CommentFiltersModal
+          settings={settings}
+          update={account.update}
           onClose={() => setOpen(false)}
         />
       )}

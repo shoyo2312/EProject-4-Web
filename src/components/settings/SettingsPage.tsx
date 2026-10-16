@@ -7,6 +7,7 @@ import { AccountListModal } from "@/components/settings/AccountListModal";
 import {
   AccountSwitchRow,
   AudienceRow,
+  CommentFiltersRow,
   ScreenTimeLimitRow,
   SleepHoursRow,
 } from "@/components/settings/rows/AccountRows";
@@ -272,6 +273,8 @@ function Row({ row, account }: { row: SettingsRow; account: AccountSettings }) {
       return <AccountListRow row={row} kind="muted" />;
     case "comment-audience":
       return <AudienceRow row={row} account={account} field="commentAudience" />;
+    case "comment-filters":
+      return <CommentFiltersRow row={row} account={account} />;
     case "dm-audience":
       return <AudienceRow row={row} account={account} field="dmAudience" />;
     case "screen-time-limit":
