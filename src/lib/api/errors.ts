@@ -132,6 +132,14 @@ const MESSAGES: Record<string, string> = {
   // thread they can see is shut to everyone.
   COMMENTS_DISABLED: "Comments are turned off for this video.",
   COMMENTS_NOT_ALLOWED: "This account doesn’t accept comments from you.",
+  // Says nothing about who blocked whom, like the 403 itself.
+  REPLY_NOT_ALLOWED: "You can’t reply to this comment.",
+  COMMENT_NOT_FOUND: "This comment is no longer available.",
+  COMMENT_REJECTED: "This comment goes against our Community Guidelines.",
+  COMMENT_RATE_LIMITED: "You’re commenting too fast. Take a rest.",
+  DUPLICATE_COMMENT: "You already posted this. Try saying something different.",
+  // Too many refused or removed comments; the panel says until when.
+  COMMENTING_RESTRICTED: "You can’t comment right now because of repeated violations.",
 
   // chat-service. MESSAGING_BLOCKED and MESSAGING_NOT_ALLOWED read alike on
   // purpose — a standing audience setting must not be distinguishable from a
@@ -150,10 +158,14 @@ const MESSAGES: Record<string, string> = {
   NETWORK_ERROR: "Can’t connect right now. Check your connection and try again.",
 };
 
-export function messageFor(error: unknown): string {
-  if (!isApiError(error)) return MESSAGES.INTERNAL_ERROR;
+/**
+ * `fallback` stands in for "Something went wrong" when the code has no copy of
+ * its own: the call site knows what was being attempted, and can say so.
+ */
+export function messageFor(error: unknown, fallback = MESSAGES.INTERNAL_ERROR): string {
+  if (!isApiError(error)) return fallback;
   if (error.code && MESSAGES[error.code]) return MESSAGES[error.code];
   if (error.status === 401) return MESSAGES.INVALID_REFRESH_TOKEN;
   if (error.status === 429) return "Too many requests. Please slow down.";
-  return MESSAGES.INTERNAL_ERROR;
+  return fallback;
 }

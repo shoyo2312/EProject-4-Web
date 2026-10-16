@@ -486,16 +486,24 @@ export interface CommentPageResponse {
  * not comment, or null when they may. The same rule that refuses the post, so
  * hiding the composer on it never disagrees with the 403 it replaces.
  */
-export type CommentRestriction = "COMMENTS_DISABLED" | "NO_ONE" | "FRIENDS_ONLY";
+export type CommentRestriction =
+  | "COMMENTS_DISABLED"
+  | "NO_ONE"
+  | "FRIENDS_ONLY"
+  | "COMMENTING_RESTRICTED";
 
 export interface CommentPermissionResponse {
   restriction: CommentRestriction | null;
 }
+ * `COMMENTING_RESTRICTED` is about the caller, not the video: too many of
+ * their comments were refused or removed lately.
 
 /* --- search-service ------------------------------------------------------ */
 
 /**
  * `GET /api/v1/search/videos` — one hit from the Elasticsearch projection, not
+  /** ISO-8601, when `COMMENTING_RESTRICTED` lifts; null with any other answer. */
+  restrictedUntil: string | null;
  * a `VideoResponse`. It is built from Kafka events, so it carries only what
  * those events published: no `hlsUrl` (a tile shows the poster and links to the
  * detail page, which fetches the playable video), no visibility (the index only

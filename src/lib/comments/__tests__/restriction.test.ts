@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { commentLockMessage } from "@/lib/comments/restriction";
+import { formatDateTime } from "@/lib/format";
 
 describe("commentLockMessage", () => {
   it("leaves the box up when nothing restricts the viewer", () => {
@@ -23,6 +24,19 @@ describe("commentLockMessage", () => {
   it("lets the video's switch win over whatever the account says", () => {
     expect(commentLockMessage(true, "FRIENDS_ONLY")).toBe(
       "This creator has turned off commenting",
+    );
+  });
+
+  it("tells a viewer restricted for repeated violations when they can comment again", () => {
+    const until = new Date(2026, 9, 14, 21, 30).getTime();
+    expect(commentLockMessage(false, "COMMENTING_RESTRICTED", until)).toBe(
+      `You can’t comment until ${formatDateTime(new Date(until))} because of repeated violations.`,
+    );
+  });
+
+  it("still explains a restriction that came without its end", () => {
+    expect(commentLockMessage(false, "COMMENTING_RESTRICTED")).toBe(
+      "You can’t comment right now because of repeated violations.",
     );
   });
 });

@@ -10,13 +10,14 @@ import {
   CommentsLocked,
   NoCommentsYet,
 } from "@/components/feed/comments/CommentStates";
-import type { ReplyTarget } from "@/components/feed/comments/types";
+import type { PostFailure, ReplyTarget } from "@/components/feed/comments/types";
 import { useCommentThread } from "@/components/feed/comments/use-comment-thread";
 import { CloseIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
 import { useCommentRestriction } from "@/hooks/use-comment-restriction";
 import {
+import { isApiError, messageFor, retryAt } from "@/lib/api/errors";
   COMMENT_FIRST_PAGE_SIZE,
   addComment,
   deleteComment as deleteCommentApi,
@@ -95,16 +96,15 @@ export function CommentPanel({
   const isDetail = variant === "detail";
   const { user } = useSession();
   // The video carries both switches — its own and an account open to no one.
-  // Friends-only depends on who is asking, so it is asked for; the owner is
-  // exempt from it, so is not asked.
-  const restriction = useCommentRestriction(
+  // Friends-only depends on who is asking, and a restriction for repeated
+  // violations follows the viewer everywhere, the owner's own videos included,
+  // so both are asked for.
+  const { restriction, restrictedUntil, restrict } = useCommentRestriction(
     videoId,
-    !commentsDisabled && user?.userId !== videoOwnerId
-      ? (user?.userId ?? null)
-      : null,
+    commentsDisabled ? null : (user?.userId ?? null),
   );
   /** Set when the viewer may read this thread but not add to it. */
-  const lockMessage = commentLockMessage(commentsDisabled, restriction);
+  const lockMessage = commentLockMessage(commentsDisabled, restriction, restrictedUntil);
   const { comments, setComments, loading, hasMore, loadingMore, loadMore, appendReplies } =
     useCommentThread({ videoId, commentsDisabled });
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
@@ -140,8 +140,11 @@ export function CommentPanel({
     composerRef.current?.focus();
   };
 
-  const postBackendComment = async (text: string, target: ReplyTarget | null) => {
-    if (!user) return;
+  const postBackendComment = async (
+    text: string,
+    target: ReplyTarget | null,
+  ): Promise<PostFailure | null> => {
+    if (!user) return null;
     invalidateCommentPage(videoId);
     const optimistic: Comment = {
       id: `pending-${Date.now()}`,
@@ -176,17 +179,29 @@ export function CommentPanel({
           ? removeCommentById(current, optimistic.id)
           : remapCommentId(current, optimistic.id, saved.commentId),
       );
-    } catch {
-      // Roll back both the optimistic row and the count bump, and say so —
+      return null;
+    } catch (cause) {
+      // Roll back both the optimistic row and the count bump, and say why —
       // unlike a like, a lost comment leaves no visible trace to explain it.
       setComments((current) => removeCommentById(current, optimistic.id));
       onCommentDeleted();
-      toast.error("Couldn’t post your comment. Please try again.");
+      // The composer puts the text back; the thread it was aimed at goes with it.
+      setReplyTo((current) => current ?? target);
+      toast.error(messageFor(cause, "Couldn’t post your comment. Please try again."));
+      // Restricted, the box gives way to when it opens again.
+      const until =
+        isApiError(cause) && cause.is("COMMENTING_RESTRICTED") ? retryAt(cause) : null;
+      if (until) restrict(until.getTime());
+      // Only the rate limit closes the box: a duplicate refuses this text, not the next.
+      return {
+        retryAfter:
+          isApiError(cause) && cause.is("COMMENT_RATE_LIMITED") ? cause.retryAfter : null,
+        refused: isApiError(cause) && cause.is("COMMENT_REJECTED"),
+      };
     }
   };
 
   const post = (text: string) => {
-    void postBackendComment(text, replyTo);
     setReplyTo(null);
   };
 
@@ -197,6 +212,7 @@ export function CommentPanel({
     onCommentDeleted();
     try {
       await deleteCommentApi(videoId, id);
+    return postBackendComment(text, replyTo);
       toast.success("Comment deleted.");
     } catch {
       setComments(previous);
