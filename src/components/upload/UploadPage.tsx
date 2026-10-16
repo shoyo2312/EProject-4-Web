@@ -4,7 +4,12 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DropZone } from "@/components/upload/page/DropZone";
+import { FIELD, Labelled, TextField } from "@/components/upload/page/Fields";
+import { Outcome } from "@/components/upload/page/Outcome";
+import { Preview } from "@/components/upload/page/Preview";
+import { UploadSkeleton } from "@/components/upload/page/UploadSkeleton";
+import { isApiError, messageFor, retryAt } from "@/lib/api/errors";
 import type { VideoStatus, VideoVisibility } from "@/lib/api/types";
 import {
   ACCEPTED_UPLOAD_TYPES,
@@ -13,7 +18,7 @@ import {
   pollUntilReady,
   uploadToStorage,
 } from "@/lib/api/videos";
-import { formatBytes } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { uploadSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
 import { toast } from "@/components/ui/toast";
@@ -58,6 +63,16 @@ const OUTCOME_MESSAGE: Record<VideoStatus, string> = {
   TAKEN_DOWN: "This video was taken down by a moderator.",
 };
 
+/**
+ * The field a caption refused at publish belongs under. The form has no tag
+ * box: tags only come from the description's hashtags, so they answer there.
+ */
+const CAPTION_FIELD: Record<string, "title" | "description"> = {
+  VIDEO_TITLE_REJECTED: "title",
+  VIDEO_DESCRIPTION_REJECTED: "description",
+  VIDEO_TAGS_REJECTED: "description",
+};
+
 export function UploadPage() {
   const { user, isLoading, openLogin } = useSession();
   const router = useRouter();
@@ -86,6 +101,37 @@ export function UploadPage() {
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
 
+  /**
+   * The file already in storage and where it landed. A caption refused at
+   * publish stores nothing, so Post after the fix publishes these same bytes
+   * instead of sending them again.
+   */
+  const uploaded = useRef<{ file: File; fileUrl: string } | null>(null);
+
+  /** When Post works again after `UPLOAD_RATE_LIMITED`; null while it does. */
+  const [postAgainAt, setPostAgainAt] = useState<Date | null>(null);
+  useEffect(() => {
+    if (!postAgainAt) return;
+    const id = window.setTimeout(() => setPostAgainAt(null), postAgainAt.getTime() - Date.now());
+    return () => window.clearTimeout(id);
+  }, [postAgainAt]);
+
+  /**
+   * The bytes are still on their way to storage. Only this stretch can be
+   * cancelled or lost: once the post exists, transcoding carries on without
+   * the page, so leaving then costs nothing.
+   */
+  const uploading = progress !== null && !processing;
+
+  // A reload or a closed tab mid-upload throws the transfer away — ask first.
+  // In-app navigation unmounts the page, which aborts the upload above.
+  useEffect(() => {
+    if (!uploading) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [uploading]);
+
   // The object URL is the preview's source; letting it leak pins the whole file
   // in memory for as long as the tab lives.
   useEffect(() => {
@@ -100,7 +146,7 @@ export function UploadPage() {
       description: "",
       visibility: "PUBLIC" as VideoVisibility,
     },
-    onSubmit: async (values) => {
+    onSubmit: async (values, { setFieldError }) => {
       if (!file) {
         toast.error("Choose a video file first.");
         return;
@@ -109,17 +155,23 @@ export function UploadPage() {
       const controller = new AbortController();
       abort.current = controller;
       const { signal } = controller;
-      setProgress(0);
+      let fileUrl = uploaded.current?.file === file ? uploaded.current.fileUrl : null;
+      setProgress(fileUrl ? 1 : 0);
       try {
-        const target = await createUploadUrl({ contentType: file.type });
-        await uploadToStorage(target.uploadUrl, file, target.formFields, setProgress, signal);
+        if (!fileUrl) {
+          const target = await createUploadUrl({ contentType: file.type });
+          await uploadToStorage(target.uploadUrl, file, target.formFields, setProgress, signal);
+          fileUrl = target.fileUrl;
+          uploaded.current = { file, fileUrl };
+        }
 
         const created = await createVideo({
           title: values.title.trim(),
           description: values.description.trim() || undefined,
-          rawFileUrl: target.fileUrl,
+          rawFileUrl: fileUrl,
           visibility: values.visibility,
         });
+        uploaded.current = null;
 
         /**
          * Stay put and keep the bar on screen. The poll is awaited on purpose:
@@ -171,6 +223,18 @@ export function UploadPage() {
         setProgress(null);
         setProcessing(false);
         if (signal.aborted) return;
+        // Over the account's hourly or daily limit: hold Post and say until when.
+        const again =
+          isApiError(cause) && cause.is("UPLOAD_RATE_LIMITED") ? retryAt(cause) : null;
+        if (again) {
+          setPostAgainAt(again);
+          return;
+        }
+        const field = isApiError(cause) ? CAPTION_FIELD[cause.code ?? ""] : undefined;
+        if (field) {
+          setFieldError(field, messageFor(cause));
+          return;
+        }
         // `useForm` turns this into an error toast.
         throw cause;
       }
@@ -248,6 +312,7 @@ export function UploadPage() {
         ) : (
           <div className="flex flex-col gap-8 lg:flex-row">
             <Preview
+              accept={ACCEPT}
               file={file}
               url={previewUrl}
               progress={progress}
@@ -293,7 +358,7 @@ export function UploadPage() {
               <div className="flex gap-3">
                 <button
                   type="submit"
-                  disabled={form.submitting}
+                  disabled={form.submitting || postAgainAt !== null}
                   className="h-11 w-40 rounded-[4px] bg-[var(--tt-red-active)] text-[15px] font-semibold text-white disabled:bg-white/[0.08] disabled:text-white/[0.34]"
                 >
                   {processing
@@ -304,245 +369,35 @@ export function UploadPage() {
                 </button>
                 <button
                   type="button"
-                  disabled={form.submitting}
+                  disabled={form.submitting && !uploading}
                   onClick={() => {
+                    // Mid-upload this stops the transfer and keeps the file and
+                    // fields, so Post retries it; otherwise it drops the file.
+                    if (uploading) {
+                      abort.current?.abort();
+                      toast.success("Upload canceled.");
+                      return;
+                    }
                     setFile(null);
                     setPreviewUrl(null);
                   }}
                   className="h-11 w-28 rounded-[4px] bg-white/[0.12] text-[15px] font-semibold text-[var(--tt-text)] disabled:text-white/[0.34]"
                 >
-                  Discard
+                  {uploading ? "Cancel" : "Discard"}
                 </button>
               </div>
+              {postAgainAt && (
+                <p className="text-[14px] leading-5 text-[var(--tt-text-secondary)]">
+                  You’ve reached the posting limit for now. You can post again on{" "}
+                  {formatDateTime(postAgainAt)}.
+                </p>
+              )}
             </form>
           </div>
         )}
 
       </div>
     </main>
-  );
-}
-
-/**
- * What became of the last post, shown over the empty drop zone.
- *
- * A banner rather than a toast because this is the only place the reason is
- * ever said: the video is already on the profile in whatever state the verdict
- * left it, and the uploader's next move — pick a different file, or go contact
- * support — depends on reading it. It clears when a new file is chosen.
- */
-function Outcome({ status, message }: { status: VideoStatus; message: string }) {
-  const bad = status === "REJECTED" || status === "FAILED" || status === "TAKEN_DOWN";
-  return (
-    <div
-      role="status"
-      className={`mb-6 rounded-[4px] border px-4 py-3 text-[14px] leading-5 ${
-        bad
-          ? "border-[var(--tt-red-active)]/40 bg-[var(--tt-red-active)]/10 text-[var(--tt-text)]"
-          : "border-white/[0.12] bg-white/[0.06] text-[var(--tt-text)]"
-      }`}
-    >
-      {message}
-    </div>
-  );
-}
-
-/**
- * The click-or-drag target. `dragCounter` rather than a boolean because
- * `dragleave` fires when the pointer crosses onto a *child* of the zone, and a
- * boolean flickers the highlight off every time the cursor passes the icon.
- */
-function DropZone({
-  accept,
-  onFile,
-  error,
-}: {
-  accept: string;
-  onFile: (file: File | null) => void;
-  error: string | null;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  const dragCounter = useRef(0);
-  const [dragging, setDragging] = useState(false);
-
-  return (
-    <div
-      onDragEnter={(event) => {
-        event.preventDefault();
-        dragCounter.current += 1;
-        setDragging(true);
-      }}
-      onDragOver={(event) => event.preventDefault()}
-      onDragLeave={() => {
-        dragCounter.current -= 1;
-        if (dragCounter.current <= 0) setDragging(false);
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        dragCounter.current = 0;
-        setDragging(false);
-        onFile(event.dataTransfer.files[0] ?? null);
-      }}
-      className={`flex flex-col items-center justify-center rounded-[8px] border-2 border-dashed px-6 py-20 text-center ${
-        dragging
-          ? "border-[var(--tt-red-active)] bg-white/[0.06]"
-          : "border-white/20 bg-white/[0.03]"
-      }`}
-    >
-      <input
-        ref={input}
-        type="file"
-        accept={accept}
-        className="hidden"
-        onChange={(event) => onFile(event.target.files?.[0] ?? null)}
-      />
-
-      <CloudIcon />
-
-      <p className="mt-4 text-[18px] leading-6 font-semibold text-[var(--tt-text)]">
-        Select video to upload
-      </p>
-      <p className="mt-1 text-[14px] leading-5 text-[var(--tt-text-secondary)]">
-        Or drag and drop it here
-      </p>
-
-      <button
-        type="button"
-        onClick={() => input.current?.click()}
-        className="mt-6 h-11 rounded-[4px] bg-[var(--tt-red-active)] px-8 text-[15px] font-semibold text-white"
-      >
-        Select video
-      </button>
-
-      {error && (
-        <p role="alert" className="mt-4 text-[14px] text-[var(--tt-red-active)]">
-          {error}
-        </p>
-      )}
-
-      <dl className="mt-10 grid gap-6 text-left sm:grid-cols-3">
-        <Fact term="Size and duration">
-          Up to 500 MB and 10 minutes.
-        </Fact>
-        <Fact term="File formats">
-          MP4, MOV and WebM — the formats the transcoder can read.
-        </Fact>
-        <Fact term="After posting">
-          It stays off the feed until transcoding finishes, which is watched
-          here.
-        </Fact>
-      </dl>
-    </div>
-  );
-}
-
-function Fact({ term, children }: { term: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-[14px] leading-5 font-semibold text-[var(--tt-text)]">
-        {term}
-      </dt>
-      <dd className="mt-1 text-[13px] leading-[18px] text-[var(--tt-text-secondary)]">
-        {children}
-      </dd>
-    </div>
-  );
-}
-
-/** The chosen file, played back in a phone-shaped frame like Studio's preview. */
-function Preview({
-  file,
-  url,
-  progress,
-  processing,
-  onReplace,
-  disabled,
-}: {
-  file: File;
-  url: string | null;
-  progress: number | null;
-  processing: boolean;
-  onReplace: (file: File | null) => void;
-  disabled: boolean;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  /**
-   * One bar for both halves of the wait. The POST is the only part with real
-   * bytes to count, so it owns 0–90%; transcoding has no progress to report
-   * and holds a pulsing 90% until it finishes, at which point the page is
-   * already navigating away.
-   */
-  const percent = processing
-    ? 90
-    : progress === null
-      ? 0
-      : Math.round(progress * 90);
-  const label = processing
-    ? "Processing your video…"
-    : percent < 90
-      ? `Uploading… ${Math.round(percent / 0.9)}%`
-      : "Uploaded — posting…";
-
-  return (
-    <div className="w-full shrink-0 lg:w-[280px]">
-      <div className="aspect-[9/16] w-full overflow-hidden rounded-[8px] bg-black">
-        {url && (
-          <video
-            src={url}
-            controls
-            muted
-            playsInline
-            className="h-full w-full object-contain"
-          />
-        )}
-      </div>
-
-      <p className="mt-3 truncate text-[14px] font-semibold text-[var(--tt-text)]">
-        {file.name}
-      </p>
-      <p className="text-[13px] text-[var(--tt-text-secondary)]">
-        {formatBytes(file.size)}
-      </p>
-
-      {(progress !== null || processing) && (
-        <div className="mt-3">
-          <div
-            role="progressbar"
-            aria-label="Upload progress"
-            aria-valuenow={percent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.12]"
-          >
-            <div
-              className={`h-full bg-[var(--tt-red-active)] transition-[width] duration-200 ${
-                processing ? "animate-pulse" : ""
-              }`}
-              style={{ width: `${percent}%` }}
-            />
-          </div>
-          <p className="mt-1.5 text-[13px] text-[var(--tt-text-secondary)]">
-            {label}
-          </p>
-        </div>
-      )}
-
-      <input
-        ref={input}
-        type="file"
-        accept={ACCEPT}
-        className="hidden"
-        onChange={(event) => onReplace(event.target.files?.[0] ?? null)}
-      />
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => input.current?.click()}
-        className="mt-3 h-9 w-full rounded-[4px] bg-white/[0.12] text-[14px] font-semibold text-[var(--tt-text)] disabled:text-white/[0.34]"
-      >
-        Replace video
-      </button>
-    </div>
   );
 }
 
@@ -564,156 +419,6 @@ function readDuration(file: File): Promise<number> {
     };
     probe.src = url;
   });
-}
-
-function CloudIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden
-      className="h-12 w-12 text-[var(--tt-text-secondary)]"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 16V4m0 0L8 8m4-4 4 4" />
-      <path d="M4 14v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3" />
-    </svg>
-  );
-}
-
-const FIELD =
-  "h-11 w-full rounded-[4px] border border-transparent bg-white/[0.12] px-3 text-[15px] text-[var(--tt-text)] caret-[var(--tt-red)] outline-none placeholder:text-[rgb(255_255_255/0.34)]";
-
-/**
- * A labelled input wired to `useForm`. Spread a field onto it:
- *   `<TextField {...form.field("title")} label="Title" />`
- *
- * It is a component rather than three inline elements so the field object is
- * never held in a local variable — `ref` in it makes the React Compiler lint
- * read the whole object as a ref, and reading `.value` off one during render is
- * (rightly) an error.
- */
-function TextField({
-  label,
-  value,
-  onChange,
-  error,
-  ref,
-  placeholder,
-  maxLength,
-  multiline,
-}: {
-  label: string;
-  value: string;
-  onChange: (next: string) => void;
-  error?: string;
-  ref?: React.Ref<HTMLInputElement & HTMLTextAreaElement>;
-  placeholder?: string;
-  maxLength?: number;
-  multiline?: boolean;
-}) {
-  const className = error ? `${FIELD} border-[var(--tt-red-active)]` : FIELD;
-  const shared = {
-    ref,
-    value,
-    maxLength,
-    placeholder,
-    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      onChange(event.target.value),
-    "aria-invalid": error ? true : undefined,
-  } as const;
-
-  const atLimit = maxLength !== undefined && value.length >= maxLength;
-  const counterId = maxLength !== undefined ? `${label}-count` : undefined;
-
-  return (
-    <Labelled label={label} error={error}>
-      {multiline ? (
-        <textarea
-          {...shared}
-          aria-describedby={counterId}
-          className={`${className} no-scrollbar h-24 resize-none py-2`}
-        />
-      ) : (
-        <input {...shared} aria-describedby={counterId} className={className} />
-      )}
-      {maxLength !== undefined && (
-        <p
-          id={counterId}
-          className={`mt-1 text-right text-[13px] leading-[18px] ${
-            atLimit
-              ? "text-[var(--tt-red-active)]"
-              : "text-[var(--tt-text-secondary)]"
-          }`}
-        >
-          {value.length} / {maxLength}
-        </p>
-      )}
-    </Labelled>
-  );
-}
-
-function Labelled({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-[15px] leading-[22px] font-semibold text-[var(--tt-text)]">
-        {label}
-      </span>
-      {children}
-      {error && (
-        <p role="alert" className="mt-1.5 text-[13px] leading-[18px] text-[var(--tt-red-active)]">
-          {error}
-        </p>
-      )}
-    </label>
-  );
-}
-
-/**
- * Placeholder for the signed-in upload page while `/me` settles.
- *
- * It reuses the page's own wrapper — `max-w-[1000px]`, `px-8 py-10`, the 24/32
- * title with `mb-6`, and the dashed drop zone with its `px-6 py-20` — so the
- * heading and the zone do not move when the real form takes over. The shell for
- * a signed-out viewer is a different (centred) layout, and it replaces this.
- */
-function UploadSkeleton() {
-  return (
-    <main className="h-screen flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-[1000px] px-8 py-10">
-        <Skeleton className="mb-6 h-8 w-[168px]" />
-
-        <div className="flex flex-col items-center justify-center rounded-[8px] border-2 border-dashed border-white/20 bg-white/[0.03] px-6 py-20 text-center">
-          <Skeleton className="h-12 w-12 rounded-full" />
-          <Skeleton className="mt-4 h-6 w-[196px]" />
-          <Skeleton className="mt-1 h-5 w-[152px]" />
-          <Skeleton className="mt-6 h-11 w-[148px] rounded-[4px]" />
-
-          <div className="mt-10 grid w-full gap-6 text-left sm:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i}>
-                <Skeleton className="h-5 w-32" />
-                {/* The `dd` under it runs to three short lines in the widest
-                    column, which is what sets the row's 54px height. */}
-                <Skeleton className="mt-1 h-[54px] w-full" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </main>
-  );
 }
 
 function Shell({ children }: { children: React.ReactNode }) {

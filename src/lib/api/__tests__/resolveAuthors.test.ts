@@ -10,7 +10,6 @@ vi.mock("@/lib/api/users", () => ({
   getProfile: (id: string) => getProfile(id),
   getProfiles: (ids: string[]) => getProfiles(ids),
 }));
-vi.mock("@/lib/api/tokens", () => ({ hasSession: () => true }));
 
 const profile = (userId: string): UserProfileResponse => ({
   userId,
@@ -80,5 +79,20 @@ describe("resolveAuthors", () => {
     expect(authors.get("1")?.nickname).toBe("user1");
     getProfiles.mockResolvedValueOnce([profile("1"), profile("2")]);
     expect((await resolveAuthors(["1", "2"])).get("1")?.nickname).toBe("User 1");
+  });
+});
+
+describe("forgetAuthor", () => {
+  it("drops one author, so only they are asked for again", async () => {
+    getProfiles.mockImplementation((ids: string[]) =>
+      Promise.resolve(ids.map(profile)),
+    );
+    const { forgetAuthor, resolveAuthors } = await load();
+
+    await resolveAuthors(["1", "2"]);
+    forgetAuthor("1");
+    await resolveAuthors(["1", "2"]);
+
+    expect(getProfiles.mock.calls).toEqual([[["1", "2"]], [["1"]]]);
   });
 });

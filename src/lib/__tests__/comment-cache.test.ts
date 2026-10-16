@@ -93,3 +93,16 @@ describe("loadFirstCommentPage", () => {
     expect(peekCommentPage("8")).toBeUndefined();
   });
 });
+
+describe("invalidateCommentPage", () => {
+  it("is not undone by a fetch that was already in flight", async () => {
+    listComments.mockResolvedValue(page(["a"]));
+    const { invalidateCommentPage, loadFirstCommentPage, peekCommentPage } = await load();
+
+    const inFlight = loadFirstCommentPage("7");
+    invalidateCommentPage("7");
+    await inFlight;
+
+    expect(peekCommentPage("7")).toBeUndefined();
+  });
+});

@@ -77,17 +77,44 @@ with the muted, unindented headings noted above.
   sidebar and top bar instead of the live page's bespoke header. Rebuilding that header would
   mean a second global chrome for one route, and the settings card itself — the part this page
   is actually about — is reproduced at full fidelity beside it.
+- **The Ads section is dropped, not reproduced.** Seven rows and a nav entry, gone from
+  `SETTINGS_SECTIONS` entirely rather than rendered inert — there is no ads subsystem anywhere in
+  the backend, so every one of them would be permanently dead. The live section's measurements stay
+  documented above as research; only our build omits it. Two things went with it: the
+  `SettingsGroup.muted` flag, which existed solely for the Ads headings' 500-weight unindented
+  style and had no other source of truth, and `AdsIcon` — both recoverable from git history if
+  advertising is ever built.
 - **One row-title style**, 16/400 `rgba(255,255,255,.9)`, rather than carrying the TUX
-  generation's 16/600 for three of the eleven rows. The muted Ads headings *are* carried,
-  because those read as a deliberate grouping rather than as drift.
+  generation's 16/600, which the live page uses for three of its rows.
 - **One switch size**, the 44 × 24 majority.
-- The Ads rows have a leading 20px glyph on the live page. Those glyphs were not extracted, so
-  the rows render without them.
 - `Business verification`'s nav glyph is redrawn on the 48 grid; the live one is a 3.2KB
   multi-part mark on a 20 viewBox. Every other nav glyph is the live path.
-- Switches toggle and hold their state for the session. Every other row is inert: they open
-  flows (a region picker, a comments-audience sheet, a keyword filter editor) that this clone
-  has no screens for.
+- **Only some rows are live; the rest are inert.** A row is only wired when the backend has
+  somewhere to keep its answer:
+  - *Privacy → Comments* and *Direct messages*, and *Screen time → Daily screen time*,
+    *Sleep hours* and *Weekly screen time updates* read and write user-service's
+    `GET/PATCH /users/me/settings` (`useAccountSettings`, one read for the page). The two
+    audiences are enforced server-side; the screen-time fields are stored only — nothing,
+    client or server, acts on them yet. The pickers are the app's own dialogs, not
+    measured off the live site.
+  - *Privacy → Comment filters* is not a row on the live panel; its place and its dialog are
+    the app's own. It writes the same settings (`filterAllComments`, `filterSpamOffensive`,
+    `commentKeywords`), which interaction-service applies to each new comment under the
+    viewer's videos, holding a match for their review.
+  - *Privacy → Blocked accounts* opens a list backed by `GET /users/me/blocked` and
+    `DELETE /users/{id}/block`, both of which already existed.
+  - *Push notifications → Allow in browser* asks for the browser's Notification permission and
+    gates the desktop notification raised for a frame arriving on the STOMP socket. It registers
+    nothing with a push service: real pushes to a closed tab need FCM web credentials and a
+    `platform` field `DeviceToken` does not carry.
+  - *Accessibility → Increase color contrast* writes `.high-contrast` on `<html>`, which shifts
+    the alpha-blended tokens in `globals.css`. Browser-local, exactly as the row's own copy says.
+
+  Each is keyed by `SettingsRow.action`, so the layout stays data and only behaviour branches.
+- Every other row is inert, and deliberately so: the remaining switches hold their position for
+  the session and are forgotten on reload, and the link rows open flows (a region picker, a
+  keyword filter editor, account deletion) that this clone has no screens for. A control
+  that appears to save something it cannot is worse than one that visibly does nothing.
 
 ## Gotchas
 

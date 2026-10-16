@@ -1,40 +1,26 @@
 "use client";
 
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ComponentType, type SVGProps } from "react";
+import { useEffect, useState } from "react";
 
+import { LoginIcon } from "@/components/icons";
 import { ActivityDrawer } from "@/components/layout/ActivityDrawer";
+import { MoreDrawer } from "@/components/layout/MoreDrawer";
 import { SearchDrawer } from "@/components/layout/SearchDrawer";
 import { NowaWordmark } from "@/components/layout/NowaWordmark";
-import {
-  ActivityIcon,
-  ExploreIcon,
-  ForYouIcon,
-  FollowingIcon,
-  FriendsIcon,
-  MessagesIcon,
-  MoreIcon,
-  SearchIcon,
-  UploadIcon,
-} from "@/components/icons";
+import { NavRow } from "@/components/layout/side-nav/NavRow";
+import { SearchField } from "@/components/layout/side-nav/SearchField";
+import { SidebarFooter } from "@/components/layout/side-nav/SidebarFooter";
 import { useSession } from "@/components/session/SessionProvider";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { useLocalSettings } from "@/hooks/use-local-settings";
 import { useNotifications } from "@/hooks/use-notifications";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
+import { setSideNavCollapsed } from "@/lib/settings/local-settings";
 import { cn } from "@/lib/utils";
 import type { FooterSection, NavItem } from "@/types/tiktok";
-
-const ICONS: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
-  "For You": ForYouIcon,
-  Explore: ExploreIcon,
-  Following: FollowingIcon,
-  Friends: FriendsIcon,
-  Messages: MessagesIcon,
-  Activity: ActivityIcon,
-  Upload: UploadIcon,
-  More: MoreIcon,
-};
 
 /**
  * Sidebar. Source rule from the live site:
@@ -57,6 +43,11 @@ const ICONS: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
  * Note the collapsed variant drops the border entirely — the drawer sitting
  * against it carries its own `border-inline` instead. The placeholder does not
  * change, so the feed never moves.
+ *
+ * The toggle beside the logo is ours, not the live site's: it puts a wide
+ * screen into the same icon-only rail the 1024px breakpoint does, and unlike a
+ * drawer it does move the feed — the placeholder narrows with it, since nothing
+ * covers the space it frees.
  */
 export function SideNav({
   navItems,
@@ -70,12 +61,26 @@ export function SideNav({
   const inbox = useNotifications();
   const [activityOpen, setActivityOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  // Both drawers sit in the same slot beside the rail, so opening one closes
-  // the other, and either one collapses the rail the same way.
-  const collapsed = activityOpen || searchOpen;
+  const [moreOpen, setMoreOpen] = useState(false);
+  // The drawers sit in the same slot beside the rail, so opening one closes
+  // the others, and any one collapses the rail the same way.
+  const collapsed = activityOpen || searchOpen || moreOpen;
+  // The reader's own collapse, from the toggle beside the logo. The rows and
+  // the header read it exactly as they read an open drawer — icons only — but
+  // unlike a drawer it keeps the rows on screen, so the rail gets the 1024px
+  // breakpoint's look rather than the drawer's.
+  const { sideNavCollapsed } = useLocalSettings();
+  // Set for as long as the toggle's width transition runs, and only for that:
+  // a drawer snaps the rail, as on the live site, so the transition class
+  // cannot stay on. While collapsing, the full layout is held until the rail
+  // has closed over it — swapping to icons first would empty the rail before
+  // it moved, and the rows would jump as it shrank.
+  const [railMotion, setRailMotion] = useState<"collapsing" | "expanding" | null>(null);
+  const railCompact = sideNavCollapsed && railMotion !== "collapsing";
+  const narrow = collapsed || railCompact;
   // Below 1024px the rail is icon-only regardless of the drawers (the `tt-1024:`
-  // classes on every label). The row labels only exist in the DOM when neither
-  // this nor `collapsed` is true, so a hover tip stands in for them otherwise.
+  // classes on every label). The row labels only exist in the DOM when none of
+  // these is true, so a hover tip stands in for them otherwise.
   const [railBelow, setRailBelow] = useState(false);
   useEffect(() => {
     const query = window.matchMedia("(max-width: 1024px)");
@@ -84,7 +89,7 @@ export function SideNav({
     query.addEventListener("change", sync);
     return () => query.removeEventListener("change", sync);
   }, []);
-  const iconOnly = collapsed || railBelow;
+  const iconOnly = narrow || railBelow;
   // The highlighted row follows the URL, so every new route lights itself up
   // without touching the nav data.
   const pathname = usePathname();
@@ -98,15 +103,17 @@ export function SideNav({
   // rows measured on the live signed-out nav.
   const visibleNavItems = (showGuest ? navItems.filter((item) => !item.authOnly) : navItems)
     // Two rows are session-dependent rather than static: Profile has to point
-    // at whoever is signed in, and Upload at the route that actually exists
-    // here (the live site's is `/tiktokstudio/upload`).
+    // at whoever is signed in — a guest has no profile, so theirs opens the
+    // login modal, as on the live site — and Upload at the route that actually
+    // exists here (the live site's is `/tiktokstudio/upload`).
     .map((item) => {
-      if (item.label === "Profile" && user) {
-        return { ...item, href: `/@${user.username}` };
+      if (item.label === "Profile") {
+        return user
+          ? { ...item, href: `/@${user.username}` }
+          : { ...item, kind: "button" as const };
       }
       if (item.label === "Upload") return { ...item, href: "/upload" };
-      // The static badge in the nav data was a placeholder; this is the real
-      // count. Zero drops the badge entirely rather than painting a "0".
+      // Zero drops the badge entirely rather than painting a "0".
       if (item.label === "Activity") {
         return { ...item, badgeCount: inbox.unreadCount || undefined };
       }
@@ -118,11 +125,25 @@ export function SideNav({
       className={cn(
         "fixed inset-y-0 left-0 z-[99] flex h-screen flex-none flex-col items-center px-4",
         "overflow-x-clip overflow-y-hidden overscroll-contain bg-[var(--tt-page)]",
+        // A marker only: the placeholder in `(shell)/layout.tsx` narrows on it.
+        sideNavCollapsed && "side-nav-collapsed",
+        // Same curve and length as the placeholder, so the feed beside the rail
+        // moves with its edge.
+        railMotion && "transition-[width] duration-300 ease-[var(--tt-ease)]",
         collapsed
           ? "w-18"
-          : "w-[var(--side-nav-width)] tt-1024:w-18 tt-1024:border-r tt-1024:border-[var(--tt-divider)]",
+          : sideNavCollapsed
+            ? "w-18 border-r border-[var(--tt-divider)]"
+            : "w-[var(--side-nav-width)] tt-1024:w-18 tt-1024:border-r tt-1024:border-[var(--tt-divider)]",
       )}
       style={{ overscrollBehavior: "contain" }}
+      onTransitionEnd={(event) => {
+        // The rail's own width only — the cover inside it eases too, and its
+        // event bubbles up here.
+        if (event.target === event.currentTarget && event.propertyName === "width") {
+          setRailMotion(null);
+        }
+      }}
     >
       {/*
         `.DivAnimationCover` — the piece that makes the live collapse smooth:
@@ -147,12 +168,49 @@ export function SideNav({
         className={cn(
           "pointer-events-none absolute inset-y-0 start-0 z-[2] bg-[var(--tt-page)]",
           "transition-[width] duration-[400ms]",
-          collapsed ? "w-18" : "w-[12.5rem] tt-1024:w-18",
+          narrow ? "w-18" : "w-[12.5rem] tt-1024:w-18",
         )}
       />
 
-      {/* Fixed header block: logo (48px) + search (40px), 208px content width */}
-      <div className={cn("relative z-[4] flex-none", collapsed ? "w-auto" : "w-52 tt-1024:w-auto")}>
+      {/* Pinned to the rail's right edge rather than placed in the header row:
+          that is where it sits both expanded (x = 184) and collapsed (x = 16),
+          so it rides the edge across the width transition instead of jumping.
+          Gone below 1024px, where the rail stays icon-only whatever this says,
+          and while a drawer holds the rail narrow on its own. */}
+      <Tooltip label={sideNavCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+        <button
+          type="button"
+          onClick={() => {
+            setRailMotion(sideNavCollapsed ? "expanding" : "collapsing");
+            setSideNavCollapsed(!sideNavCollapsed);
+          }}
+          aria-label={sideNavCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!sideNavCollapsed}
+          className={cn(
+            "absolute top-1 right-4 z-[5] opacity-40 flex h-10 w-10 items-center justify-center rounded-[6px]",
+            "text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-field)] tt-1024:hidden",
+            collapsed && "hidden",
+          )}
+        >
+          {sideNavCollapsed ? (
+            <PanelLeftOpen className="h-6 w-6" />
+          ) : (
+            <PanelLeftClose className="h-6 w-6" />
+          )}
+        </button>
+      </Tooltip>
+
+      {/* Fixed header block: logo (48px) + search (40px), 208px content width.
+          Held at the rail's left padding rather than centred whenever no drawer
+          is open: centring a 208px block in a rail mid-transition would slide
+          it off the left edge. Where it is 40px wide, the two agree. */}
+      <div
+        className={cn(
+          "relative z-[4] flex-none",
+          !collapsed && "self-start",
+          narrow ? "w-auto" : "w-52 tt-1024:w-auto",
+        )}
+      >
         <div className="relative flex h-12 items-center">
           {/* The hiding class goes on the link, not on the wordmark: the
               wordmark sets its own `inline-flex`, and Tailwind v4 emits that
@@ -163,7 +221,12 @@ export function SideNav({
             aria-label="Nowa"
             className={cn(
               "flex items-center gap-1.5",
-              collapsed ? "hidden" : "tt-1024:hidden",
+              narrow ? "hidden" : "tt-1024:hidden",
+              // The toggle sweeps across the wordmark on its way along the
+              // edge, so the mark fades rather than being cut in half under it.
+              "transition-opacity duration-300 ease-[var(--tt-ease)]",
+              sideNavCollapsed && "opacity-0",
+              railMotion === "expanding" && "starting:opacity-0",
             )}
           >
             <NowaWordmark className="h-6 w-auto text-white" />
@@ -173,14 +236,15 @@ export function SideNav({
         <div
           className={cn(
             "flex w-full pt-4",
-            collapsed ? "justify-center" : "tt-1024:justify-center",
+            narrow ? "justify-center" : "tt-1024:justify-center",
           )}
         >
           <SearchField
-            collapsed={collapsed}
+            collapsed={narrow}
             iconOnly={iconOnly}
             onOpen={() => {
               setActivityOpen(false);
+              setMoreOpen(false);
               setSearchOpen(true);
             }}
           />
@@ -206,8 +270,11 @@ export function SideNav({
           // the collapse reads as a stutter rather than a cut.
           //
           // Nothing here is transitioned, on purpose: the live rail animates no
-          // layout at all. Only the cover above eases.
-          "w-52 tt-1024:w-auto",
+          // layout at all. Only the cover above eases. (The reader's toggle
+          // does move the rail's edge, and this column sits still under it —
+          // held at the left padding, like the header.)
+          !collapsed && "self-start",
+          railCompact ? "w-auto" : "w-52 tt-1024:w-auto",
         )}
       >
         <nav className="flex flex-col">
@@ -216,17 +283,29 @@ export function SideNav({
               key={item.label}
               item={item}
               avatarUrl={user?.avatarUrl ?? DEFAULT_AVATAR}
-              collapsed={collapsed}
+              collapsed={narrow}
               iconOnly={iconOnly}
               active={item.href === pathname}
-              selected={item.label === "Activity" && activityOpen}
+              selected={
+                (item.label === "Activity" && activityOpen) ||
+                (item.label === "More" && moreOpen)
+              }
               onClick={
                 item.label === "Activity"
                   ? () => {
                       setSearchOpen(false);
+                      setMoreOpen(false);
                       setActivityOpen((v) => !v);
                     }
-                  : undefined
+                  : item.label === "More"
+                    ? () => {
+                        setSearchOpen(false);
+                        setActivityOpen(false);
+                        setMoreOpen((v) => !v);
+                      }
+                    : item.label === "Profile" && showGuest
+                      ? openLogin
+                      : undefined
               }
             />
           ))}
@@ -237,28 +316,44 @@ export function SideNav({
             `border-radius: 6px`, 16px/500/21px, `margin-bottom: 24px`, which is
             what pushes the footer down to where the guest sidebar has it. */}
         {showGuest && (
-          <div
-            className={cn(
-              // 16px above the button, 24px below it, and the 4px inset that
-              // puts the 200px button inside the 208px nav column.
-              "mb-6 px-1 pt-4",
-              // The collapsed 4.5rem rail has no room for a text button; the
-              // top bar's Log in pill stays reachable there.
-              "tt-1024:hidden",
-              collapsed && "hidden",
-            )}
-          >
-            <button
-              type="button"
-              onClick={openLogin}
-              className="h-10 w-full rounded-[6px] bg-[var(--tt-red)] px-4 text-[16px] leading-[21px] font-medium text-white transition-colors hover:bg-[var(--tt-red-hover)]"
+          <>
+            <div
+              className={cn(
+                // 16px above the button, 24px below it, and the 4px inset that
+                // puts the 200px button inside the 208px nav column.
+                "mb-6 px-1 pt-4",
+                narrow ? "hidden" : "tt-1024:hidden",
+              )}
             >
-              Log in
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={openLogin}
+                className="h-10 w-full rounded-[6px] bg-[var(--tt-red)] px-4 text-[16px] leading-[21px] font-medium text-white transition-colors hover:bg-[var(--tt-red-hover)]"
+              >
+                Log in
+              </button>
+            </div>
+
+            {/* The icon-only rail's version: a 40px `#FE2C55` circle 16px under
+                More, around a 20px white glyph, the same size as the rows so it
+                lines up with them (x = 16 in the 72px rail). The live rail's
+                circle is 44px at x = 14. */}
+            <div className={cn("pt-4", narrow ? "flex justify-center" : "hidden tt-1024:block")}>
+              <Tooltip label="Log in">
+                <button
+                  type="button"
+                  onClick={openLogin}
+                  aria-label="Log in"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tt-red)] text-white transition-colors hover:bg-[var(--tt-red-hover)]"
+                >
+                  <LoginIcon className="h-5 w-5" />
+                </button>
+              </Tooltip>
+            </div>
+          </>
         )}
 
-        <SidebarFooter sections={footerSections} hidden={collapsed} />
+        <SidebarFooter sections={footerSections} hidden={narrow} />
       </div>
 
       <ActivityDrawer
@@ -268,266 +363,8 @@ export function SideNav({
       />
 
       <SearchDrawer open={searchOpen} onClose={() => setSearchOpen(false)} />
+
+      <MoreDrawer open={moreOpen} onClose={() => setMoreOpen(false)} />
     </div>
   );
 }
-
-/**
- * Nav row = TUX secondary button, 208×40, radius 6px, transparent background,
- * `.TUXButton-content` 204×32 with gap 12px, `.TUXButton-iconContainer` 32×32,
- * label 16px/500/21px. Active label colour #FF3B5C, inactive icon #F6F6F6.
- */
-function NavRow({
-  item,
-  avatarUrl,
-  collapsed = false,
-  iconOnly = false,
-  active = false,
-  selected = false,
-  onClick,
-}: {
-  item: NavItem;
-  /** The viewer's avatar, which the Profile row renders in place of an icon. */
-  avatarUrl: string;
-  /** True while a drawer holds the sidebar at 4.5rem. */
-  collapsed?: boolean;
-  /** True whenever the label is off screen — a drawer is open *or* the rail is
-   *  below its 1024px breakpoint. Gates the hover tip that stands in for the label. */
-  iconOnly?: boolean;
-  /** The row whose href matches the current route. */
-  active?: boolean;
-  selected?: boolean;
-  onClick?: () => void;
-}) {
-  const Icon = ICONS[item.label];
-
-  const inner = (
-    <span
-      className={cn(
-        "group inline-flex h-10 items-center rounded-[6px]",
-        // 40px wide, not 208: the live rows shrink to their icon box while the
-        // column keeps its 208px width, so `items-center` parks them entirely
-        // outside the 4.5rem rail (x = -68 … -28) instead of leaving the labels
-        // half visible next to the panel.
-        collapsed ? "w-10" : "w-full tt-1024:w-10",
-        "transition-colors hover:bg-[var(--tt-field)]",
-        selected && "bg-[var(--tt-field)]",
-      )}
-    >
-      <span
-        className={cn(
-          "flex h-8 items-center gap-3",
-          collapsed ? "w-10 justify-center" : "w-full tt-1024:w-10 tt-1024:justify-center",
-        )}
-      >
-        <span className="relative flex h-8 w-8 flex-none items-center justify-center">
-          {item.label === "Profile" ? (
-            // eslint-disable-next-line @next/next/no-img-element -- the avatar can be any CDN URL the account set; next/image would need each host allow-listed
-            <img
-              src={avatarUrl}
-              alt=""
-              width={32}
-              height={32}
-              className="h-8 w-8 rounded-full object-cover"
-            />
-          ) : Icon ? (
-            <Icon
-              className={cn(
-                "h-[26px] w-[26px]",
-                active ? "text-[var(--tt-red-active)]" : "text-[var(--tt-icon)]",
-              )}
-            />
-          ) : null}
-
-          {item.badgeCount ? (
-            <span className="absolute -right-1 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--tt-red)] px-1 text-[10px] font-bold leading-none text-white">
-              {item.badgeCount}
-            </span>
-          ) : null}
-        </span>
-
-        <span
-          className={cn(
-            "truncate text-[16px] font-medium leading-[21px]",
-            collapsed ? "hidden" : "tt-1024:hidden",
-            active ? "text-[var(--tt-red-active)]" : "text-[var(--tt-text)]",
-          )}
-        >
-          {item.label}
-        </span>
-      </span>
-    </span>
-  );
-
-  const row =
-    item.kind === "link" && item.href ? (
-      <Link
-        href={item.href}
-        aria-label={iconOnly ? item.label : undefined}
-        className={cn(collapsed ? "w-10" : "w-full")}
-      >
-        {inner}
-      </Link>
-    ) : (
-      <button
-        type="button"
-        onClick={onClick}
-        aria-label={iconOnly ? item.label : undefined}
-        aria-expanded={onClick ? selected : undefined}
-        className={cn("text-left", collapsed ? "w-10" : "w-full")}
-      >
-        {inner}
-      </button>
-    );
-
-  return iconOnly ? (
-    <Tooltip label={item.label} placement="right">
-      {row}
-    </Tooltip>
-  ) : (
-    row
-  );
-}
-
-/**
- * `.DivFooterContainer` — extracted verbatim:
- *
- *   position: relative; padding-top: 16px; padding-left: 8px;
- *   ::before { content: ""; position: absolute; left: 8px; right: 8px; top: 0;
- *              height: 1px; background: rgba(255,255,255,.12);
- *              transform: scaleY(.5) }            ← a hairline, not a border
- *   @media screen and (max-width: 1071px) { display: none }
- *
- *   .H4LinkListHeader  15px/700/22px, TikTokDisplayFont, cursor: pointer,
- *                      margin-top: 5px (0 on the first), color .5 → .9 when
- *                      its section is open
- *   .DivLinkContainer  margin-bottom: 8px; children flow inline and wrap
- *   .StyledNavLink     12px/600/16px, rgba(255,255,255,.5), inline-block,
- *                      margin-right: 6px, margin-top: 5px; :hover keeps the
- *                      same colour and adds no underline
- *   .SpanCopyright     same type as the links, inline-block, margin-top: 5px
- *
- * It is a **single-open accordion that starts fully collapsed** — the link
- * lists are not in the DOM until their heading is clicked, and clicking an open
- * heading closes it. The 1071px breakpoint is its own; it is not 1024.
- */
-function SidebarFooter({
-  sections,
-  hidden,
-}: {
-  sections: FooterSection[];
-  hidden: boolean;
-}) {
-  const [openSection, setOpenSection] = useState<string | null>(null);
-
-  const toggle = (heading: string) =>
-    setOpenSection((current) => (current === heading ? null : heading));
-
-  return (
-    <div
-      className={cn(
-        "relative pl-2 pt-4 tt-1071:hidden",
-        "before:absolute before:inset-x-2 before:top-0 before:h-px",
-        "before:bg-[var(--tt-divider)] before:[transform:scaleY(0.5)] before:content-['']",
-        hidden && "hidden",
-      )}
-    >
-      {sections.map((section, index) => {
-        const open = openSection === section.heading;
-        return (
-          <div key={section.heading}>
-            {/* The live site puts the handler on a bare `h3`. The tag is kept
-                for fidelity, with role/tabIndex/keydown added so it is still
-                operable from the keyboard. */}
-            <h3
-              role="button"
-              tabIndex={0}
-              aria-expanded={open}
-              onClick={() => toggle(section.heading)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
-                  toggle(section.heading);
-                }
-              }}
-              className={cn(
-                "cursor-pointer text-[15px] font-bold leading-[22px]",
-                index === 0 ? "mt-0" : "mt-[5px]",
-                open ? "text-[var(--tt-text)]" : "text-[var(--tt-text-muted)]",
-              )}
-            >
-              {section.heading}
-            </h3>
-
-            {open && (
-              <div className="mb-2">
-                {section.links.map((link) => (
-                  <span
-                    key={link}
-                    className="mr-1.5 mt-[5px] inline-block cursor-pointer text-[12px] font-semibold leading-4 text-[var(--tt-text-muted)]"
-                  >
-                    {link}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
-
-      <span className="mt-[5px] inline-block pb-6 text-[12px] font-semibold leading-4 text-[var(--tt-text-muted)]">
-        © 2026 Nowa
-      </span>
-    </div>
-  );
-}
-
-/**
- * The field in the rail. It is a trigger, not an input: on the live site a
- * click anywhere in it opens the search panel, which carries the real field —
- * see `SearchDrawer`. Measured 208 × 40, radius 999px, background
- * rgba(255,255,255,.13); collapsed it is the 40 × 40 circle holding just the
- * icon, which is what stays on screen while the panel is open.
- */
-function SearchField({
-  collapsed = false,
-  iconOnly = false,
-  onOpen,
-}: {
-  collapsed?: boolean;
-  iconOnly?: boolean;
-  onOpen: () => void;
-}) {
-  const button = (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label="Search"
-      className={cn(
-        "flex h-10 items-center rounded-full bg-[var(--tt-field)] py-1.5 text-start",
-        collapsed
-          ? "w-10 justify-center px-0"
-          : "w-full px-2.5 tt-1024:w-10 tt-1024:justify-center tt-1024:px-0",
-      )}
-    >
-      <SearchIcon className="h-4 w-4 flex-none text-[var(--tt-placeholder)]" />
-      <span
-        className={cn(
-          "ml-2 text-[15px] text-[var(--tt-placeholder)]",
-          collapsed ? "hidden" : "tt-1024:hidden",
-        )}
-      >
-        Search
-      </span>
-    </button>
-  );
-
-  return iconOnly ? (
-    <Tooltip label="Search" placement="right">
-      {button}
-    </Tooltip>
-  ) : (
-    button
-  );
-}
-

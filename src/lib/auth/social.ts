@@ -210,6 +210,15 @@ interface FacebookSdk {
 let facebookReady = false;
 
 async function facebookAccessToken(): Promise<string> {
+  // Facebook refuses `FB.login` from http pages and never calls back, which
+  // would leave the row spinning. Say why instead — `next dev --experimental-https`
+  // serves localhost over https.
+  if (window.location.protocol !== "https:") {
+    throw new SocialAuthError(
+      "unavailable",
+      "Facebook sign-in only works over HTTPS.",
+    );
+  }
   await loadScript(FACEBOOK_SDK_SRC);
   const fb = window.FB;
   if (!fb) {

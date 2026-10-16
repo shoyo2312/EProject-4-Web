@@ -3,15 +3,35 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AccountListModal } from "@/components/settings/AccountListModal";
+import {
+  AccountSwitchRow,
+  AudienceRow,
+  CommentFiltersRow,
+  ScreenTimeLimitRow,
+  SleepHoursRow,
+} from "@/components/settings/rows/AccountRows";
+import { AddEmailRow } from "@/components/settings/rows/AddEmailModal";
+import { PasswordRow } from "@/components/settings/rows/PasswordModal";
+import {
+  Accessory,
+  ROW_CLASS,
+  RowBody,
+  Switch,
+} from "@/components/settings/rows/parts";
+import {
+  type AccountSettings,
+  useAccountSettings,
+} from "@/hooks/use-account-settings";
+import { useBrowserNotifications } from "@/hooks/use-browser-notifications";
+import { useLocalSettings } from "@/hooks/use-local-settings";
+import { setHighContrast } from "@/lib/settings/local-settings";
+import { toast } from "@/components/ui/toast";
 import {
   AccessibilityIcon,
-  AdsIcon,
   ArrowLeftIcon,
   BusinessVerificationIcon,
-  CaretDownIcon,
-  ChevronRightIcon,
   ContentPreferencesIcon,
-  ExternalLinkIcon,
   ManageAccountIcon,
   PrivacyLockIcon,
   PushNotificationsIcon,
@@ -25,12 +45,14 @@ import type {
   SettingsSection,
 } from "@/types/tiktok";
 
-const ICONS: Record<SettingsIconName, typeof AdsIcon> = {
+/** A switch row, narrowed — the three below each own one. */
+type SwitchSettingsRow = Extract<SettingsRow, { kind: "switch" }>;
+
+const ICONS: Record<SettingsIconName, typeof ManageAccountIcon> = {
   "manage-account": ManageAccountIcon,
   privacy: PrivacyLockIcon,
   "push-notifications": PushNotificationsIcon,
   "business-verification": BusinessVerificationIcon,
-  ads: AdsIcon,
   "screen-time": ScreenTimeIcon,
   "content-preferences": ContentPreferencesIcon,
   accessibility: AccessibilityIcon,
@@ -54,6 +76,7 @@ const ICONS: Record<SettingsIconName, typeof AdsIcon> = {
  */
 export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
   const router = useRouter();
+  const account = useAccountSettings();
   const panelRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const [active, setActive] = useState(sections[0]?.id ?? "");
@@ -159,7 +182,7 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
 
         <div
           ref={panelRef}
-          className="min-w-0 flex-1 overflow-y-auto rounded-t-[8px] bg-[#252525] px-6 pt-4 pb-6"
+          className="no-scrollbar min-w-0 flex-1 overflow-y-auto rounded-t-[8px] bg-[#252525] px-6 pt-4 pb-6"
         >
           {sections.map((section, index) => (
             <section
@@ -175,7 +198,11 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
               </h1>
 
               {section.groups.map((group, groupIndex) => (
-                <Group key={group.heading ?? groupIndex} group={group} />
+                <Group
+                  key={group.heading ?? groupIndex}
+                  group={group}
+                  account={account}
+                />
               ))}
             </section>
           ))}
@@ -185,18 +212,17 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
   );
 }
 
-function Group({ group }: { group: SettingsGroup }) {
+function Group({
+  group,
+  account,
+}: {
+  group: SettingsGroup;
+  account: AccountSettings;
+}) {
   return (
     <div className="mb-4">
       {group.heading && (
-        <h2
-          className={cn(
-            "text-[18px] leading-6",
-            group.muted
-              ? "font-medium text-[rgb(255_255_255/0.6)]"
-              : "mx-4 font-semibold text-[var(--tt-text)]",
-          )}
-        >
+        <h2 className="mx-4 text-[18px] leading-6 font-semibold text-[var(--tt-text)]">
           {group.heading}
         </h2>
       )}
@@ -208,113 +234,153 @@ function Group({ group }: { group: SettingsGroup }) {
 
       <div className="mt-3">
         {group.rows.map((row) => (
-          <Row key={row.title} row={row} />
+          <Row key={row.title} row={row} account={account} />
         ))}
       </div>
     </div>
   );
 }
 
-const ROW_CLASS =
-  "flex w-full items-center gap-4 border-b border-[var(--tt-divider)] px-4 py-3 text-left last:border-b-0";
-
 /**
- * One row: title over an optional description, with the accessory that says
- * what the row does. `switch` is the only kind that changes anything — the
- * others are the entry points to flows this clone has no screens for, so they
- * are rendered exactly and left inert.
+ * One row, dispatched on `row.action`.
+ *
+ * A row without an action is still rendered exactly and left inert: it is the
+ * entry point to a flow whose state no backend service stores yet, and a
+ * control that pretends to save something is worse than one that visibly does
+ * nothing. The wired ones need a hook each, so each is its own component
+ * rather than a branch inside one.
  */
-function Row({ row }: { row: SettingsRow }) {
-  const [on, setOn] = useState(row.kind === "switch" && row.on);
-
-  const body = (
-    <div className="min-w-0 flex-1">
-      <p className="text-[16px] leading-[21px] text-[var(--tt-text)]">
-        {row.title}
-      </p>
-      {row.description && (
-        <p className="mt-1 max-w-[583px] text-[12px] leading-[15.6px] text-[rgb(255_255_255/0.6)]">
-          {row.description}
-        </p>
-      )}
-    </div>
-  );
-
-  // On the live page the switch is the only hit area in its row; every other
-  // kind makes the whole row clickable.
+function Row({ row, account }: { row: SettingsRow; account: AccountSettings }) {
   if (row.kind === "switch") {
-    return (
-      <div className={ROW_CLASS}>
-        {body}
-        <Switch on={on} label={row.title} onToggle={() => setOn((w) => !w)} />
-      </div>
-    );
+    switch (row.action) {
+      case "high-contrast":
+        return <HighContrastRow row={row} />;
+      case "browser-notifications":
+        return <BrowserNotificationsRow row={row} />;
+      case "private-account":
+        return <AccountSwitchRow row={row} account={account} field="privateAccount" />;
+      case "weekly-screen-time":
+        return <AccountSwitchRow row={row} account={account} field="weeklyScreenTimeDigest" />;
+      default:
+        return <SessionSwitchRow row={row} />;
+    }
+  }
+
+  switch (row.action) {
+    case "blocked-accounts":
+      return <AccountListRow row={row} kind="blocked" />;
+    case "muted-accounts":
+      return <AccountListRow row={row} kind="muted" />;
+    case "comment-audience":
+      return <AudienceRow row={row} account={account} field="commentAudience" />;
+    case "comment-filters":
+      return <CommentFiltersRow row={row} account={account} />;
+    case "dm-audience":
+      return <AudienceRow row={row} account={account} field="dmAudience" />;
+    case "screen-time-limit":
+      return <ScreenTimeLimitRow row={row} account={account} />;
+    case "sleep-hours":
+      return <SleepHoursRow row={row} account={account} />;
+    case "add-email":
+      return <AddEmailRow row={row} />;
+    case "password":
+      return <PasswordRow row={row} />;
   }
 
   return (
     <button type="button" className={cn(ROW_CLASS, "hover:bg-white/[0.03]")}>
-      {body}
+      <RowBody row={row} />
       <Accessory row={row} />
     </button>
   );
 }
 
-function Accessory({ row }: { row: SettingsRow }) {
-  if (row.kind === "expand") {
-    return (
-      <CaretDownIcon className="h-4 w-4 flex-none text-[rgb(255_255_255/0.6)]" />
-    );
-  }
-
-  if (row.kind === "external") {
-    return (
-      <ExternalLinkIcon className="h-4 w-4 flex-none text-[var(--tt-red)]" />
-    );
-  }
+/**
+ * The unwired switch — business verification. It holds its position for the
+ * session and is forgotten on reload, which is the honest rendering of a
+ * control with nowhere to save to.
+ */
+function SessionSwitchRow({ row }: { row: SwitchSettingsRow }) {
+  const [on, setOn] = useState(row.on);
 
   return (
-    <div className="flex flex-none items-center gap-2">
-      {row.kind === "value" && (
-        <span className="text-[16px] leading-[20.8px] text-[rgb(255_255_255/0.6)]">
-          {row.value}
-        </span>
-      )}
-      <ChevronRightIcon className="h-4 w-4 text-[rgb(255_255_255/0.6)]" />
+    <div className={ROW_CLASS}>
+      <RowBody row={row} />
+      <Switch on={on} label={row.title} onToggle={() => setOn((w) => !w)} />
+    </div>
+  );
+}
+
+/** Accessibility → "Increase color contrast". Browser-local, by its own copy. */
+function HighContrastRow({ row }: { row: SwitchSettingsRow }) {
+  const { highContrast } = useLocalSettings();
+
+  return (
+    <div className={ROW_CLASS}>
+      <RowBody row={row} />
+      <Switch
+        on={highContrast}
+        label={row.title}
+        onToggle={() => setHighContrast(!highContrast)}
+      />
     </div>
   );
 }
 
 /**
- * `.DivSwitchWrapper` — 44 × 24 track, 20px knob inset 2px, `#0BE09B` when on.
- * Green, not the brand red: `/setting` is the only page in the app using it.
+ * Push notifications → "Allow in browser".
+ *
+ * Nothing is registered with a push service: this gates the desktop
+ * notification `useNotifications` raises for a frame already arriving over the
+ * STOMP socket. Real pushes to a closed tab need FCM web credentials and a
+ * `platform` field notification-service's `DeviceToken` does not have yet.
  */
-function Switch({
-  on,
-  label,
-  onToggle,
-}: {
-  on: boolean;
-  label: string;
-  onToggle: () => void;
-}) {
+function BrowserNotificationsRow({ row }: { row: SwitchSettingsRow }) {
+  const { on, blocked, unsupported, toggle } = useBrowserNotifications();
+
+  const onToggle = () => {
+    void toggle().then((problem) => {
+      if (problem) toast.error(problem);
+    });
+  };
+
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      onClick={onToggle}
-      className={cn(
-        "flex h-6 w-11 flex-none items-center rounded-full p-0.5 transition-colors",
-        on ? "bg-[#0be09b]" : "bg-white/[0.12]",
-      )}
-    >
-      <span
-        className={cn(
-          "h-5 w-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.15)] transition-transform",
-          on && "translate-x-5",
-        )}
+    <div className={ROW_CLASS}>
+      <RowBody
+        row={row}
+        note={
+          unsupported
+            ? "This browser cannot show desktop notifications."
+            : blocked
+              ? "Blocked in your browser settings."
+              : undefined
+        }
       />
-    </button>
+      <Switch
+        on={on}
+        label={row.title}
+        onToggle={onToggle}
+        disabled={unsupported}
+      />
+    </div>
+  );
+}
+
+/** Privacy → "Blocked accounts" / "Muted accounts". The dialog portals itself out of this row. */
+function AccountListRow({ row, kind }: { row: SettingsRow; kind: "blocked" | "muted" }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cn(ROW_CLASS, "hover:bg-white/[0.03]")}
+      >
+        <RowBody row={row} />
+        <Accessory row={row} />
+      </button>
+      {open && <AccountListModal kind={kind} onClose={() => setOpen(false)} />}
+    </>
   );
 }

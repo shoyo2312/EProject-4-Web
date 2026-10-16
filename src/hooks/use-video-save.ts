@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { isBackendHandle } from "@/lib/api/adapters";
 import { getSaveStatus, saveVideo, unsaveVideo } from "@/lib/api/interactions";
 
 /**
@@ -11,35 +10,39 @@ import { getSaveStatus, saveVideo, unsaveVideo } from "@/lib/api/interactions";
  * as the feed's `useSavedVideos` does — and toggles optimistically with a
  * silent rollback on failure.
  */
-export function useVideoSave(videoId: string) {
+export function useVideoSave(videoId: string, signedIn: boolean) {
   const [saved, setSaved] = useState(false);
+  /** The save as first read — the one the page's save count already holds. */
+  const [savedAtLoad, setSavedAtLoad] = useState(false);
 
+  // Signed out there is nothing to ask: the status endpoint needs a token.
   useEffect(() => {
-    if (!isBackendHandle(videoId)) return;
+    if (!signedIn) return;
     let cancelled = false;
     getSaveStatus(videoId)
       .then((status) => {
-        if (!cancelled) setSaved(status.saved);
+        if (cancelled) return;
+        setSaved(status.saved);
+        setSavedAtLoad(status.saved);
       })
       .catch(() => {
-        // Signed out, or the call failed — the bookmark starts unfilled.
+        // The call failed — the bookmark starts unfilled.
       });
     return () => {
       cancelled = true;
     };
-  }, [videoId]);
+  }, [videoId, signedIn]);
 
+  // The request goes out here, never from inside a `setSaved` updater: React
+  // may run an updater twice, which sent the save twice and let the second
+  // one's failure roll back a save that had worked.
   const toggleSave = useCallback(() => {
-    setSaved((current) => {
-      const next = !current;
-      if (isBackendHandle(videoId)) {
-        (next ? saveVideo(videoId) : unsaveVideo(videoId)).catch(() => {
-          setSaved(current);
-        });
-      }
-      return next;
+    const next = !saved;
+    setSaved(next);
+    (next ? saveVideo(videoId) : unsaveVideo(videoId)).catch(() => {
+      setSaved(!next);
     });
-  }, [videoId]);
+  }, [videoId, saved]);
 
-  return { saved, toggleSave };
+  return { saved, savedAtLoad, toggleSave };
 }

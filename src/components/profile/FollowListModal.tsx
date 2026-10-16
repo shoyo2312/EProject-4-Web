@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { CloseIcon } from "@/components/icons";
 import { useFollow } from "@/hooks/use-follow";
 import { useSuggestedCreators } from "@/hooks/use-suggested-creators";
@@ -55,6 +56,8 @@ export function FollowListModal({
   const [tab, setTab] = useState<FollowTab>(initialTab);
 
   useEscapeKey(onClose);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef);
 
   return (
     <div className="fixed inset-0 z-[3001] flex items-center justify-center">
@@ -66,6 +69,7 @@ export function FollowListModal({
       />
 
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Followers and following"
@@ -334,14 +338,15 @@ function UserRowSkeletonList({ count }: { count: number }) {
   );
 }
 
-function UserRow({
+/** One account with its Follow button; the search page's Accounts tab uses it too. */
+export function UserRow({
   author,
   initialFollowing = false,
 }: {
   author: Author;
   initialFollowing?: boolean;
 }) {
-  const { isSelf, following, toggle } = useFollow(author.userId, initialFollowing);
+  const { isSelf, following, requested, toggle } = useFollow(author.userId, initialFollowing);
 
   return (
     <Link
@@ -352,6 +357,7 @@ function UserRow({
       <img
         src={author.avatarUrl || DEFAULT_AVATAR}
         alt=""
+        referrerPolicy="no-referrer"
         className="h-11 w-11 flex-none rounded-full object-cover"
       />
       <div className="min-w-0 flex-1">
@@ -373,12 +379,12 @@ function UserRow({
           }}
           className={cn(
             "h-8 flex-none rounded-[4px] px-4 text-[14px] font-semibold transition-colors",
-            following
+            following || requested
               ? "bg-[var(--tt-field)] text-[var(--tt-text)] hover:bg-[var(--tt-shape-neutral-3)]"
               : "bg-[var(--tt-red-active)] text-white hover:bg-[var(--tt-red)]",
           )}
         >
-          {following ? "Following" : "Follow"}
+          {following ? "Following" : requested ? "Requested" : "Follow"}
         </button>
       )}
     </Link>

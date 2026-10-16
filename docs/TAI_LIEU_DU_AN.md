@@ -29,7 +29,7 @@ Gateway ──▶ auth-service / user-service / video-service / chat-service ...
 
 - Trình duyệt gọi `/api/v1/...` trên **cùng origin** với Next.js. `next.config.ts` có cấu hình `rewrites()` để proxy các request này sang Gateway (`API_GATEWAY_URL`, mặc định `http://localhost:8080`).
 - Lý do dùng rewrite thay vì gọi thẳng cross-origin: Gateway không cấu hình CORS, và giữ same-origin để sau này có thể chuyển token sang httpOnly cookie mà không phải sửa từng nơi gọi API.
-- **WebSocket (STOMP/SockJS)** cho tính năng realtime (chat, thông báo, cập nhật video/like...) **không** đi qua rewrite này (rewrite chỉ proxy HTTP, không proxy WS Upgrade) — nó kết nối thẳng tới Gateway qua `NEXT_PUBLIC_WS_GATEWAY_URL`.
+- **WebSocket (STOMP)** cho tính năng realtime (chat, thông báo, cập nhật video/like...) **không** đi qua rewrite này (rewrite chỉ proxy HTTP, không proxy WS Upgrade) — nó kết nối thẳng tới Gateway qua `NEXT_PUBLIC_WS_GATEWAY_URL`.
 - **Media (ảnh/video)**: avatar và thumbnail được phục vụ qua CDN (`MEDIA_CDN_HOST`) hoặc trực tiếp từ MinIO (`MEDIA_ORIGIN`, dev dùng cổng `:9000`). Avatar từ Google/Facebook (đăng nhập social) được phục vụ trực tiếp từ domain của Google/Facebook cho tới khi `media-worker` mirror nó về MinIO.
 
 ## 3. Công nghệ sử dụng (Tech stack)
@@ -39,10 +39,10 @@ Gateway ──▶ auth-service / user-service / video-service / chat-service ...
 | Framework | Next.js 16 (App Router, React 19, TypeScript strict) |
 | UI | shadcn/ui (dựa trên Radix), Tailwind CSS v4 (design token dạng oklch) |
 | Icon | Lucide React + SVG tự trích xuất (`src/components/icons.tsx`) |
-| State/data | Zustand, TanStack React Query |
-| Form | react-hook-form + zod (validate schema) |
-| HTTP | `fetch` thuần qua wrapper riêng (`src/lib/api/client.ts`), có dùng `axios` cho vài trường hợp |
-| Realtime | `@stomp/stompjs` + `sockjs-client` (WebSocket/STOMP) |
+| State/data | React state/context + hook tự viết (`src/hooks/`), cache cấp module trong `src/lib/` — không dùng thư viện state ngoài |
+| Form | Hook `useForm` tự viết (`src/lib/forms/use-form.ts`) + zod (validate schema) |
+| HTTP | `fetch` thuần qua wrapper riêng (`src/lib/api/client.ts`); riêng upload file lên storage dùng XHR để báo tiến độ |
+| Realtime | `@stomp/stompjs` trên WebSocket thuần (STOMP) |
 | Video | `hls.js` (phát HLS) |
 | Test | Vitest + Testing Library (jsdom) |
 | Lint/Type | ESLint 9 + TypeScript strict |
@@ -67,17 +67,21 @@ src/
   components/             # React components, chia theo tính năng
     auth/                 # Đăng nhập, đăng ký, social login, Turnstile captcha
     feed/                 # Feed video (For You), thẻ video, action rail, comment, share
-      comments/           #   sub-component riêng của CommentPanel (khi file > ~500 dòng)
+      card/               #   sub-component riêng của VideoCard (thanh tiến độ, âm lượng, lớp tap/double-tap)
+      comments/           #   sub-component riêng của CommentPanel/CommentItem (khi file > ~500 dòng)
+      list/               #   sub-component riêng của Feed (thẻ video + action rail, nút lên/xuống)
     video/                # Trang chi tiết video
       detail/             #   sub-component riêng của BackendVideoDetail/VideoDetail
     profile/               # Trang cá nhân, chỉnh sửa hồ sơ, danh sách follow
     explore/, following/   # Trang khám phá, trang đang theo dõi
     layout/                 # TopBar, SideNav, các drawer (thông báo, tìm kiếm)
+      side-nav/             #   sub-component riêng của SideNav (dòng menu, ô tìm kiếm, footer)
     player/                 # Cấu hình player video (tốc độ phát, cài đặt...)
     search/                 # Kết quả tìm kiếm
     session/                 # SessionProvider (quản lý trạng thái đăng nhập toàn app), LoginModal
     settings/                # Trang cài đặt tài khoản
     upload/                  # Trang upload video
+      page/                  #   sub-component riêng của UploadPage (drop zone, preview, field)
     report/                  # Dialog báo cáo vi phạm
     ui/                      # shadcn/ui primitives (Button, Modal, Toast, Skeleton, Tooltip...)
     icons.tsx                # Icon SVG trích xuất từ TikTok gốc
@@ -85,7 +89,8 @@ src/
   hooks/                  # Custom hook, đặt tên kebab-case (vd: use-video-feed.ts)
     __tests__/            # Test đặt cạnh hook, trong thư mục __tests__ sibling
     use-video-feed.ts, use-follow-feed.ts, use-explore-feed.ts  # Lấy dữ liệu feed
-    use-video-like.ts, use-like-debounce.ts, use-video-save.ts  # Tương tác (like/save có debounce)
+    use-like-statuses.ts, use-video-like.ts, use-like-debounce.ts  # Tim: dùng chung cho feed và trang video, có debounce
+    use-video-save.ts     # Lưu video (bookmark)
     use-*-realtime.ts     # Lắng nghe cập nhật realtime qua STOMP (comment, notification, user, video)
     use-dismiss.ts        # Đóng popover/menu khi click ra ngoài hoặc nhấn Escape
     use-escape-key.ts     # Đóng modal/drawer khi nhấn Escape
@@ -101,11 +106,13 @@ src/
       tokens.ts            #   Lưu/đọc access & refresh token
       errors.ts            #   ApiError, isApiError()
     auth/                   # Social login (Google/Facebook), Cloudflare Turnstile
-    forms/                  # Schema zod dùng chung + hook wrapper cho react-hook-form
+    forms/                  # Schema zod dùng chung + hook `useForm` tự viết
     realtime/
       stompClient.ts        # Client STOMP dùng chung toàn app (singleton)
     comments/                # Logic thuần xử lý comment (build/merge cây comment...)
-    comment-cache.ts, comment-panel.ts, repost-context.ts, overlay-origin.ts, mock-feed.ts, data.ts
+    likes.ts                 # Logic thuần cho tim video (gộp trạng thái like, số đếm hiển thị)
+    comment-cache.ts, comment-panel.ts, repost-context.ts, overlay-origin.ts
+    site-config.ts           # Cấu hình UI tĩnh: nav, footer, lựa chọn đăng nhập, share targets, danh mục Explore, settings
     format.ts                # Format số/thời gian hiển thị (vd: 1.2K, "3 giờ trước")
     utils.ts                 # cn() — merge class Tailwind (từ shadcn)
     __tests__/               # Test cho lib/ thuần (không phải component)
@@ -189,10 +196,11 @@ Những quy tắc `apiFetch` đã xử lý sẵn, đừng tự làm lại:
 
 ## 7. Xác thực & quản lý phiên đăng nhập
 
-- `src/components/session/SessionProvider.tsx` là nơi quản lý trạng thái người dùng đăng nhập cho toàn app (Context), bao gồm: load thông tin `me`, đăng nhập/đăng xuất, mở `LoginModal` khi cần.
+- `src/components/session/SessionProvider.tsx` là nơi quản lý trạng thái người dùng đăng nhập cho toàn app (Context), bao gồm: load thông tin `me`, đăng nhập/đăng xuất, mở `AuthModal` khi cần.
 - Hỗ trợ đăng nhập bằng email/password và social login (Google, Facebook) — logic social nằm ở `src/lib/auth/social.ts`.
 - Có Cloudflare Turnstile (captcha) khi đăng ký/đăng nhập — `src/lib/auth/turnstile.ts`, `src/components/auth/TurnstileWidget.tsx`.
-- Một tài khoản social đăng ký xong có thể **chưa có email ngay** (chờ `user-service` xử lý event từ Kafka, thường mất vài trăm ms) — có route riêng `signup/add-email` để bổ sung.
+- Đăng nhập và đăng ký đều nằm trong `AuthModal` (`src/components/session/AuthModal.tsx`, các bước con ở `session/auth-modal/`) — không có route `/login` hay `/signup`, URL không đổi khi chuyển bước.
+- Tài khoản social mà provider không đưa email (vd. Facebook bị bỏ quyền `email`) sẽ **không có email** — modal không đóng mà chuyển sang bước "Add your email" để bổ sung. Bước này bỏ qua được; lần đăng nhập social sau sẽ hỏi lại.
 
 ## 8. Realtime (WebSocket/STOMP)
 
@@ -214,7 +222,7 @@ Những quy tắc `apiFetch` đã xử lý sẵn, đừng tự làm lại:
 | Trang cá nhân | `/[username]` | `components/profile/ProfileRouter.tsx` → `BackendProfilePage.tsx`/`ProfilePage.tsx` |
 | Upload video | `/upload` | `components/upload/UploadPage.tsx` |
 | Cài đặt tài khoản | `/setting` | `components/settings/SettingsPage.tsx` |
-| Đăng nhập/Đăng ký | `(auth)/login`, `(auth)/signup` | `components/auth/*` |
+| Đăng nhập/Đăng ký | Modal trong layout (không có route riêng) | `components/session/AuthModal.tsx` + `session/auth-modal/`, `components/auth/*` |
 | Thông báo (activity) | Drawer trong layout | `components/layout/ActivityDrawer.tsx` + `use-notifications.ts`, `use-notification-realtime.ts` |
 | Bình luận | Panel trong feed/video | `components/feed/CommentPanel.tsx` + `components/feed/comments/` |
 | Báo cáo vi phạm | Dialog | `components/report/ReportDialog.tsx` |

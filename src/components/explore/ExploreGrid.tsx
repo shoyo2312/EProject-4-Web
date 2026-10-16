@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { HeartIcon, MutedIcon, VolumeIcon } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useExploreFeed } from "@/hooks/use-explore-feed";
+import { useHoverCapable } from "@/hooks/use-hover-capable";
 import { formatCount } from "@/lib/format";
 import { markOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
@@ -28,7 +29,22 @@ export function ExploreGrid({
 }) {
   const [active, setActive] = useState(categories[0] ?? "All");
   const listRef = useRef<HTMLDivElement>(null);
-  const { items: visible, isLoading, error } = useExploreFeed(active);
+  const { items: visible, isLoading, error, loadMore } = useExploreFeed(active);
+
+  // Infinite scroll, a screen ahead of the last row.
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !loadMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+      },
+      { rootMargin: "600px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore, visible.length]);
   // Sound is a page-level setting, not a per-tile one: exactly one tile plays at
   // a time — whichever is hovered, falling back to the last one hovered while
   // the sound was on — and it is audible whenever `soundOn`.
@@ -42,9 +58,11 @@ export function ExploreGrid({
   };
 
   const toggleSound = (id: string) => {
-    const next = !soundOn;
-    setSoundOn(next);
-    setPinnedId(next ? id : null);
+    // Each button speaks for its own tile: it silences the grid only when that
+    // tile is the one making the sound, and otherwise takes the sound over.
+    const audible = soundOn && playingId === id;
+    setSoundOn(!audible);
+    setPinnedId(audible ? null : id);
   };
 
   const setHover = (id: string, hovering: boolean) => {
@@ -53,6 +71,15 @@ export function ExploreGrid({
     // hovered is the one that keeps playing once the pointer leaves the grid.
     if (hovering && soundOn) setPinnedId(id);
   };
+
+  // A pinned tile goes on playing with the pointer elsewhere, so it has to let
+  // go once it scrolls out of sight: its own toggle is the only control over
+  // it, and that has scrolled away too.
+  const releasePinned = useCallback(() => setPinnedId(null), []);
+
+  // A tile that falls back to muted playback leaves the flag lying: the grid is
+  // silent, so nothing should still be offering to turn the sound off.
+  const handleAutoplayBlocked = useCallback(() => setSoundOn(false), []);
 
   return (
     <main className="h-screen flex-1 overflow-y-auto px-6 pb-12 tt-1024:px-4">
@@ -97,7 +124,7 @@ export function ExploreGrid({
 
       {Boolean(error) && (
         <p className="pb-6 text-center text-[13px] text-[var(--tt-red-active)]">
-          Can’t reach the API gateway on :8080.
+          Can’t connect right now. Check your connection and try again.
         </p>
       )}
 
@@ -114,9 +141,13 @@ export function ExploreGrid({
                 playing={playingId === item.id}
                 onHoverChange={(hovering) => setHover(item.id, hovering)}
                 onToggleSound={() => toggleSound(item.id)}
+                onExitViewport={releasePinned}
+                onAutoplayBlocked={handleAutoplayBlocked}
               />
             ))}
       </div>
+
+      {!isLoading && loadMore && <div ref={sentinelRef} aria-hidden className="h-px" />}
 
       {!isLoading && visible.length === 0 && (
         <p className="py-24 text-center text-[15px] text-[var(--tt-text-muted)]">
@@ -144,7 +175,7 @@ function ExploreTileSkeleton() {
  * toggle and the like count overlaid, and the author row underneath.
  *
  * Whether it plays is the grid's call — only one tile does at a time — so
- * `playing` comes down as a prop rather than being derived from `hovered`.
+ * `playing` comes down as a prop rather than being derived here.
  */
 function ExploreTile({
   item,
@@ -152,88 +183,120 @@ function ExploreTile({
   playing,
   onHoverChange,
   onToggleSound,
+  onExitViewport,
+  onAutoplayBlocked,
 }: {
   item: ExploreItem;
   soundOn: boolean;
   playing: boolean;
   onHoverChange: (hovering: boolean) => void;
   onToggleSound: () => void;
+  onExitViewport: () => void;
+  onAutoplayBlocked: () => void;
 }) {
+  const posterRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const hoverCapable = useHoverCapable();
+  // This tile is the audible one only while it is the tile that plays, so the
+  // button says what it alone will do rather than echoing the page-wide flag.
+  const audible = soundOn && playing;
+  // A touch screen has no hover to reveal the toggle with, so it stays up
+  // there: it is also the only thing that can start a preview at all.
+  const toggleVisible = playing || focused || !hoverCapable;
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     video.muted = !soundOn;
-    if (playing) {
-      // Autoplay can reject (e.g. reduced-power mode) — the poster stays up.
-      void video.play().catch(() => {});
-    } else {
+    if (!playing) {
       video.pause();
       video.currentTime = 0;
+      return;
     }
-  }, [playing, soundOn]);
+    void video.play().catch(() => {
+      // A rejection with the sound on is almost always the autoplay policy, and
+      // the fix it wants is the one the browser would have accepted: mute and
+      // try once more, the way the feed's preview already recovers, rather than
+      // leaving a frozen poster under a control that still claims sound.
+      if (video.muted) return;
+      video.muted = true;
+      onAutoplayBlocked();
+      void video.play().catch(() => {});
+    });
+  }, [playing, soundOn, onAutoplayBlocked]);
+
+  useEffect(() => {
+    const poster = posterRef.current;
+    if (!playing || !poster) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) onExitViewport();
+      },
+      { threshold: 0 },
+    );
+    observer.observe(poster);
+    return () => observer.disconnect();
+  }, [playing, onExitViewport]);
 
   return (
     <div className="flex flex-col gap-2">
-      <Link
-        href={`/video/${item.id}`}
-        className="relative block aspect-[3/4] overflow-hidden rounded-[8px] bg-[var(--tt-field)]"
-        onClick={() => markOverlayOrigin("/explore")}
-        onMouseEnter={() => {
-          setHovered(true);
-          onHoverChange(true);
-        }}
-        onMouseLeave={() => {
-          setHovered(false);
-          onHoverChange(false);
-        }}
+      {/* The toggle is a sibling of the permalink, not a child of it: a button
+          inside an anchor is invalid, and screen readers skip the inner one. */}
+      <div
+        ref={posterRef}
+        className="relative aspect-[3/4] overflow-hidden rounded-[8px] bg-[var(--tt-field)]"
+        onMouseEnter={() => onHoverChange(true)}
+        onMouseLeave={() => onHoverChange(false)}
       >
-        <video
-          ref={videoRef}
-          src={item.videoUrl}
-          poster={item.posterUrl}
-          muted
-          loop
-          playsInline
-          preload="none"
-          className="h-full w-full object-cover"
-        />
+        <Link
+          href={`/video/${item.id}`}
+          className="block h-full w-full"
+          onClick={() => markOverlayOrigin("/explore")}
+        >
+          <video
+            ref={videoRef}
+            src={item.videoUrl}
+            poster={item.posterUrl}
+            muted
+            loop
+            playsInline
+            preload="none"
+            className="h-full w-full object-cover"
+          />
+        </Link>
 
         {/* Like count and sound toggle sit on a bottom gradient so they stay
-            legible on any poster frame. */}
-        <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2 pt-6 pb-2 text-[14px] font-medium text-white">
-          <span className="pointer-events-none flex items-center gap-1">
+            legible on any poster frame. The strip itself passes clicks down to
+            the permalink behind it; only the button takes them. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 bg-gradient-to-t from-black/60 to-transparent px-2 pt-6 pb-2 text-[14px] font-medium text-white">
+          <span className="flex items-center gap-1">
             <HeartIcon className="h-4 w-4" />
             {formatCount(item.likes)}
           </span>
 
           <button
             type="button"
-            aria-label={soundOn ? "Turn sound off" : "Turn sound on"}
-            aria-pressed={soundOn}
-            onClick={(event) => {
-              // The toggle lives inside the tile's permalink.
-              event.preventDefault();
-              event.stopPropagation();
-              onToggleSound();
-            }}
+            aria-label={audible ? "Turn sound off" : "Play with sound"}
+            aria-pressed={audible}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onClick={onToggleSound}
             className={cn(
-              "flex h-7 w-7 items-center justify-center rounded-full bg-black/40 transition-opacity hover:bg-black/60",
-              hovered || playing
-                ? "opacity-100"
+              "flex h-7 w-7 items-center justify-center rounded-full bg-black/40 transition-opacity outline-none hover:bg-black/60 focus-visible:ring-2 focus-visible:ring-white/80",
+              toggleVisible
+                ? "pointer-events-auto opacity-100"
                 : "pointer-events-none opacity-0",
             )}
           >
-            {soundOn ? (
+            {audible ? (
               <VolumeIcon className="h-4 w-4" />
             ) : (
               <MutedIcon className="h-4 w-4" />
             )}
           </button>
         </div>
-      </Link>
+      </div>
 
       <Link
         href={`/@${item.author.username}`}
@@ -243,6 +306,7 @@ function ExploreTile({
         <img
           src={item.author.avatarUrl}
           alt=""
+          referrerPolicy="no-referrer"
           className="h-6 w-6 flex-none rounded-full"
         />
         <span className="truncate">{item.author.nickname}</span>

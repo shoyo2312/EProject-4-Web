@@ -1,18 +1,21 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useEscapeKey } from "@/hooks/use-escape-key";
-import { CloseIcon } from "@/components/icons";
+import { AddFriendIcon, ChevronRightIcon, CloseIcon } from "@/components/icons";
+import { FollowRequestsModal } from "@/components/layout/FollowRequestsModal";
+import { useSession } from "@/components/session/SessionProvider";
 import {
   NOTIFICATION_FILTERS,
   groupByDay,
   type NotificationInbox,
 } from "@/hooks/use-notifications";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
-import type { NotificationResponse } from "@/lib/api/notifications";
+import { referencesUser, type NotificationResponse } from "@/lib/api/notifications";
 import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
+import { getFollowRequests } from "@/lib/api/users";
 import { formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +59,25 @@ export function ActivityDrawer({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const signedIn = useSession().user !== null;
   const [filter, setFilter] = useState<string>(NOTIFICATION_FILTERS[0].label);
+  /** Follow requests waiting on this (private) account; a public one has none. */
+  const [requestCount, setRequestCount] = useState(0);
+  const [requestsOpen, setRequestsOpen] = useState(false);
+
+  const countRequests = useCallback(() => {
+    getFollowRequests(0, 1).then(
+      (page) => setRequestCount(page.page.totalElements),
+      () => {
+        // Unreadable — the entry keeps whatever it last showed.
+      },
+    );
+  }, []);
+
+  // On every open: requests arrive while the panel is shut.
+  useEffect(() => {
+    if (open && signedIn) countRequests();
+  }, [open, signedIn, countRequests]);
 
   const groups = useMemo(() => {
     const selected = NOTIFICATION_FILTERS.find((chip) => chip.label === filter);
@@ -87,10 +108,10 @@ export function ActivityDrawer({
     inbox.markRead(item.id);
     if (!item.referenceId) return;
 
-    // A NEW_FOLLOWER's referenceId is the follower's userId, and `/@{id}` is a
+    // The follow types' referenceId is an account's userId, and `/@{id}` is a
     // profile URL in its own right (see ProfileRouter) — no lookup needed to
     // turn it into a handle first.
-    if (item.type === "NEW_FOLLOWER") {
+    if (referencesUser(item.type)) {
       navigate(`/@${item.referenceId}`);
       return;
     }
@@ -117,105 +138,150 @@ export function ActivityDrawer({
   useEscapeKey(onClose, open);
 
   return (
-    <div
-      aria-hidden={!open}
-      className={cn(
-        // Under the sidebar's animation cover — see `SearchDrawer`.
-        "fixed top-0 z-[1] h-screen w-80 overscroll-contain bg-[var(--tt-page)]",
-        "left-18 border-x border-[var(--tt-divider)]",
-        // `transform`, not Tailwind's `translate-x-*`: in v4 those compile to the
-        // `translate` property, which `transition-[transform]` does not cover —
-        // the slide snapped instantly while opacity eased.
-        "transition-[transform,opacity,visibility] duration-[400ms] ease-[ease]",
-        open
-          ? "visible opacity-100 [transform:translateX(0)]"
-          : "invisible opacity-30 [transform:translateX(-24rem)] [pointer-events:none]",
-      )}
-    >
-      {/* `.DivDrawerCloseButtonContainer` — absolute, top 1.5rem, end 1rem.
-          The button itself is 28×28, rgba(255,255,255,.13), radius 999px. */}
-      <div className="absolute end-4 top-6 z-[1] flex items-center justify-center">
+    <>
+      {/* Beside the panel, not over it, like `SearchDrawer`'s mask: a press
+          anywhere in the feed closes the panel. */}
+      {open && (
         <button
           type="button"
-          onClick={onClose}
           aria-label="Close notifications"
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--tt-field)] text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-shape-neutral-3)]"
-        >
-          <CloseIcon className="h-3.5 w-3.5" />
-        </button>
-      </div>
+          onClick={onClose}
+          className="fixed top-0 left-[calc(20rem+4.5rem)] z-[99] h-screen w-screen cursor-default"
+        />
+      )}
 
-      {/* `.DivInboxContainer` — height 100%, flex column, padding 20px 8px 0, gap 16 */}
-      <div className="flex h-full flex-col gap-4 px-2 pb-0 pt-5">
-        {/* `.DivInboxHeaderContainer` — flex column, gap 16, flex 0 0 auto */}
-        <div className="flex flex-none flex-col gap-4 px-2">
-          {/* `.H2InboxTitle` — NowaDisplayFont 20px/25px/600 */}
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="flex text-[20px] font-semibold leading-[25px] text-[var(--tt-text)]">
-              Notifications
-            </h2>
-            {/* Not on the live drawer, which marks read per row only. Kept
-                because the inbox here is unpaginated: with nothing to open,
-                an old unread row would hold the badge up forever. */}
-            {inbox.unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={inbox.markAllRead}
-                className="me-9 shrink-0 cursor-pointer text-[13px] font-semibold leading-[17px] text-[var(--tt-text-tertiary,rgb(255_255_255_/_0.5))] transition-colors hover:text-[var(--tt-text)]"
-              >
-                Mark all read
-              </button>
-            )}
+      <div
+        inert={!open || undefined}
+        className={cn(
+          // Under the sidebar's animation cover — see `SearchDrawer`.
+          "fixed top-0 z-[1] h-screen w-80 overscroll-contain bg-[var(--tt-page)]",
+          "left-18 border-x border-[var(--tt-divider)]",
+          // `transform`, not Tailwind's `translate-x-*`: in v4 those compile to the
+          // `translate` property, which `transition-[transform]` does not cover —
+          // the slide snapped instantly while opacity eased.
+          "transition-[transform,opacity,visibility] duration-[400ms] ease-[ease]",
+          open
+            ? "visible opacity-100 [transform:translateX(0)]"
+            : "invisible opacity-30 [transform:translateX(-24rem)] [pointer-events:none]",
+        )}
+      >
+        {/* `.DivDrawerCloseButtonContainer` — absolute, top 1.5rem, end 1rem.
+            The button itself is 28×28, rgba(255,255,255,.13), radius 999px. */}
+        <div className="absolute end-4 top-6 z-[1] flex items-center justify-center">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close notifications"
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--tt-field)] text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-shape-neutral-3)]"
+          >
+            <CloseIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* `.DivInboxContainer` — height 100%, flex column, padding 20px 8px 0, gap 16 */}
+        <div className="flex h-full flex-col gap-4 px-2 pb-0 pt-5">
+          {/* `.DivInboxHeaderContainer` — flex column, gap 16, flex 0 0 auto */}
+          <div className="flex flex-none flex-col gap-4 px-2">
+            {/* `.H2InboxTitle` — NowaDisplayFont 20px/25px/600 */}
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="flex text-[20px] font-semibold leading-[25px] text-[var(--tt-text)]">
+                Notifications
+              </h2>
+              {/* Not on the live drawer, which marks read per row only. Kept
+                  because the inbox here is unpaginated: with nothing to open,
+                  an old unread row would hold the badge up forever. */}
+              {inbox.unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={inbox.markAllRead}
+                  className="me-9 shrink-0 cursor-pointer text-[13px] font-semibold leading-[17px] text-[var(--tt-text-tertiary,rgb(255_255_255_/_0.5))] transition-colors hover:text-[var(--tt-text)]"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+
+            {/* `.DivGroupContainer` — flex wrap, gap 12px 8px */}
+            <div className="flex flex-wrap gap-x-2 gap-y-3">
+              {NOTIFICATION_FILTERS.map((chip) => (
+                <FilterChip
+                  key={chip.label}
+                  label={chip.label}
+                  selected={filter === chip.label}
+                  onSelect={() => setFilter(chip.label)}
+                />
+              ))}
+            </div>
           </div>
 
-          {/* `.DivGroupContainer` — flex wrap, gap 12px 8px */}
-          <div className="flex flex-wrap gap-x-2 gap-y-3">
-            {NOTIFICATION_FILTERS.map((chip) => (
-              <FilterChip
-                key={chip.label}
-                label={chip.label}
-                selected={filter === chip.label}
-                onSelect={() => setFilter(chip.label)}
+          {/* `.DivInboxContentContainer` — flex 1 1 auto, overflow auto, with an
+              8px negative end margin so the scrollbar sits outside the padding. */}
+          <div className="no-scrollbar -me-2 flex-1 overflow-auto pe-2">
+            {/* Shaped like the live system-notification row: 72px, a 48px round
+                icon field, a title line over a one-line description. */}
+            {requestCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setRequestsOpen(true)}
+                className="mb-4 flex h-[72px] w-full items-center rounded-[8px] px-2 text-start transition-colors hover:bg-[rgb(37,37,37)]"
+              >
+                <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-[rgb(50,54,75)] text-white">
+                  <AddFriendIcon className="h-6 w-6" />
+                </span>
+                <span className="min-w-0 flex-1 px-2">
+                  <span className="block truncate text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
+                    Follow requests
+                  </span>
+                  <span className="block truncate text-[13px] leading-[17px] text-[rgb(255_255_255_/_0.5)]">
+                    {requestCount === 1 ? "1 person wants" : `${requestCount} people want`} to follow you
+                  </span>
+                </span>
+                <ChevronRightIcon className="h-4 w-4 flex-none text-[rgb(255_255_255_/_0.5)]" />
+              </button>
+            )}
+            {requestsOpen && (
+              <FollowRequestsModal
+                onClose={() => setRequestsOpen(false)}
+                onLeave={() => {
+                  setRequestsOpen(false);
+                  onClose();
+                }}
+                onSettled={countRequests}
               />
+            )}
+            {groups.length === 0 && inbox.loaded && (
+              <p className="px-2 py-6 text-[14px] leading-[18px] text-[rgb(255_255_255_/_0.5)]">
+                No notifications yet.
+              </p>
+            )}
+            {groups.map((group) => (
+              <div key={group.title}>
+                {/* `.PTimeGroupTitle` — 14px/600/18px, padding 0 8px 4px */}
+                <p className="px-2 pb-1 text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
+                  {group.title}
+                </p>
+                <ul>
+                  {group.items.map((item) => {
+                    const actor = item.actorId ? inbox.actors.get(item.actorId) : undefined;
+                    return (
+                      <li key={item.id} className="mb-4 last:mb-0">
+                        <NotificationItem
+                          item={item}
+                          actor={actor}
+                          video={item.referenceId ? inbox.videos.get(item.referenceId) : undefined}
+                          onOpen={() => openNotification(item)}
+                          onOpenActor={() => openActor(item, actor)}
+                        />
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             ))}
           </div>
         </div>
-
-        {/* `.DivInboxContentContainer` — flex 1 1 auto, overflow auto, with an
-            8px negative end margin so the scrollbar sits outside the padding. */}
-        <div className="no-scrollbar -me-2 flex-1 overflow-auto pe-2">
-          {groups.length === 0 && inbox.loaded && (
-            <p className="px-2 py-6 text-[14px] leading-[18px] text-[rgb(255_255_255_/_0.5)]">
-              No notifications yet.
-            </p>
-          )}
-          {groups.map((group) => (
-            <div key={group.title}>
-              {/* `.PTimeGroupTitle` — 14px/600/18px, padding 0 8px 4px */}
-              <p className="px-2 pb-1 text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
-                {group.title}
-              </p>
-              <ul>
-                {group.items.map((item) => {
-                  const actor = item.actorId ? inbox.actors.get(item.actorId) : undefined;
-                  return (
-                    <li key={item.id} className="mb-4 last:mb-0">
-                      <NotificationItem
-                        item={item}
-                        actor={actor}
-                        video={item.referenceId ? inbox.videos.get(item.referenceId) : undefined}
-                        onOpen={() => openNotification(item)}
-                        onOpenActor={() => openActor(item, actor)}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -270,10 +336,16 @@ function describe(item: NotificationResponse): string {
   switch (item.type) {
     case "LIKE":
       return "liked your video";
+    case "COMMENT_LIKE":
+      return "liked your comment";
     case "SHARE":
       return "shared your video";
     case "NEW_FOLLOWER":
       return "started following you";
+    case "FOLLOW_REQUEST":
+      return "requested to follow you";
+    case "FOLLOW_REQUEST_ACCEPTED":
+      return "accepted your follow request";
     case "COMMENT":
       return `commented: ${item.body}`;
     case "SYSTEM":
@@ -304,19 +376,31 @@ function NotificationItem({
    */
   const pendingActor = Boolean(item.actorId) && !actor;
   const heading = actor ? (actor.username ?? "Someone") : item.title;
+  // SYSTEM has nowhere to navigate to — its detail is the admin's full reason,
+  // which the one-line clamp cuts off, so the row expands in place instead.
+  const expandable = item.type === "SYSTEM";
+  const [expanded, setExpanded] = useState(false);
+  const open = () => {
+    onOpen();
+    if (expandable) setExpanded((value) => !value);
+  };
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={onOpen}
+      aria-expanded={expandable ? expanded : undefined}
+      onClick={open}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onOpen();
+          open();
         }
       }}
-      className="flex h-[72px] cursor-pointer flex-row items-center px-2 transition-colors hover:bg-[rgb(37,37,37)]"
+      className={cn(
+        "flex cursor-pointer flex-row items-center px-2 transition-colors hover:bg-[rgb(37,37,37)]",
+        expanded ? "min-h-[72px] py-3" : "h-[72px]",
+      )}
     >
       <div className="flex h-12 w-12 min-w-12 items-center justify-center rounded-3xl bg-[rgb(50,54,75)]">
         {item.actorId ? (
@@ -324,6 +408,7 @@ function NotificationItem({
           <img
             src={actor?.avatarUrl ?? DEFAULT_AVATAR}
             alt=""
+            referrerPolicy="no-referrer"
             width={48}
             height={48}
             className="h-12 w-12 rounded-3xl object-cover"
@@ -334,7 +419,12 @@ function NotificationItem({
       </div>
 
       <div className="min-w-0 flex-1 pe-2 ps-3">
-        <p className="truncate text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]">
+        <p
+          className={cn(
+            "text-[14px] font-semibold leading-[18px] text-[var(--tt-text)]",
+            expanded ? "break-words" : "truncate",
+          )}
+        >
           {pendingActor ? (
             <span className="inline-block h-[14px] w-24 animate-pulse rounded bg-[rgb(255_255_255_/_0.12)] align-middle" />
           ) : actor ? (
@@ -362,9 +452,20 @@ function NotificationItem({
             heading
           )}
         </p>
-        <p className="truncate text-[13px] leading-[17px] text-[var(--tt-text)]">
-          {describe(item)} · {formatRelativeTime(item.createdAt)}
-        </p>
+        {expanded ? (
+          <>
+            <p className="mt-1 whitespace-pre-line break-words text-[13px] leading-[17px] text-[var(--tt-text)]">
+              {describe(item)}
+            </p>
+            <p className="mt-1 text-[12px] leading-[16px] text-[rgb(255_255_255_/_0.5)]">
+              {new Date(item.createdAt).toLocaleString()}
+            </p>
+          </>
+        ) : (
+          <p className="truncate text-[13px] leading-[17px] text-[var(--tt-text)]">
+            {describe(item)} · {formatRelativeTime(item.createdAt)}
+          </p>
+        )}
       </div>
 
       {video?.thumbnailUrl && (

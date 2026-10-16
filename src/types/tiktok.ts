@@ -4,24 +4,18 @@ import type { VideoStatus } from "@/lib/api/types";
 
 export interface Author {
   /**
-   * The backend's account id, present only for authors that came from the API
-   * (mock authors have none). It is what every user-service and video-service
-   * call is keyed by — `username` cannot be used for that, because
-   * user-service stores no handle. A Snowflake, kept as a string: see
-   * `lib/api/json.ts`.
+   * The backend's account id — what every user-service and video-service call
+   * is keyed by. A Snowflake, kept as a string: see `lib/api/json.ts`.
    */
-  userId?: string;
+  userId: string;
   /**
-   * The `/@…` route segment. For backend accounts this is the numeric id, since
-   * user-service offers no lookup-by-username — see `handleFor`. Mock authors
-   * use a real handle like "sashtalk".
+   * The `/@…` route segment: the numeric id for other accounts — see
+   * `handleFor` — and the viewer's own handle for themself.
    */
   username: string;
   /**
-   * The real "@handle" from auth-service, for display only — null on backend
-   * accounts predating user-service copying it, and absent on mock authors
-   * (whose `username` already is the handle). Never route with this; use
-   * `username`.
+   * The real "@handle", for display only — absent on accounts predating
+   * user-service copying it. Never route with this; use `username`.
    */
   handle?: string;
   /** Display name shown next to the caption, e.g. "SASH TALK". */
@@ -80,9 +74,8 @@ export interface FeedVideo {
   /** Duration in seconds — drives the "00:02 / 01:39" progress label. */
   durationSeconds: number;
   /**
-   * When the video was posted, ISO-8601. Carried only for backend videos — the
-   * mock feed has no upload date — so the detail page's "· 3d ago" is dropped
-   * rather than invented when it is absent.
+   * When the video was posted, ISO-8601. The detail page's "· 3d ago" is
+   * dropped rather than invented when it is absent.
    */
   createdAt?: string;
   /** Whether the signed-in user already follows this author. */
@@ -90,15 +83,21 @@ export interface FeedVideo {
   /** Whether a "See translation" affordance appears under the caption. */
   hasTranslation: boolean;
   /**
-   * PUBLIC/FRIENDS/PRIVATE, carried only for backend videos — it seeds the
-   * owner's privacy select on the detail page. Undefined for mock feed videos.
+   * PUBLIC/FRIENDS/PRIVATE — it seeds the owner's privacy select on the
+   * detail page.
    */
   visibility?: "PUBLIC" | "FRIENDS" | "PRIVATE";
   /**
-   * The owner turned comments off. Carried only for backend videos; when true
+   * Comments are off on this video — its own switch, or an owner whose account
+   * accepts comments from no one. Carried only for backend videos; when true
    * the comment panel shows the "commenting is off" state and no count renders.
    */
   commentsDisabled?: boolean;
+  /**
+   * The video's own "Allow comments" switch alone, for the owner's toggle to
+   * seed from — `commentsDisabled` also folds in the account setting.
+   */
+  commentsSwitchOff?: boolean;
 }
 
 export interface Comment {
@@ -131,7 +130,7 @@ export interface Comment {
 
 /**
  * One tile in the Explore grid (`.DivItemContainerV2`). It is a poster with a
- * view count overlaid, plus an author row underneath — not a full `FeedVideo`,
+ * like count overlaid, plus an author row underneath — not a full `FeedVideo`,
  * so it carries only what that card renders.
  */
 export interface ExploreItem {
@@ -141,7 +140,7 @@ export interface ExploreItem {
   author: Author;
   caption: string;
   posterUrl: string;
-  /** Played muted on hover, the way the live grid previews a tile. */
+  /** Previewed on hover, muted unless the tile's sound toggle is on. */
   videoUrl: string;
   views: number;
   /** What the tile overlays on the poster — the grid shows likes, not views. */
@@ -189,14 +188,17 @@ export interface ProfileVideo {
   /** `visibility: "PRIVATE"` — the grid marks it with a lock. Owner-only. */
   isPrivate?: boolean;
   /**
-   * video-service's status. Absent on mock profiles, and on someone else's
-   * grid every tile is PUBLISHED anyway — it is the owner's own grid that
+   * video-service's status. On someone else's grid every tile is PUBLISHED
+   * anyway — it is the owner's own grid that
    * carries videos still processing, waiting on a moderator, or removed.
    */
   status?: VideoStatus;
 }
 
 /** The header of `/@handle` plus the content behind each of its tabs. */
+/** Where the viewer stands with an account — "Requested" only exists for a private one. */
+export type FollowStatus = "FOLLOWING" | "REQUESTED" | "NONE";
+
 export interface UserProfile {
   author: Author;
   /** Renders the `#20D5EC` tick after the handle. */
@@ -208,6 +210,8 @@ export interface UserProfile {
   stats: { following: number; followers: number; likes: number };
   /** Whether the viewer already follows them; the button's initial state. */
   isFollowing: boolean;
+  /** A follow request from the viewer is waiting on this private account. */
+  followRequested?: boolean;
   /**
    * Tiles per tab. Each list is in **Latest** order — the sort control derives
    * its other two options from it (Oldest reverses, Popular sorts by views),
@@ -233,7 +237,7 @@ export interface NavItem {
   authOnly?: boolean;
 }
 
-/** One row in an option list — the login modal, `/login` or `/signup`. */
+/** One row in the login or signup modal's option list. */
 export interface LoginOption {
   /** Verbatim label, e.g. "Continue with Facebook". */
   label: string;
@@ -251,12 +255,6 @@ export interface LoginOption {
    * back to the email flow.
    */
   provider?: "google" | "facebook";
-  /**
-   * Draws the cyan "Last login" flag over the row's top-right corner. The live
-   * page sets it from the viewer's own history; the clone hard-codes it on the
-   * phone/email row so the badge is visible at all.
-   */
-  lastLogin?: boolean;
 }
 
 export interface FooterSection {
@@ -275,17 +273,43 @@ export type SettingsIconName =
   | "privacy"
   | "push-notifications"
   | "business-verification"
-  | "ads"
   | "screen-time"
   | "content-preferences"
   | "accessibility";
+
+/**
+ * What a settings row actually does. Absent on the rows that are still inert —
+ * the ones whose flows need account state no backend service stores yet.
+ *
+ * The layout stays local data (`SETTINGS_SECTIONS`) while behaviour hangs off
+ * this key, so a row gaining an action is one word here and a branch in `Row`,
+ * not a new shape for the whole panel.
+ */
+export type SettingsAction =
+  | "add-email"
+  | "blocked-accounts"
+  | "muted-accounts"
+  | "browser-notifications"
+  | "high-contrast"
+  | "private-account"
+  | "comment-audience"
+  | "comment-filters"
+  | "dm-audience"
+  | "screen-time-limit"
+  | "password"
+  | "sleep-hours"
+  | "weekly-screen-time";
 
 /**
  * The five row shapes the live settings panel uses. `link` and `value` both
  * end in a chevron; `value` also shows the current choice before it. `expand`
  * is a row that opens in place (caret), `external` leaves TikTok.
  */
-export type SettingsRow = { title: string; description?: string } & (
+export type SettingsRow = {
+  title: string;
+  description?: string;
+  action?: SettingsAction;
+} & (
   | { kind: "link" }
   | { kind: "value"; value: string }
   | { kind: "switch"; on: boolean }
@@ -297,13 +321,6 @@ export interface SettingsGroup {
   heading?: string;
   /** Text under the heading, e.g. "Your preferences will be synced…". */
   description?: string;
-  /**
-   * The Ads section renders its headings at 500 weight in `rgba(255,255,255,.6)`
-   * and flush with the panel edge, where every other section uses 600 at .9 and
-   * indents by 16. It is a second design generation on the same page, not a
-   * mistake, so it is carried as a flag.
-   */
-  muted?: boolean;
   rows: SettingsRow[];
 }
 

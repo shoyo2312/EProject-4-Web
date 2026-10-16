@@ -27,13 +27,28 @@ export function NoCommentsYet() {
   );
 }
 
-/** Same shape as {@link NoCommentsYet}, shown when the creator turned comments off. */
-export function CommentsOff() {
+/**
+ * Same shape as {@link NoCommentsYet}, for an empty thread the viewer cannot
+ * add to — comments off, or an owner who does not take comments from them.
+ */
+export function CommentsLocked({ message }: { message: string }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-6">
       <CommentIcon className="h-16 w-16 text-white/25" />
-      <p className="text-[14px] leading-5 text-white/75">
-        This creator has turned off commenting
+      <p className="text-[14px] leading-5 text-white/75">{message}</p>
+    </div>
+  );
+}
+
+/**
+ * Stands in for the composer under a thread the viewer can read but not add
+ * to. Same 64px slot as the composer, so the list above does not move.
+ */
+export function CommentLockNotice({ message }: { message: string }) {
+  return (
+    <div className="flex h-16 flex-none items-end justify-center pb-2.5">
+      <p className="text-center text-[14px] leading-5 text-white/60">
+        {message}
       </p>
     </div>
   );

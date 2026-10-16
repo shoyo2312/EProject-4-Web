@@ -167,13 +167,16 @@ export function VideoContextMenu({
           trailing={<Switch on={autoScroll} />}
         />
 
-        {/* Nothing behind these two in the clone — no PiP surface, and the mock
-            feed carries no caption tracks — so they only dismiss. */}
         <MenuRow
           icon={<FloatingPlayerIcon className="h-5 w-5" />}
           label="Floating Player"
-          onClick={onClose}
+          onClick={() => {
+            void floatingPlayer(hostRef.current?.querySelector("video") ?? null);
+            onClose();
+          }}
         />
+
+        {/* Videos carry no caption tracks yet, so this only dismisses. */}
 
         <MenuRow
           icon={<CaptionsIcon className="h-5 w-5" />}
@@ -187,7 +190,7 @@ export function VideoContextMenu({
           icon={<DownloadIcon className="h-5 w-5" />}
           label="Download video"
           onClick={() => {
-            download(video);
+            void download(video);
             onClose();
           }}
         />
@@ -230,15 +233,48 @@ function place(click: number, size: number, available: number) {
 }
 
 /**
- * Saves the file the card is playing. `download` only takes effect for
- * same-origin URLs, which every entry in the mock feed is (`/videos/*.mp4`).
+ * The browser's own Picture-in-Picture window, toggled. It mirrors the card's
+ * element, so it pauses with the card when the feed scrolls on.
+ * ponytail: a window that keeps playing past the card would need its own
+ * element, detached from the feed's playback.
  */
-function download(video: FeedVideo) {
+async function floatingPlayer(video: HTMLVideoElement | null) {
+  if (!video || !document.pictureInPictureEnabled) {
+    toast.warning("Floating player isn’t available here.");
+    return;
+  }
+  try {
+    if (document.pictureInPictureElement === video) await document.exitPictureInPicture();
+    else await video.requestPictureInPicture();
+  } catch {
+    toast.warning("Couldn’t open the floating player.");
+  }
+}
+
+/**
+ * Saves the file the card is playing. The media lives on object storage, a
+ * different origin, where the browser ignores `download` and navigates the tab
+ * to the raw file instead — so it is fetched into a same-origin blob first.
+ * A plain media fetch, not an API call: it must not carry the session token,
+ * which is why it does not go through `lib/api/client`.
+ * ponytail: holds the whole file in memory; a server-side
+ * `Content-Disposition: attachment` link would stream it instead.
+ */
+async function download(video: FeedVideo) {
   if (!video.videoUrl) return;
-  const link = document.createElement("a");
-  link.href = video.videoUrl;
-  link.download = video.videoUrl.split("/").pop() ?? "video.mp4";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  try {
+    const response = await fetch(video.videoUrl);
+    if (!response.ok) throw new Error(String(response.status));
+    const href = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `${video.id}.mp4`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // Deferred: some browsers still read the blob after `click()` returns.
+    setTimeout(() => URL.revokeObjectURL(href));
+  } catch {
+    toast.warning("Couldn’t download this video.");
+  }
 }

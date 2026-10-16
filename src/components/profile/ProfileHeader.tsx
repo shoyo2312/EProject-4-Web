@@ -6,15 +6,15 @@ import { useState } from "react";
 import {
   AddFriendIcon,
   BioLinkIcon,
-  MoreHorizontalIcon,
   SettingsIcon,
   ShareIcon,
   VerifiedBadgeIcon,
 } from "@/components/icons";
+import { ProfileMoreMenu } from "@/components/profile/ProfileMoreMenu";
 import { displayHandle } from "@/lib/api/adapters";
 import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { UserProfile } from "@/types/tiktok";
+import type { FollowStatus, UserProfile } from "@/types/tiktok";
 
 /**
  * `.CreatorPageHeader` — the 172px avatar beside the identity column.
@@ -51,18 +51,20 @@ export function ProfileHeader({
   /** Opens the Edit profile modal. Only the owner's header can reach it. */
   onEditProfile: () => void;
   /**
-   * Persists the follow state. Absent for mock profiles, where the toggle is
-   * only local. Rejecting puts the button back where it was.
+   * Persists the follow state. Rejecting puts the button back where it was.
    */
-  onToggleFollow?: (next: boolean) => Promise<void>;
-  /**
-   * Opens the Followers/Following dialog on that stat. Absent for mock
-   * profiles — there is no backend account to list connections for.
-   */
-  onOpenFollowers?: () => void;
-  onOpenFollowing?: () => void;
+  /** Resolves to where the server settled — a private account only takes a request. */
+  onToggleFollow: (next: boolean) => Promise<FollowStatus>;
+  /** Opens the Followers/Following dialog on that stat. */
+  onOpenFollowers: () => void;
+  onOpenFollowing: () => void;
 }) {
-  const [following, setFollowing] = useState(profile.isFollowing);
+  const fromServer: FollowStatus = profile.isFollowing
+    ? "FOLLOWING"
+    : profile.followRequested
+      ? "REQUESTED"
+      : "NONE";
+  const [status, setStatus] = useState(fromServer);
   const [followPending, setFollowPending] = useState(false);
 
   /**
@@ -74,10 +76,10 @@ export function ProfileHeader({
    * (rather than assigning on each render) keeps a click from being undone by
    * the next re-render.
    */
-  const [lastFromServer, setLastFromServer] = useState(profile.isFollowing);
-  if (profile.isFollowing !== lastFromServer) {
-    setLastFromServer(profile.isFollowing);
-    setFollowing(profile.isFollowing);
+  const [lastFromServer, setLastFromServer] = useState(fromServer);
+  if (fromServer !== lastFromServer) {
+    setLastFromServer(fromServer);
+    setStatus(fromServer);
   }
 
   /**
@@ -88,16 +90,16 @@ export function ProfileHeader({
   const toggleFollow = async () => {
     if (!requireSignIn() || followPending) return;
 
-    const next = !following;
-    setFollowing(next);
-
-    if (!onToggleFollow) return;
+    // "Requested" is undone like "Following": the same call withdraws it.
+    const previous = status;
+    const next = previous === "NONE";
+    setStatus(next ? "FOLLOWING" : "NONE");
 
     setFollowPending(true);
     try {
-      await onToggleFollow(next);
+      setStatus(await onToggleFollow(next));
     } catch {
-      setFollowing(!next);
+      setStatus(previous);
     } finally {
       setFollowPending(false);
     }
@@ -109,6 +111,7 @@ export function ProfileHeader({
       <img
         src={profile.author.avatarUrl}
         alt=""
+        referrerPolicy="no-referrer"
         className="h-[172px] w-[172px] flex-none rounded-full object-cover tt-840:h-24 tt-840:w-24"
       />
 
@@ -164,8 +167,8 @@ export function ProfileHeader({
             </>
           ) : (
             <>
-              <PillButton primary={!following} onClick={toggleFollow}>
-                {following ? "Following" : "Follow"}
+              <PillButton primary={status === "NONE"} onClick={toggleFollow}>
+                {status === "FOLLOWING" ? "Following" : status === "REQUESTED" ? "Requested" : "Follow"}
               </PillButton>
               <PillButton onClick={requireSignIn}>Message</PillButton>
               <IconButton label="Suggest friends" onClick={requireSignIn}>
@@ -179,9 +182,7 @@ export function ProfileHeader({
           </IconButton>
 
           {!isOwner && (
-            <IconButton label="More" onClick={requireSignIn}>
-              <MoreHorizontalIcon className="h-5 w-5" />
-            </IconButton>
+            <ProfileMoreMenu userId={profile.author.userId} name={profile.author.nickname} />
           )}
         </div>
 

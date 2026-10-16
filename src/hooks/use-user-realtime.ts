@@ -1,6 +1,4 @@
-import { useEffect, useRef } from "react";
-import type { StompSubscription } from "@stomp/stompjs";
-import { getStompClient, onStompConnect } from "@/lib/realtime/stompClient";
+import { useStompTopic } from "@/hooks/use-stomp-topic";
 
 export type UserStatsFrame = {
   type: "stats";
@@ -20,35 +18,6 @@ export type UserStatsFrame = {
  * Single id, unlike `useVideoRealtime`: a profile page only ever watches the
  * one account it is showing.
  */
-export function useUserRealtime(
-  userId: string | null,
-  token: string | null,
-  onFrame: (frame: UserStatsFrame) => void,
-) {
-  const handler = useRef(onFrame);
-  useEffect(() => {
-    handler.current = onFrame;
-  });
-
-  useEffect(() => {
-    if (!token || !userId) return;
-    const client = getStompClient(token);
-    let subscription: StompSubscription | null = null;
-
-    const sync = () => {
-      if (!client.connected || subscription) return;
-      subscription = client.subscribe(`/topic/users.${userId}`, (message) => {
-        handler.current(JSON.parse(message.body) as UserStatsFrame);
-      });
-    };
-
-    sync();
-    const unsubscribeConnect = onStompConnect(sync);
-
-    return () => {
-      unsubscribeConnect();
-      subscription?.unsubscribe();
-      subscription = null;
-    };
-  }, [userId, token]);
+export function useUserRealtime(userId: string | null, onFrame: (frame: UserStatsFrame) => void) {
+  useStompTopic(userId ? `/topic/users.${userId}` : null, onFrame);
 }

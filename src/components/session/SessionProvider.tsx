@@ -11,15 +11,20 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 
-import { LoginModal } from "@/components/session/LoginModal";
+import { AuthModal } from "@/components/session/AuthModal";
+import { LogoutConfirmModal } from "@/components/session/LogoutConfirmModal";
+import { MODAL_EXIT_MS } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
+import { usePresence } from "@/hooks/use-presence";
 import { authorFromMe } from "@/lib/api/adapters";
 import { clearAuthorCache } from "@/lib/api/authors";
 import { clearRepostContextCache } from "@/lib/repost-context";
 import { clearCommentCache } from "@/lib/comment-cache";
+import { resetRealtime } from "@/lib/realtime/stompClient";
 import * as authApi from "@/lib/api/auth";
 import { isApiError } from "@/lib/api/errors";
 import { getAccessToken, getRefreshToken, onSessionEnded } from "@/lib/api/tokens";
+import { awaitProfile } from "@/lib/auth/await-profile";
 import type { SocialProvider } from "@/lib/auth/social";
 import * as usersApi from "@/lib/api/users";
 import type { MeResponse } from "@/lib/api/types";
@@ -29,7 +34,7 @@ import type { Author, LoginOption } from "@/types/tiktok";
 export interface SessionUser extends Author {
   userId: string;
   /** Null for a social account the provider gave no address for — see
-   *  `requiresEmail` and `/signup/add-email`. */
+   *  `requiresEmail` and the modal's add-email step. */
   email: string | null;
   bio: string;
   followerCount: number;
@@ -40,6 +45,12 @@ export interface SessionUser extends Author {
    * eventual; it usually resolves in a few hundred milliseconds.
    */
   profileReady: boolean;
+  /** When the handle may change again (once every 30 days); null when it may now. */
+  usernameChangeableAt: string | null;
+  /** When the nickname may change again (once every 7 days); null when it may now. */
+  nicknameChangeableAt: string | null;
+  /** False for a social account that has never set a password. */
+  hasPassword: boolean;
 }
 
 interface SessionValue {
@@ -56,8 +67,25 @@ interface SessionValue {
   requireSignIn: () => boolean;
   openLogin: () => void;
 
-  /** Real login. Throws `ApiError` so the form can branch on `code`. */
-  signIn: (usernameOrEmail: string, password: string) => Promise<void>;
+  /**
+   * Real login. Throws `ApiError` so the form can branch on `code`. `quiet`
+   * skips the "logged in" toast, for a caller signing back in after a change
+   * of its own that it announces itself.
+   */
+  signIn: (
+    usernameOrEmail: string,
+    password: string,
+    options?: { quiet?: boolean },
+  ) => Promise<void>;
+  /**
+   * Last step of the email-first signup: creates the account for the address
+   * the ticket proved and signs it in. Throws `ApiError` like `signIn`.
+   */
+  signUp: (input: {
+    signupToken: string;
+    username: string;
+    password: string;
+  }) => Promise<void>;
   /**
    * Trades a token the provider's SDK already issued for a session of ours.
    * Signs up on first use — the backend has one endpoint for both.
@@ -67,7 +95,7 @@ interface SessionValue {
    * message to show but a code to collect and hand to `confirmSocialLink`.
    *
    * `requiresEmail` means the account has no address at all — the provider
-   * gave none — and should be sent to the add-email screen.
+   * gave none. The modal stays open then, and asks for one next.
    */
   signInWithProvider: (
     provider: SocialProvider,
@@ -79,6 +107,8 @@ interface SessionValue {
     input: { token: string; otp: string },
   ) => Promise<{ requiresEmail: boolean }>;
   signOut: () => Promise<void>;
+  /** Asks "Are you sure you want to log out?" first, as the live menu does. */
+  confirmSignOut: () => void;
   /** Re-reads `/me`; call after anything that changes the profile server-side. */
   reload: () => Promise<void>;
   /**
@@ -111,7 +141,23 @@ function toSessionUser(me: MeResponse): SessionUser {
     followerCount: me.followerCount ?? 0,
     followingCount: me.followingCount ?? 0,
     profileReady: me.profileReady,
+    usernameChangeableAt: me.usernameChangeableAt ?? null,
+    nicknameChangeableAt: me.displayNameChangeableAt ?? null,
+    hasPassword: me.hasPassword ?? true,
   };
+}
+
+/**
+ * Forgets everything cached on behalf of the previous viewer — or of nobody:
+ * authors resolved while signed out are placeholders, and `likedByMe`, the
+ * follow cache and the socket's `/user/**` identity are all per viewer.
+ */
+function resetViewerState(): void {
+  clearAuthorCache();
+  clearCommentCache();
+  clearRepostContextCache();
+  usersApi.clearFollowCache();
+  resetRealtime();
 }
 
 /**
@@ -125,15 +171,23 @@ function toSessionUser(me: MeResponse): SessionUser {
  */
 export function SessionProvider({
   loginOptions,
+  signupOptions,
   children,
 }: {
   loginOptions: LoginOption[];
+  signupOptions: LoginOption[];
   children: React.ReactNode;
 }) {
   const router = useRouter();
   const [user, setUser] = useState<SessionUser | null>(null);
   const [isLoading, setLoading] = useState(true);
   const [loginOpen, setLoginOpen] = useState(false);
+  // Every close plays the way out, including the one a sign-in makes.
+  const loginModal = usePresence(loginOpen, MODAL_EXIT_MS);
+  // Here rather than beside the menu that opens it, which unmounts with the
+  // session — this has to outlive the logout to finish closing.
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const logoutConfirm = usePresence(logoutConfirmOpen, MODAL_EXIT_MS);
 
   const openLogin = useCallback(() => setLoginOpen(true), []);
 
@@ -173,10 +227,7 @@ export function SessionProvider({
   useEffect(
     () =>
       onSessionEnded(() => {
-        clearAuthorCache();
-        clearCommentCache();
-        clearRepostContextCache();
-        usersApi.clearFollowCache();
+        resetViewerState();
         setUser(null);
         setLoading(false);
       }),
@@ -205,7 +256,9 @@ export function SessionProvider({
     const tick = () => {
       attempts += 1;
       loadMe().catch(() => undefined);
-      if (attempts < 3) timer = window.setTimeout(tick, 1_500);
+      // ~11s total: auth-service's outbox only flushes every 5s, so the
+      // registration event can take that long just to reach Kafka.
+      if (attempts < 8) timer = window.setTimeout(tick, 1_500);
     };
 
     timer = window.setTimeout(tick, 800);
@@ -221,29 +274,41 @@ export function SessionProvider({
    * the server had already consumed, so every retry answered `INVALID_OTP` and
    * the flow could not be finished at all. The throw stops here instead; the
    * profile fills in on the next `/me`.
+   *
+   * `close` is false only for a social account with no address, which the
+   * modal goes on to ask for.
    */
-  const settleSignIn = useCallback(async () => {
+  const settleSignIn = useCallback(async (close = true) => {
     // Every author resolved while signed out is a placeholder — user-service
     // will not answer without a token — and those must not outlive the moment
     // a token exists.
-    clearAuthorCache();
-    clearCommentCache();
-    clearRepostContextCache();
-    usersApi.clearFollowCache();
+    resetViewerState();
     try {
       await loadMe();
     } catch {
       // ponytail: swallowed, because the next navigation or reload re-reads
       // `/me`. Retry here if a stale-looking header proves worth the machinery.
     }
-    setLoginOpen(false);
+    if (close) setLoginOpen(false);
   }, [loadMe]);
 
   const signIn = useCallback(
-    async (usernameOrEmail: string, password: string) => {
+    async (usernameOrEmail: string, password: string, options?: { quiet?: boolean }) => {
       await authApi.login({ usernameOrEmail, password });
       await settleSignIn();
-      toast.success("You’re logged in.");
+      if (!options?.quiet) toast.success("You’re logged in.");
+    },
+    [settleSignIn],
+  );
+
+  const signUp = useCallback(
+    async (input: { signupToken: string; username: string; password: string }) => {
+      await authApi.completeSignup(input);
+      // The profile is built off a Kafka event; leaving now would let a quick
+      // tap on "Profile" hit an account that is not there yet.
+      await awaitProfile();
+      await settleSignIn();
+      toast.success("Welcome to Nowa!");
     },
     [settleSignIn],
   );
@@ -251,7 +316,10 @@ export function SessionProvider({
   const signInWithProvider = useCallback(
     async (provider: SocialProvider, providerToken: string) => {
       const result = await authApi.socialLogin(provider, providerToken);
-      await settleSignIn();
+      // A first sign-in with Google or Facebook creates the account too; for a
+      // returning one the profile is already there and this answers at once.
+      await awaitProfile();
+      await settleSignIn(!result.requiresEmail);
       if (!result.requiresEmail) toast.success("You’re logged in.");
       return { requiresEmail: result.requiresEmail };
     },
@@ -261,7 +329,7 @@ export function SessionProvider({
   const confirmSocialLink = useCallback(
     async (provider: SocialProvider, input: { token: string; otp: string }) => {
       const result = await authApi.confirmSocialLink(provider, input);
-      await settleSignIn();
+      await settleSignIn(!result.requiresEmail);
       return { requiresEmail: result.requiresEmail };
     },
     [settleSignIn],
@@ -272,16 +340,17 @@ export function SessionProvider({
    * rethrows a network failure — so signing out with the gateway unreachable
    * skipped everything below and left a signed-in-looking UI over a session
    * that no longer had tokens. The local sign-out is what was asked for, so it
-   * happens either way.
+   * happens either way — and the failure stops here rather than surfacing as
+   * an unhandled rejection from a caller that fires and forgets: this device
+   * is signed out, and the server-side tokens run out on their own.
    */
   const signOut = useCallback(async () => {
     try {
       await authApi.logout();
+    } catch {
+      // Gateway unreachable: the tokens are already gone locally.
     } finally {
-      clearAuthorCache();
-      clearCommentCache();
-      clearRepostContextCache();
-      usersApi.clearFollowCache();
+      resetViewerState();
       setUser(null);
       router.push("/");
       toast.success("You’re logged out.");
@@ -304,6 +373,7 @@ export function SessionProvider({
               bio: profile.bio ?? "",
               followerCount: profile.followerCount,
               followingCount: profile.followingCount,
+              nicknameChangeableAt: profile.displayNameChangeableAt ?? null,
             }
           : current,
       );
@@ -323,9 +393,11 @@ export function SessionProvider({
       },
       openLogin,
       signIn,
+      signUp,
       signInWithProvider,
       confirmSocialLink,
       signOut,
+      confirmSignOut: () => setLogoutConfirmOpen(true),
       reload: async () => {
         try {
           await loadMe();
@@ -343,6 +415,7 @@ export function SessionProvider({
       isLoading,
       openLogin,
       signIn,
+      signUp,
       signInWithProvider,
       confirmSocialLink,
       signOut,
@@ -356,15 +429,22 @@ export function SessionProvider({
     <SessionContext.Provider value={value}>
       {children}
 
-      {loginOpen && (
-        <LoginModal
-          options={loginOptions}
+      {loginModal.mounted && (
+        <AuthModal
+          closing={loginModal.closing}
+          loginOptions={loginOptions}
+          signupOptions={signupOptions}
           onClose={() => setLoginOpen(false)}
-          // There is no in-modal password form on the live site either: every
-          // row leads to the full login flow.
-          onSignIn={() => {
-            setLoginOpen(false);
-            router.push("/login/phone-or-email/email");
+        />
+      )}
+
+      {logoutConfirm.mounted && (
+        <LogoutConfirmModal
+          closing={logoutConfirm.closing}
+          onCancel={() => setLogoutConfirmOpen(false)}
+          onConfirm={() => {
+            setLogoutConfirmOpen(false);
+            void signOut();
           }}
         />
       )}

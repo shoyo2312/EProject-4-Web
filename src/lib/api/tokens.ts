@@ -24,8 +24,25 @@ type SessionEndedListener = () => void;
 const sessionEndedListeners = new Set<SessionEndedListener>();
 
 export function onSessionEnded(listener: SessionEndedListener): () => void {
+  if (sessionEndedListeners.size === 0) window.addEventListener("storage", onStorage);
   sessionEndedListeners.add(listener);
-  return () => sessionEndedListeners.delete(listener);
+  return () => {
+    sessionEndedListeners.delete(listener);
+    if (sessionEndedListeners.size === 0) window.removeEventListener("storage", onStorage);
+  };
+}
+
+/**
+ * Every tab shares one pair, so another tab signing out — or losing its
+ * session to a refused refresh — has ended this tab's session too. Without
+ * this, the tab kept a signed-in UI whose every request answered 401.
+ * `key === null` is another tab clearing storage outright.
+ */
+function onStorage(event: StorageEvent): void {
+  if (event.storageArea !== window.localStorage) return;
+  if (event.key !== REFRESH_KEY && event.key !== null) return;
+  if (getRefreshToken() !== null) return;
+  sessionEndedListeners.forEach((listener) => listener());
 }
 
 export function getAccessToken(): string | null {
@@ -55,6 +72,28 @@ export function clearTokens({ notify = true }: { notify?: boolean } = {}): void 
   window.localStorage.removeItem(ACCESS_KEY);
   window.localStorage.removeItem(REFRESH_KEY);
   if (notify) sessionEndedListeners.forEach((listener) => listener());
+}
+
+/**
+ * Whether an access token is still good for at least `marginMs`, read off its
+ * own `exp` claim. For callers that hand the token to something other than
+ * `apiFetch` — the WebSocket handshake — and so get no 401-and-refresh for free.
+ *
+ * A token whose payload cannot be read counts as fresh: the server is the
+ * judge, and guessing "expired" would refresh on every call.
+ */
+export function isAccessTokenFresh(
+  token: string,
+  now = Date.now(),
+  marginMs = 30_000,
+): boolean {
+  try {
+    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const { exp } = JSON.parse(atob(payload)) as { exp?: unknown };
+    return typeof exp !== "number" || exp * 1000 - marginMs > now;
+  } catch {
+    return true;
+  }
 }
 
 /**

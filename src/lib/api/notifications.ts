@@ -12,9 +12,20 @@ import { apiFetch } from "@/lib/api/client";
 export type NotificationType =
   | "LIKE"
   | "COMMENT"
+  | "COMMENT_LIKE"
   | "SHARE"
   | "NEW_FOLLOWER"
+  | "FOLLOW_REQUEST"
+  | "FOLLOW_REQUEST_ACCEPTED"
   | "SYSTEM";
+
+/**
+ * The types whose `referenceId` is an account, not a video: the new follower,
+ * the requester, and the private account that approved the viewer.
+ */
+export function referencesUser(type: NotificationType): boolean {
+  return type === "NEW_FOLLOWER" || type === "FOLLOW_REQUEST" || type === "FOLLOW_REQUEST_ACCEPTED";
+}
 
 export interface NotificationResponse {
   id: string;
@@ -25,8 +36,9 @@ export interface NotificationResponse {
   body: string;
   /**
    * What the notification points at, type-dependent: a videoId for
-   * LIKE/COMMENT/SHARE, the follower's userId for NEW_FOLLOWER, null for
-   * SYSTEM. Opaque to the service, so the client decides what it means.
+   * LIKE/COMMENT/COMMENT_LIKE/SHARE, a userId for the three follow types (see
+   * `referencesUser`), null for SYSTEM. Opaque to the service, so the client
+   * decides what it means.
    */
   referenceId: string | null;
   read: boolean;

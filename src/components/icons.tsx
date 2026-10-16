@@ -98,6 +98,29 @@ export function MoreIcon(props: IconProps) {
   );
 }
 
+/**
+ * The collapsed rail's stand-in for the guest Log in button — a person in a
+ * ring, read off `.SquareTUXButton` with the live sidebar collapsed. TikTok
+ * renders it at 20px, not the rows' 19-in-32.
+ */
+export function LoginIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M24 11.2a8.47 8.47 0 1 1 0 16.94 8.47 8.47 0 0 1 0-16.94Zm5.17 8.47a5.17 5.17 0 1 0-10.35-.01 5.17 5.17 0 0 0 10.34 0Z"
+      />
+      <path d="M15.87 36.25a12.65 12.65 0 0 1 16.26 0c.94-.62 1.8-1.35 2.56-2.16A15.94 15.94 0 0 0 24 30c-4.1 0-7.85 1.55-10.69 4.1.77.8 1.62 1.53 2.56 2.15Z" />
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M2 24a22 22 0 1 1 44 0 22 22 0 0 1-44 0ZM24 6a18 18 0 1 0 0 36 18 18 0 0 0 0-36Z"
+      />
+    </Icon>
+  );
+}
+
 /* --- Search ------------------------------------------------------------- */
 
 export function SearchIcon(props: IconProps) {
@@ -194,7 +217,7 @@ export function AtIcon(props: IconProps) {
   );
 }
 
-/** The play glyph next to the view count on each Explore tile. */
+/** The play glyph beside a view count, and the play state of the control bar. */
 export function PlayIcon(props: IconProps) {
   return (
     <Icon {...props}>
@@ -655,14 +678,6 @@ export function BusinessVerificationIcon(props: IconProps) {
   );
 }
 
-export function AdsIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M41.11 5.34A2 2 0 0 1 42 7v33.36a2 2 0 0 1-2.7 1.87l-7.88-2.97A9.89 9.89 0 0 1 23.65 43a9.77 9.77 0 0 1-9.82-10.38L8 30.42v1.24a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V16.34a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.78L39.23 5.15a2 2 0 0 1 1.88.19ZM8 22.44v3.7l30 11.33V10L8 22.45Zm9.87 11.7a5.91 5.91 0 0 0 9.47 3.57l-9.47-3.56Z" />
-    </Icon>
-  );
-}
-
 export function ScreenTimeIcon(props: IconProps) {
   return (
     <Icon {...props}>
@@ -687,22 +702,10 @@ export function AccessibilityIcon(props: IconProps) {
   );
 }
 
-/* --- /login and /signup --------------------------------------------------
- * Every glyph below is a live path from the auth pages, on the same 48 grid.
+/* --- Auth ----------------------------------------------------------------
+ * Every glyph below is a live path from TikTok's /login and /signup pages, on
+ * the same 48 grid.
  * ------------------------------------------------------------------------- */
-
-/** `.StyledHelpIcon` — the "Feedback and help" mark in the auth header. */
-export function HelpCircleIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M24 6C14.0589 6 6 14.0589 6 24C6 33.9411 14.0589 42 24 42C33.9411 42 42 33.9411 42 24C42 14.0589 33.9411 6 24 6ZM2 24C2 11.8497 11.8497 2 24 2C36.1503 2 46 11.8497 46 24C46 36.1503 36.1503 46 24 46C11.8497 46 2 36.1503 2 24ZM24.0909 15C22.172 15 20.3433 16.2292 19.2617 18.61C19.0332 19.1128 18.4726 19.4 17.9487 19.2253L16.0513 18.5929C15.5274 18.4182 15.2406 17.8497 15.4542 17.3405C16.9801 13.7031 20.0581 11 24.0909 11C28.459 11 32 14.541 32 18.9091C32 21.2138 30.7884 23.4606 29.2167 25.074C27.8157 26.5121 25.5807 27.702 22.9988 27.9518C22.4491 28.0049 22.0001 27.5523 22.0001 27V25C22.0001 24.4477 22.4504 24.0057 22.9955 23.9167C24.2296 23.7153 25.5034 23.1533 26.3515 22.2828C27.4389 21.1666 28 19.8679 28 18.9091C28 16.7502 26.2498 15 24.0909 15ZM24 36C22.3431 36 21 34.6569 21 33C21 31.3431 22.3431 30 24 30C25.6569 30 27 31.3431 27 33C27 34.6569 25.6569 36 24 36Z"
-      />
-    </Icon>
-  );
-}
 
 /** `.DivBack` — the chevron before "Go back". */
 export function ChevronLeftIcon(props: IconProps) {
@@ -712,22 +715,6 @@ export function ChevronLeftIcon(props: IconProps) {
         fillRule="evenodd"
         clipRule="evenodd"
         d="M4.58579 22.5858L20.8787 6.29289C21.2692 5.90237 21.9024 5.90237 22.2929 6.29289L23.7071 7.70711C24.0976 8.09763 24.0976 8.7308 23.7071 9.12132L8.82843 24L23.7071 38.8787C24.0976 39.2692 24.0976 39.9024 23.7071 40.2929L22.2929 41.7071C21.9024 42.0976 21.2692 42.0976 20.8787 41.7071L4.58579 25.4142C3.80474 24.6332 3.80474 23.3668 4.58579 22.5858Z"
-      />
-    </Icon>
-  );
-}
-
-/**
- * The solid triangle inside a select. Distinct from `CaretDownIcon`, which is
- * the hairline chevron `/setting` uses for a row that expands in place.
- */
-export function CaretFilledIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M25.5187 35.2284C24.7205 36.1596 23.2798 36.1596 22.4816 35.2284L8.83008 19.3016C7.71807 18.0042 8.63988 16 10.3486 16H37.6517C39.3604 16 40.2822 18.0042 39.1702 19.3016L25.5187 35.2284Z"
       />
     </Icon>
   );
@@ -824,5 +811,58 @@ export function GoogleBrandIcon(props: IconProps) {
         d="M12 4.773c1.762 0 3.344.606 4.589 1.796l3.442-3.442C17.951 1.19 15.235 0 12 0A11.996 11.996 0 0 0 1.28 6.612l4.007 3.109C6.23 6.884 8.875 4.773 12 4.773Z"
       />
     </svg>
+  );
+}
+
+/* --- Auth modal ---------------------------------------------------------- */
+
+/** `.BoostedPasswordRuleDot` once its rule is met — extracted from the live modal. */
+export function RuleCheckIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M42.6925 12.7217C43.0748 13.1203 43.0616 13.7533 42.663 14.1356L18.8847 36.9434C18.0993 37.6967 16.8556 37.6838 16.086 36.9142L5.29314 26.1213C4.90261 25.7308 4.90261 25.0976 5.29314 24.7071L6.70735 23.2929C7.09788 22.9024 7.73104 22.9024 8.12156 23.2929L17.5294 32.7007L39.8941 11.2489C40.2927 10.8666 40.9257 10.8798 41.308 11.2783L42.6925 12.7217Z"
+      />
+    </Icon>
+  );
+}
+
+/** `.ClearButton` — the filled disc with a cross, extracted from the live modal. */
+export function ClearCircleIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M46 24a22 22 0 1 0-44 0 22 22 0 0 0 44 0Zm-30.49 5.66a1 1 0 0 0 0 1.41l1.42 1.42a1 1 0 0 0 1.41 0L24 26.83l5.66 5.66a1 1 0 0 0 1.41 0l1.42-1.42a1 1 0 0 0 0-1.41L26.83 24l5.66-5.66a1 1 0 0 0 0-1.41l-1.42-1.41a1 1 0 0 0-1.41 0L24 21.17l-5.66-5.66a1 1 0 0 0-1.41 0l-1.42 1.42a1 1 0 0 0 0 1.41L21.17 24l-5.66 5.66Z"
+      />
+    </Icon>
+  );
+}
+
+/** The modal's `.IPasswordIcon` while the password is hidden — a shut eye. */
+export function EyeClosedIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M24 26c-4.3 0-8.1-1.33-10.8-3.4-2.38-1.81-3.83-4.13-4.14-6.6-.07-.55-.5-1-1.06-1H6c-.55 0-1 .45-.96 1 .32 3.92 2.54 7.34 5.72 9.78.46.35.94.68 1.45 1L9.5 31.46a1 1 0 0 0 .37 1.37l1.73 1a1 1 0 0 0 1.36-.37l2.84-4.92c1.92.73 4.01 1.2 6.2 1.38V35a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-5.08a22.8 22.8 0 0 0 6.89-1.65l2.61 4.52a1 1 0 0 0 1.37.37l1.73-1a1 1 0 0 0 .36-1.37l-2.55-4.42c.28-.19.56-.38.83-.59 3.18-2.44 5.4-5.86 5.72-9.78.04-.55-.4-1-.96-1h-2c-.55 0-1 .45-1.06 1-.31 2.47-1.76 4.79-4.13 6.6A17.88 17.88 0 0 1 24 26Z" />
+    </Icon>
+  );
+}
+
+/**
+ * The red warning glyph that joins the clear button while a typed password
+ * breaks a rule. Drawn to the 48 grid, not extracted.
+ */
+export function WarningIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M21.4 5.5a3 3 0 0 1 5.2 0l18.6 32.5a3 3 0 0 1-2.6 4.5H5.4a3 3 0 0 1-2.6-4.5L21.4 5.5ZM22 17a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V17Zm2 15.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"
+      />
+    </Icon>
   );
 }

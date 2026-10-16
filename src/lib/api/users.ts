@@ -1,17 +1,19 @@
 "use client";
 
 import { apiFetch } from "@/lib/api/client";
-import { isApiError } from "@/lib/api/errors";
+import { isApiError, isRetryable } from "@/lib/api/errors";
 import { isLastPage } from "@/lib/api/types";
 import type {
   FollowResponse,
+  FriendshipResponse,
   PageResponse,
   UserProfileResponse,
+  UserSettingsResponse,
 } from "@/lib/api/types";
 
 /**
- * user-service. Every endpoint here needs a token — there is no public read,
- * not even for somebody else's profile.
+ * user-service. Reading a profile — by id, by handle, or a batch of them — is
+ * public, like the videos on it; everything else here needs a token.
  */
 
 export function getMyProfile(): Promise<UserProfileResponse> {
@@ -24,7 +26,7 @@ export function getMyProfile(): Promise<UserProfileResponse> {
  * of you blocked the other" on purpose, so the UI must not guess between them.
  */
 export function getProfile(userId: string): Promise<UserProfileResponse> {
-  return apiFetch<UserProfileResponse>(`/users/${userId}`, { auth: "required" });
+  return apiFetch<UserProfileResponse>(`/users/${userId}`, { auth: "optional" });
 }
 
 /**
@@ -37,7 +39,7 @@ export function getProfileByUsername(
 ): Promise<UserProfileResponse> {
   return apiFetch<UserProfileResponse>(
     `/users/by-username/${encodeURIComponent(username)}`,
-    { auth: "required" },
+    { auth: "optional" },
   );
 }
 
@@ -59,7 +61,7 @@ export function getProfiles(
 ): Promise<UserProfileResponse[]> {
   return apiFetch<UserProfileResponse[]>("/users", {
     query: { ids: userIds.join(",") },
-    auth: "required",
+    auth: "optional",
   });
 }
 
@@ -162,9 +164,32 @@ export function setFollowState(userId: string, value: boolean): void {
   notifyFollowState();
 }
 
+/**
+ * Private accounts the viewer has a follow request waiting on. Beside
+ * `followState` rather than in it: the following-list walk can only answer
+ * yes or no, and a request is neither. Known from a follow's answer or a
+ * friendship read, never walked — so "not in here" means "not known".
+ */
+const requestedState = new Set<string>();
+
+/** Writes the request half of the cache, waking the buttons like `setFollowState`. */
+export function setFollowRequested(userId: string, value: boolean): void {
+  if (requestedState.has(userId) === value) return;
+  if (value) requestedState.add(userId);
+  else requestedState.delete(userId);
+  notifyFollowState();
+}
+
+export function peekRequested(userId: string): boolean {
+  return requestedState.has(userId);
+}
+
 /** Called on sign-in/sign-out: one viewer's answers must not serve another. */
 export function clearFollowCache(): void {
+  followEpoch += 1;
   followState.clear();
+  requestedState.clear();
+  followingWalk = null;
   notifyFollowState();
 }
 
@@ -183,7 +208,9 @@ export async function follow(userId: string): Promise<FollowResponse> {
       method: "POST",
       auth: "required",
     });
-    setFollowState(userId, true);
+    // A private account only records a request: "Following" would be a lie.
+    setFollowState(userId, result.status === "FOLLOWING");
+    setFollowRequested(userId, result.status === "REQUESTED");
     return result;
   } catch (cause) {
     // `ALREADY_FOLLOWING` is the server saying it already agrees with where
@@ -192,10 +219,24 @@ export async function follow(userId: string): Promise<FollowResponse> {
     if (isApiError(cause) && cause.is("ALREADY_FOLLOWING")) {
       setFollowState(userId, true);
     }
+    if (isApiError(cause) && cause.is("ALREADY_REQUESTED")) {
+      setFollowRequested(userId, true);
+    }
     throw cause;
   }
 }
 
+/** The viewer's relationship to one account — exact, unlike `isFollowing`'s capped walk. */
+export async function getFriendship(userId: string): Promise<FriendshipResponse> {
+  const result = await apiFetch<FriendshipResponse>(`/users/${userId}/friendship`, {
+    auth: "required",
+  });
+  setFollowState(userId, result.following);
+  setFollowRequested(userId, result.requested);
+  return result;
+}
+
+/** Unfollows — or, to a private account still deciding, withdraws the request. */
 export async function unfollow(userId: string): Promise<void> {
   try {
     await apiFetch<void>(`/users/${userId}/follow`, {
@@ -203,9 +244,11 @@ export async function unfollow(userId: string): Promise<void> {
       auth: "required",
     });
     setFollowState(userId, false);
+    setFollowRequested(userId, false);
   } catch (cause) {
     if (isApiError(cause) && cause.is("NOT_FOLLOWING")) {
       setFollowState(userId, false);
+      setFollowRequested(userId, false);
     }
     throw cause;
   }
@@ -233,11 +276,14 @@ export function getFollowing(
   );
 }
 
-export function block(userId: string): Promise<void> {
-  return apiFetch<void>(`/users/${userId}/block`, {
+export async function block(userId: string): Promise<void> {
+  await apiFetch<void>(`/users/${userId}/block`, {
     method: "POST",
     auth: "required",
   });
+  // The server ends the follows both ways, a pending request included.
+  setFollowState(userId, false);
+  setFollowRequested(userId, false);
 }
 
 export function unblock(userId: string): Promise<void> {
@@ -273,6 +319,72 @@ export function getBlocked(
     auth: "required",
     query: { page, size },
   });
+}
+
+/**
+ * `GET /api/v1/users/me/follow-requests` — who is waiting on the viewer's
+ * approval, newest first. Only a private account collects any.
+ */
+export function getFollowRequests(
+  page = 0,
+  size = 20,
+): Promise<PageResponse<UserProfileResponse>> {
+  return apiFetch<PageResponse<UserProfileResponse>>("/users/me/follow-requests", {
+    auth: "required",
+    query: { page, size },
+  });
+}
+
+/** `POST …/follow-requests/{requesterId}/approve` — the requester now follows the viewer. */
+export function approveFollowRequest(requesterId: string): Promise<FollowResponse> {
+  return apiFetch<FollowResponse>(`/users/me/follow-requests/${requesterId}/approve`, {
+    method: "POST",
+    auth: "required",
+  });
+}
+
+/** `DELETE …/follow-requests/{requesterId}` — declined, and the requester is not told. */
+export function declineFollowRequest(requesterId: string): Promise<void> {
+  return apiFetch<void>(`/users/me/follow-requests/${requesterId}`, {
+    method: "DELETE",
+    auth: "required",
+  });
+}
+
+export function getMySettings(): Promise<UserSettingsResponse> {
+  return apiFetch<UserSettingsResponse>("/users/me/settings", {
+    auth: "required",
+  });
+}
+
+/**
+ * `PATCH /api/v1/users/me/settings` — only the keys the body carries change,
+ * and the answer is the whole settings object as it now stands.
+ *
+ * Not `PATCH /users/me`'s rules: `""` clears nothing here, and `null` is how
+ * the three screen-time fields are switched off. The type keeps `null` away
+ * from the three fields the server refuses it on.
+ *
+ * Replayed once on `CONCURRENT_MODIFICATION`, as the contract asks: two
+ * devices, or two first writes racing the row's insert. The body is the
+ * viewer's own intent, so it is sent again as is rather than re-derived.
+ */
+export async function updateMySettings(
+  patch: Partial<UserSettingsResponse>,
+): Promise<UserSettingsResponse> {
+  const send = () =>
+    apiFetch<UserSettingsResponse>("/users/me/settings", {
+      method: "PATCH",
+      body: patch,
+      auth: "required",
+    });
+
+  try {
+    return await send();
+  } catch (cause) {
+    if (isRetryable(cause)) return send();
+    throw cause;
+  }
 }
 
 export function getMuted(
@@ -353,18 +465,55 @@ async function collectIds(
 }
 
 /**
+ * The walk of the viewer's following list that `isFollowing` answers from,
+ * resolving to whether it read the list to its end. One per viewer per tab,
+ * shared by every caller: a feed of twenty cards by ten authors asks the
+ * question ten times at once, and ten parallel walks of the same list is the
+ * gateway's per-IP limit spent on identical requests.
+ */
+let followingWalk: { viewerId: string; complete: Promise<boolean> } | null = null;
+/** Bumped by `clearFollowCache`, so a walk still in flight knows its viewer is gone. */
+let followEpoch = 0;
+
+function walkFollowing(viewerId: string, maxPages: number): Promise<boolean> {
+  if (followingWalk?.viewerId === viewerId) return followingWalk.complete;
+
+  const epoch = followEpoch;
+  const complete = (async () => {
+    for (let page = 0; page < maxPages; page += 1) {
+      const result = await getFollowing(viewerId, page, 50);
+      // `clearFollowCache` (a sign-out, another account) dropped this walk while
+      // the page was in flight: its answers belong to the previous viewer.
+      if (epoch !== followEpoch) return false;
+      for (const profile of result.content) followState.set(profile.userId, true);
+      notifyFollowState();
+      if (isLastPage(result.page)) return true;
+    }
+    return false;
+  })();
+
+  const walk = { viewerId, complete };
+  followingWalk = walk;
+  // A failed walk is forgotten, so the next question tries again.
+  complete.catch(() => {
+    if (followingWalk === walk) followingWalk = null;
+  });
+  return complete;
+}
+
+/**
  * Whether the viewer follows `userId`.
  *
- * There is no `GET /users/{id}/relationship` endpoint and the profile response
- * carries no `isFollowing` flag, so the only way to answer the question the
- * Follow button asks is to walk the viewer's own following list. That costs up
+ * `getFriendship` answers this for one account, but there is no batch form of
+ * it, and a feed asks about every author on screen at once — one request each.
+ * So the cards answer from a walk of the viewer's own following list. That costs up
  * to `maxPages` requests against a gateway that allows 20 per second per IP —
  * and behind the Next proxy every viewer shares one IP — so the walk happens
- * at most once per account per tab:
+ * at most once per tab:
  *
  *  - `follow`/`unfollow` write the answer directly, so toggling never walks;
- *  - a walk seeds *every* profile it passes, not just the one asked about, so
- *    the second profile page usually costs nothing;
+ *  - the walk seeds *every* profile it passes, and is shared by every caller
+ *    asking while it runs or after it, so later questions cost nothing;
  *  - `false` is only remembered when the list was read to its end. Giving up
  *    at `maxPages` means the answer is a guess, and a guess must not be cached.
  */
@@ -376,18 +525,10 @@ export async function isFollowing(
   const known = followState.get(userId);
   if (known !== undefined) return known;
 
-  for (let page = 0; page < maxPages; page += 1) {
-    const result = await getFollowing(viewerId, page, 50);
-    for (const profile of result.content) followState.set(profile.userId, true);
-    notifyFollowState();
+  const complete = await walkFollowing(viewerId, maxPages);
+  const found = followState.get(userId);
+  if (found !== undefined) return found;
 
-    if (result.content.some((profile) => profile.userId === userId)) return true;
-
-    if (page + 1 >= result.page.totalPages) {
-      setFollowState(userId, false);
-      return false;
-    }
-  }
-
+  if (complete) setFollowState(userId, false);
   return false;
 }

@@ -3,9 +3,9 @@
 /**
  * Cloudflare Turnstile, loaded from its own CDN like the Google/Facebook SDKs
  * in `social.ts` — no npm package to install, vendor's only supported
- * distribution. Only ever mounted when the backend has already rejected a
- * request with `TURNSTILE_VERIFICATION_FAILED` (see auth-service
- * `OtpRateLimiter.requiresTurnstile`), so most viewers never load this script.
+ * distribution. Loaded once a form that mails a code is on screen, since
+ * auth-service gates every first send on it; a resend goes on a ticket
+ * instead (`CodeStep`).
  */
 
 const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "";
@@ -15,8 +15,15 @@ export function isTurnstileConfigured(): boolean {
   return SITE_KEY !== "";
 }
 
+/**
+ * `interaction-only` keeps the widget hidden unless Cloudflare actually needs
+ * the visitor to click — an auto-passed check never flashes on screen.
+ */
+export type TurnstileAppearance = "always" | "interaction-only";
+
 interface TurnstileRenderOptions {
   sitekey: string;
+  appearance?: TurnstileAppearance;
   callback: (token: string) => void;
   "error-callback"?: () => void;
   "expired-callback"?: () => void;
@@ -72,6 +79,7 @@ export async function renderTurnstile(
   container: HTMLElement,
   handlers: { onToken: (token: string) => void; onError?: () => void },
   isCancelled: () => boolean,
+  appearance: TurnstileAppearance = "always",
 ): Promise<string | undefined> {
   await loadScript(SDK_SRC);
   if (isCancelled()) return undefined;
@@ -80,6 +88,7 @@ export async function renderTurnstile(
   }
   return window.turnstile.render(container, {
     sitekey: SITE_KEY,
+    appearance,
     callback: handlers.onToken,
     "error-callback": handlers.onError,
     "expired-callback": handlers.onError,

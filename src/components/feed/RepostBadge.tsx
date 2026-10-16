@@ -40,15 +40,12 @@ export function RepostBadge({
   const [reposter, setReposter] = useState<Author | null>(null);
   const [removing, setRemoving] = useState(false);
 
-  // Mock videos have no backend id, so there is nothing to ask about.
-  const isBackendVideo = /^\d+$/.test(videoId);
-
   useEffect(() => {
-    if (!isBackendVideo || !viewerId) return;
+    if (!viewerId) return;
     setContext(getRepostContext(videoId));
     loadRepostContext(videoId);
     return subscribeRepostContext(() => setContext(getRepostContext(videoId)));
-  }, [videoId, viewerId, isBackendVideo]);
+  }, [videoId, viewerId]);
 
   useEffect(() => {
     if (!context || !viewerId) {

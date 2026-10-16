@@ -3,11 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
-import { isBackendHandle } from "@/lib/api/adapters";
 import { listSavedVideos, saveVideo, unsaveVideo } from "@/lib/api/interactions";
 
 interface SavedVideos {
   isSaved: (videoId: string) => boolean;
+  /**
+   * Whether it was a favourite when the list was first read. A card's save
+   * count is read at about that moment, so this is the save it already holds.
+   */
+  wasSaved: (videoId: string) => boolean;
   /** Optimistic, with a silent rollback on failure — same contract as the heart. */
   toggleSave: (videoId: string) => void;
 }
@@ -30,12 +34,16 @@ const PAGE_SIZE = 50;
  */
 export function useSavedVideos(): SavedVideos {
   const { user, requireSignIn } = useSession();
+  // Keyed on the id, not the object: `user` is rebuilt on every `/me` read and
+  // profile edit, and each rebuild re-read up to ten pages of favourites.
+  const viewerId = user?.userId;
   const [savedIds, setSavedIds] = useState<ReadonlySet<string>>(new Set());
+  const [loadedIds, setLoadedIds] = useState<ReadonlySet<string>>(new Set());
 
   // Signed out there is nothing to ask: every save endpoint needs a token, so
   // the bookmarks start empty and the tap opens the login modal.
   useEffect(() => {
-    if (!user) return;
+    if (!viewerId) return;
     let cancelled = false;
 
     (async () => {
@@ -48,7 +56,10 @@ export function useSavedVideos(): SavedVideos {
         if (!reply.hasMore || !reply.nextCursor) break;
         cursor = reply.nextCursor;
       }
-      if (!cancelled) setSavedIds(new Set(ids));
+      if (cancelled) return;
+      const loaded = new Set(ids);
+      setSavedIds(loaded);
+      setLoadedIds(loaded);
     })().catch(() => {
       // Unreadable list — the bookmarks just start empty.
     });
@@ -56,14 +67,19 @@ export function useSavedVideos(): SavedVideos {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [viewerId]);
 
   // Gated on the session rather than cleared on sign-out: emptying the set
   // inside the effect above is a second render for a value nothing reads while
   // signed out, and the next sign-in replaces it wholesale anyway.
   const isSaved = useCallback(
-    (videoId: string) => user !== null && savedIds.has(videoId),
-    [savedIds, user],
+    (videoId: string) => viewerId !== undefined && savedIds.has(videoId),
+    [savedIds, viewerId],
+  );
+
+  const wasSaved = useCallback(
+    (videoId: string) => viewerId !== undefined && loadedIds.has(videoId),
+    [loadedIds, viewerId],
   );
 
   const toggleSave = useCallback(
@@ -78,10 +94,6 @@ export function useSavedVideos(): SavedVideos {
         return updated;
       });
 
-      // Mock videos have no backend row to save; the icon still fills, which is
-      // what the cloned UI did before any of this was wired up.
-      if (!isBackendHandle(videoId)) return;
-
       (next ? saveVideo(videoId) : unsaveVideo(videoId)).catch(() => {
         setSavedIds((current) => {
           const updated = new Set(current);
@@ -94,5 +106,5 @@ export function useSavedVideos(): SavedVideos {
     [requireSignIn, savedIds],
   );
 
-  return { isSaved, toggleSave };
+  return { isSaved, wasSaved, toggleSave };
 }

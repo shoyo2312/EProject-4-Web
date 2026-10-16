@@ -3,7 +3,11 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { COMMENT_MAX_LENGTH, type ReplyTarget } from "@/components/feed/comments/types";
+import {
+  COMMENT_MAX_LENGTH,
+  type PostFailure,
+  type ReplyTarget,
+} from "@/components/feed/comments/types";
 import {
   ArrowPostIcon,
   AtIcon,
@@ -16,6 +20,7 @@ import { useDismiss } from "@/hooks/use-dismiss";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import type { UserProfileResponse } from "@/lib/api/types";
 import { getFollowing, searchUsers } from "@/lib/api/users";
+import { codePointLength } from "@/lib/code-points";
 import { COMPOSER_EMOJI_GROUPS } from "@/lib/comments/emoji-groups";
 import {
   MENTION_DEBOUNCE_MS,
@@ -51,7 +56,8 @@ export function CommentComposer({
   ref: React.RefObject<HTMLInputElement | null>;
   replyTo: ReplyTarget | null;
   onCancelReply: () => void;
-  onPost: (text: string) => void;
+  /** Resolves null once the post is through, or with why it was not. */
+  onPost: (text: string) => Promise<PostFailure | null>;
 }) {
   const [value, setValue] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
@@ -59,9 +65,15 @@ export function CommentComposer({
   const [mentionResults, setMentionResults] = useState<UserProfileResponse[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [limitHit, setLimitHit] = useState(false);
+  /** Seconds Post stays off after a rate limit — 0 when it is on. */
+  const [lockedFor, setLockedFor] = useState(0);
+  /** The last text the rules turned down; Post stays off while the box still holds it. */
+  const [refusedText, setRefusedText] = useState<string | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
-  const canPost = value.trim() !== "";
+  const refused = refusedText !== null && value.trim() === refusedText;
+  const canPost = value.trim() !== "" && lockedFor === 0 && !refused;
   const { user, openLogin } = useSession();
+  const viewerId = user?.userId;
   const mentionQuery = mention?.query ?? null;
   const mentionOpen = mention !== null && mentionResults.length > 0;
 
@@ -72,6 +84,12 @@ export function CommentComposer({
     const id = window.setTimeout(() => setLimitHit(false), 3500);
     return () => window.clearTimeout(id);
   }, [limitHit]);
+
+  useEffect(() => {
+    if (lockedFor === 0) return;
+    const id = window.setTimeout(() => setLockedFor(0), lockedFor * 1000);
+    return () => window.clearTimeout(id);
+  }, [lockedFor]);
 
   /* Any click outside the bar dismisses whichever tray is open. */
   const closeTrays = useCallback(() => {
@@ -86,16 +104,16 @@ export function CommentComposer({
    * every account. Both need a token, so a signed-out viewer never gets here.
    */
   useEffect(() => {
-    if (mentionQuery === null || !user) return;
+    if (mentionQuery === null || !viewerId) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
       const request = mentionQuery
         ? searchUsers(mentionQuery, MENTION_LIMIT, controller.signal)
-        : getFollowing(user.userId, 0, MENTION_LIMIT);
+        : getFollowing(viewerId, 0, MENTION_LIMIT);
       request
         .then((page) => {
           if (controller.signal.aborted) return;
-          setMentionResults(page.content.filter((p) => p.userId !== user.userId));
+          setMentionResults(page.content.filter((p) => p.userId !== viewerId));
           setMentionIndex(0);
         })
         .catch(() => {
@@ -107,7 +125,23 @@ export function CommentComposer({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [mentionQuery, user]);
+  }, [mentionQuery, viewerId]);
+
+  /*
+   * Every edit lands here — typed, pasted, an emoji or a mention. Past the cap
+   * it is refused whole and the hint says why. The cap is the server's, in code
+   * points, which an input's `maxLength` (UTF-16 units) cannot count.
+   */
+  const edit = (next: string) => {
+    const length = codePointLength(next);
+    if (length > COMMENT_MAX_LENGTH) {
+      setLimitHit(true);
+      return false;
+    }
+    setValue(next);
+    if (length < COMMENT_MAX_LENGTH) setLimitHit(false);
+    return true;
+  };
 
   /* Re-read the token on every keystroke and every caret move. */
   const syncMention = (nextValue: string, caret: number | null) => {
@@ -124,7 +158,7 @@ export function CommentComposer({
     const input = ref.current;
     const caret = input?.selectionStart ?? value.length;
     const handle = `@${mentionHandle(profile)} `;
-    setValue(value.slice(0, mention.start) + handle + value.slice(caret));
+    if (!edit(value.slice(0, mention.start) + handle + value.slice(caret))) return;
     const next = mention.start + handle.length;
     setMention(null);
     setMentionResults([]);
@@ -139,7 +173,7 @@ export function CommentComposer({
     const input = ref.current;
     const start = input?.selectionStart ?? value.length;
     const end = input?.selectionEnd ?? value.length;
-    setValue(value.slice(0, start) + text + value.slice(end));
+    if (!edit(value.slice(0, start) + text + value.slice(end))) return;
     const caret = start + text.length;
     requestAnimationFrame(() => {
       input?.focus();
@@ -147,10 +181,16 @@ export function CommentComposer({
     });
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!canPost) return;
-    onPost(value.trim());
+    const text = value.trim();
     setValue("");
+    const failure = await onPost(text);
+    if (!failure) return;
+    // A refused post is not lost — unless something new was typed meanwhile.
+    setValue((current) => current || text);
+    if (failure.retryAfter) setLockedFor(failure.retryAfter);
+    if (failure.refused) setRefusedText(text);
   };
 
   /*
@@ -217,6 +257,17 @@ export function CommentComposer({
         </div>
       )}
 
+      {/* Until the text changes — which is also when Post comes back. */}
+      {refused && (
+        <p
+          role="status"
+          className="mb-2 animate-[tt-comment-in_200ms_ease-out] rounded-[8px] bg-[var(--tt-field)] px-3 py-1.5 text-[13px] leading-[18px] text-[#f6708a]"
+        >
+          Edit your comment to post it. Repeated violations will stop you from
+          commenting for a while.
+        </p>
+      )}
+
       <div ref={barRef} className="relative flex items-center gap-2">
       <Image
         src={user.avatarUrl || DEFAULT_AVATAR}
@@ -240,30 +291,14 @@ export function CommentComposer({
         <input
           ref={ref}
           value={value}
-          maxLength={COMMENT_MAX_LENGTH}
           onChange={(event) => {
-            setValue(event.target.value);
+            if (!edit(event.target.value)) return;
             syncMention(event.target.value, event.target.selectionStart);
-            if (event.target.value.length < COMMENT_MAX_LENGTH) setLimitHit(false);
           }}
           onSelect={(event) =>
             syncMention(event.currentTarget.value, event.currentTarget.selectionStart)
           }
           onKeyDown={(event) => {
-            /* At the cap, a printable keystroke with no selection to replace is
-               silently dropped by `maxLength` — surface it as a small hint. */
-            const el = event.currentTarget;
-            if (
-              el.value.length >= COMMENT_MAX_LENGTH &&
-              el.selectionStart === el.selectionEnd &&
-              event.key.length === 1 &&
-              !event.ctrlKey &&
-              !event.metaKey &&
-              !event.altKey
-            ) {
-              setLimitHit(true);
-            }
-
             /* While the mention list is up it owns the arrows and Enter. */
             if (mentionOpen) {
               if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -282,7 +317,7 @@ export function CommentComposer({
                 return;
               }
             }
-            if (event.key === "Enter") submit();
+            if (event.key === "Enter") void submit();
             if (event.key === "Escape") {
               if (emojiOpen) setEmojiOpen(false);
               else if (replyTo) onCancelReply();
@@ -388,7 +423,7 @@ export function CommentComposer({
 
       <button
         type="button"
-        onClick={submit}
+        onClick={() => void submit()}
         disabled={!canPost}
         aria-label={replyTo ? "Post reply" : "Post comment"}
         className={cn(

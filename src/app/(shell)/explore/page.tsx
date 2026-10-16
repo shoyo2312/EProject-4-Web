@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { ExploreGrid } from "@/components/explore/ExploreGrid";
-import { getExploreCategories } from "@/lib/data";
+import { EXPLORE_CATEGORIES } from "@/lib/site-config";
 
 export const metadata: Metadata = {
   title: "Explore - Find your favourite videos on Nowa",
@@ -13,12 +13,9 @@ export const metadata: Metadata = {
  * "Explore" — the category-browsable grid. The sidebar, top bar and page chrome
  * come from `app/layout.tsx`; this route only owns the content column.
  *
- * `categories` is the only server-fetched piece: it is a fixed UI taxonomy,
- * not video data (video-service has no category concept — see
- * `useExploreFeed`). The tiles themselves are fetched client-side.
+ * `categories` is a fixed UI taxonomy, not video data (video-service has no
+ * category concept — see `useExploreFeed`). The tiles are fetched client-side.
  */
-export default async function ExplorePage() {
-  const categories = await getExploreCategories();
-
-  return <ExploreGrid categories={categories} />;
+export default function ExplorePage() {
+  return <ExploreGrid categories={EXPLORE_CATEGORIES} />;
 }

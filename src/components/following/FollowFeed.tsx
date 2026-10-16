@@ -29,6 +29,14 @@ export function FollowFeed({
   source?: FollowFeedSource;
 }) {
   const { user } = useSession();
+  // The feed's ids, cursor and cards are one account's; the sidebar keeps this
+  // page mounted across a sign-out or an account switch, so a new viewer starts
+  // a new instance instead of paging on from the last one's.
+  return <ViewerFollowFeed key={user?.userId ?? "guest"} source={source} />;
+}
+
+function ViewerFollowFeed({ source }: { source: FollowFeedSource }) {
+  const { user } = useSession();
   const { videos, isLoading, error, loadMore, followedIds } =
     useFollowFeed(source);
 
@@ -43,7 +51,7 @@ export function FollowFeed({
     return (
       <div className="relative flex-1">
         <div className="absolute inset-x-0 top-0 z-20 bg-[var(--tt-red-active)]/90 px-4 py-2 text-center text-[13px] leading-5 text-white">
-          Can’t reach the API gateway on :8080 — showing creators to follow.
+          Can’t connect right now — showing creators to follow.
         </div>
         <SuggestedCreators exclude={exclude} />
       </div>
@@ -54,13 +62,5 @@ export function FollowFeed({
     return <SuggestedCreators exclude={exclude} />;
   }
 
-  return (
-    <Feed
-      videos={videos}
-      // `CommentPanel` fetches real comments itself for these (numeric) ids —
-      // same as the For You feed, this map serves nothing here.
-      comments={{}}
-      onReachEnd={loadMore}
-    />
-  );
+  return <Feed videos={videos} onReachEnd={loadMore} />;
 }

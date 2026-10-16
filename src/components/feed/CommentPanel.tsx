@@ -1,49 +1,37 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { CommentComposer } from "@/components/feed/comments/CommentComposer";
 import { CommentItem } from "@/components/feed/comments/CommentItem";
+import { HeldComments } from "@/components/feed/comments/HeldComments";
 import {
   CommentListSkeleton,
-  CommentsOff,
+  CommentLockNotice,
+  CommentsLocked,
   NoCommentsYet,
 } from "@/components/feed/comments/CommentStates";
-import type {
-  CommentRealtimeFrame,
-  ReplyTarget,
-} from "@/components/feed/comments/types";
+import type { PostFailure, ReplyTarget } from "@/components/feed/comments/types";
+import { useCommentThread } from "@/components/feed/comments/use-comment-thread";
 import { CloseIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
-import { useCommentRealtime } from "@/hooks/use-comment-realtime";
-import { isBackendHandle } from "@/lib/api/adapters";
-import { getAccessToken } from "@/lib/api/tokens";
-import { resolveAuthor } from "@/lib/api/authors";
+import { useCommentRestriction } from "@/hooks/use-comment-restriction";
+import { isApiError, messageFor, retryAt } from "@/lib/api/errors";
 import {
   COMMENT_FIRST_PAGE_SIZE,
   addComment,
   deleteComment as deleteCommentApi,
-  listComments,
 } from "@/lib/api/interactions";
+import { invalidateCommentPage } from "@/lib/comment-cache";
+import { commentLockMessage } from "@/lib/comments/restriction";
 import {
-  type CommentPage,
-  invalidateCommentPage,
-  loadFirstCommentPage,
-  peekCommentPage,
-  toUiComments,
-} from "@/lib/comment-cache";
-import {
-  type PendingReply,
   addReply,
   hasCommentId,
-  mergeComments,
   remapCommentId,
   removeCommentById,
-  setCommentLikes,
 } from "@/lib/comments/tree";
-import { formatCount, formatRelativeTime } from "@/lib/format";
-import { CURRENT_USER } from "@/lib/mock-feed";
+import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Comment } from "@/types/tiktok";
 
@@ -74,7 +62,6 @@ import type { Comment } from "@/types/tiktok";
 export function CommentPanel({
   videoId,
   videoOwnerId,
-  comments: initialComments,
   commentCount,
   commentsDisabled = false,
   onClose,
@@ -82,16 +69,12 @@ export function CommentPanel({
   onCommentDeleted,
   variant = "sidebar",
 }: {
-  /** Backend id (numeric) fetches real comments; a mock id keeps `comments` as-is. */
   videoId: string;
   /**
    * The video's uploader — interaction-service lets them delete any comment on their own video,
-   * not only their own, so the "⋯" menu offers Delete there too. Absent for mock videos, whose
-   * comments carry no `userId` to match against anyway.
+   * not only their own, so the "⋯" menu offers Delete there too.
    */
   videoOwnerId?: string;
-  /** This video's comments as loaded by the page — used only for mock ids. */
-  comments: Comment[];
   /** Total shown in the header — the loaded count plus anything posted here. */
   commentCount: number;
   /**
@@ -112,154 +95,27 @@ export function CommentPanel({
   variant?: "sidebar" | "detail";
 }) {
   const isDetail = variant === "detail";
-  const isBackend = isBackendHandle(videoId);
   const { user } = useSession();
-  // Same pattern as `Feed.tsx`'s `wsToken`: read during render so a token
-  // change (login, or a rotation that happens to land on a re-render) is a
-  // dependency `useCommentRealtime` can react to — reading it
-  // only inside that effect would close over whatever `getStompClient` built
-  // at mount and never notice a later swap.
-  const token = user ? getAccessToken() : null;
-  /**
-   * The panel is keyed by video id, so every pass over a video in the feed
-   * remounts it. Seeding from the cache — synchronously, during the first
-   * render — is what makes a revisit paint its comments instead of a skeleton.
-   */
-  const cached: CommentPage | undefined = isBackend
-    ? peekCommentPage(videoId)
-    : undefined;
-  const [comments, setComments] = useState<Comment[]>(() =>
-    cached ? mergeComments([], cached.entries, []) : isBackend ? [] : initialComments,
+  const isOwner = Boolean(user) && user?.userId === videoOwnerId;
+  // The video carries both switches — its own and an account open to no one.
+  // Friends-only depends on who is asking, and a restriction for repeated
+  // violations follows the viewer everywhere, the owner's own videos included,
+  // so both are asked for.
+  const { restriction, restrictedUntil, restrict } = useCommentRestriction(
+    videoId,
+    commentsDisabled ? null : (user?.userId ?? null),
   );
+  /** Set when the viewer may read this thread but not add to it. */
+  const lockMessage = commentLockMessage(commentsDisabled, restriction, restrictedUntil);
+  const { comments, setComments, loading, hasMore, loadingMore, loadMore, appendReplies } =
+    useCommentThread({ videoId, commentsDisabled });
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   /** Newest locally-posted comment — drives the slide-in and the auto-expand. */
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(isBackend && !cached);
-  const [cursor, setCursor] = useState<string | null>(cached?.cursor ?? null);
-  const [hasMore, setHasMore] = useState(cached?.hasMore ?? false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const composerRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   /** Scrolled into view at the foot of the list — fetches the next page. */
   const sentinelRef = useRef<HTMLButtonElement>(null);
-  /** Replies whose parent lands on a later page — held across `loadMore` calls until it arrives. */
-  const pendingRepliesRef = useRef<PendingReply[]>([]);
-
-  // Real comments load once per video; the mock path keeps the prop as its
-  // whole state, unchanged from before this was wired up.
-  useEffect(() => {
-    // Comments off: the backend returns an empty list, so there is nothing to fetch.
-    if (!isBackend || commentsDisabled) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-    // The cached page seeds the paint; opening the panel always refetches.
-    // The cache lives for the whole tab and only drops on a mutation this tab
-    // saw, so a video whose comments were read while it had none — then opened
-    // again from a notification about a comment somebody else just left —
-    // otherwise kept painting the empty list until a full reload, under a
-    // header count that came fresh from video-service and said 1.
-    setLoading(!peekCommentPage(videoId));
-    pendingRepliesRef.current = [];
-
-    loadFirstCommentPage(videoId, true)
-      .then((page) => {
-        if (cancelled) return;
-        setComments(mergeComments([], page.entries, pendingRepliesRef.current));
-        setCursor(page.cursor);
-        setHasMore(page.hasMore);
-      })
-      .catch(() => {
-        // Leave the list empty — the header count still comes from video-service.
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [videoId, isBackend, commentsDisabled]);
-
-  /**
-   * Folds one realtime frame into the list. Whatever the frame says, this
-   * video's cached first page is now stale.
-   */
-  const applyRealtimeFrame = useCallback(
-    (frame: CommentRealtimeFrame) => {
-      invalidateCommentPage(videoId);
-      if (frame.type === "comment.liked") {
-        if (frame.likeCount === undefined) return;
-        setComments((current) =>
-          setCommentLikes(current, frame.commentId, frame.likeCount as number),
-        );
-        return;
-      }
-      if (frame.type === "comment.deleted") {
-        setComments((current) => removeCommentById(current, frame.commentId));
-        return;
-      }
-      // Deduped by id, not by "is this my own comment": the same viewer can
-      // have this panel open on two devices (or two tabs), and a userId guard
-      // dropped the frame in *every* one of them, not just the tab that
-      // posted — see `postBackendComment`, which resolves the matching race
-      // in the other direction by yielding to whichever of the frame or the
-      // HTTP response lands first.
-      Promise.all([
-        resolveAuthor(frame.userId ?? ""),
-        frame.replyToUserId ? resolveAuthor(frame.replyToUserId) : Promise.resolve(null),
-      ])
-        .then(([author, replyToAuthor]) => {
-          setComments((current) => {
-            // Checks replies too: a reply already attached is not a top-level
-            // absence, and re-inserting it would show the same row twice.
-            if (hasCommentId(current, frame.commentId)) return current;
-            const ui: Comment = {
-              id: frame.commentId,
-              author,
-              text: frame.content ?? "",
-              timestamp: formatRelativeTime(frame.createdAt ?? new Date().toISOString()),
-              likes: 0,
-              replyToName: replyToAuthor?.nickname,
-            };
-            if (!frame.parentId) return [ui, ...current];
-            // Parent not on a loaded page yet — same holding pen `loadMore`
-            // uses, so it attaches as soon as its page arrives.
-            if (!current.some((comment) => comment.id === frame.parentId)) {
-              pendingRepliesRef.current.push({ ui, parentId: frame.parentId });
-              return current;
-            }
-            return addReply(current, frame.parentId, ui);
-          });
-          // No count bump here: the counts frame carries the authoritative
-          // comment total. Counting the row *and* the poster's optimistic
-          // bump made every comment worth +2 on the device that wrote it.
-        })
-        .catch(() => {
-          // Author lookup failed — skip rather than show a comment with no author.
-        });
-    },
-    [videoId],
-  );
-
-  useCommentRealtime(videoId, isBackend ? token : null, applyRealtimeFrame);
-
-  const loadMore = useCallback(async () => {
-    if (!cursor || loadingMore) return;
-    setLoadingMore(true);
-    try {
-      const page = await listComments(videoId, cursor);
-      const entries = await toUiComments(page.items);
-      setComments((current) => mergeComments(current, entries, pendingRepliesRef.current));
-      setCursor(page.nextCursor);
-      setHasMore(page.hasMore);
-    } catch {
-      // Stay put — the button is still there to retry.
-    } finally {
-      setLoadingMore(false);
-    }
-  }, [videoId, cursor, loadingMore]);
 
   /**
    * Infinite scroll. The sentinel *is* the "Load more" button rather than an
@@ -281,37 +137,16 @@ export function CommentPanel({
     return () => observer.disconnect();
   }, [hasMore, loadMore]);
 
-  /**
-   * One fetched page of a thread, folded in under its parent.
-   *
-   * ponytail: appended, so a reply posted locally before the thread was opened
-   * sits above the older server replies that arrive after it. Sorting by
-   * snowflake id would fix it, and the optimistic `pending-*` ids do not have
-   * one — not worth it for the one row the poster already knows they wrote.
-   */
-  const appendReplies = useCallback((parentId: string, entries: Comment[]) => {
-    setComments((current) =>
-      current.map((comment) => {
-        if (comment.id !== parentId) return comment;
-        const known = new Set((comment.replies ?? []).map((reply) => reply.id));
-        return {
-          ...comment,
-          replies: [
-            ...(comment.replies ?? []),
-            ...entries.filter((entry) => !known.has(entry.id)),
-          ],
-        };
-      }),
-    );
-  }, []);
-
   const startReply = (target: ReplyTarget) => {
     setReplyTo(target);
     composerRef.current?.focus();
   };
 
-  const postBackendComment = async (text: string, target: ReplyTarget | null) => {
-    if (!user) return;
+  const postBackendComment = async (
+    text: string,
+    target: ReplyTarget | null,
+  ): Promise<PostFailure | null> => {
+    if (!user) return null;
     invalidateCommentPage(videoId);
     const optimistic: Comment = {
       id: `pending-${Date.now()}`,
@@ -334,55 +169,50 @@ export function CommentPanel({
         text,
         target?.replyToCommentId ?? target?.parentId,
       );
+      if (saved.status === "HELD") {
+        // Waiting on the owner: in no listing and no count, and no frame follows.
+        setComments((current) => removeCommentById(current, optimistic.id));
+        onCommentDeleted();
+        toast.success("Your comment will appear once the creator approves it.");
+        return null;
+      }
       setComments((current) =>
         // The realtime frame for this same comment can land before this HTTP
         // response does — it is a broadcast to every device, including this
         // one, and nothing about it waits for this request to finish. When
         // that happens `saved.commentId` is already in the list (inserted by
-        // `applyRealtimeFrame`), so remapping would leave two rows with
-        // the same id; drop the placeholder and keep the one already there
-        // instead.
+        // `useCommentThread`'s `applyRealtimeFrame`), so remapping would leave
+        // two rows with the same id; drop the placeholder and keep the one
+        // already there instead.
         hasCommentId(current, saved.commentId)
           ? removeCommentById(current, optimistic.id)
           : remapCommentId(current, optimistic.id, saved.commentId),
       );
-    } catch {
-      // Roll back both the optimistic row and the count bump, and say so —
+      return null;
+    } catch (cause) {
+      // Roll back both the optimistic row and the count bump, and say why —
       // unlike a like, a lost comment leaves no visible trace to explain it.
       setComments((current) => removeCommentById(current, optimistic.id));
       onCommentDeleted();
-      toast.error("Couldn’t post your comment. Please try again.");
+      // The composer puts the text back; the thread it was aimed at goes with it.
+      setReplyTo((current) => current ?? target);
+      toast.error(messageFor(cause, "Couldn’t post your comment. Please try again."));
+      // Restricted, the box gives way to when it opens again.
+      const until =
+        isApiError(cause) && cause.is("COMMENTING_RESTRICTED") ? retryAt(cause) : null;
+      if (until) restrict(until.getTime());
+      // Only the rate limit closes the box: a duplicate refuses this text, not the next.
+      return {
+        retryAfter:
+          isApiError(cause) && cause.is("COMMENT_RATE_LIMITED") ? cause.retryAfter : null,
+        refused: isApiError(cause) && cause.is("COMMENT_REJECTED"),
+      };
     }
   };
 
   const post = (text: string) => {
-    // A real video persists both a top-level comment and a reply through
-    // interaction-service; the mock path keeps everything local.
-    if (isBackend) {
-      void postBackendComment(text, replyTo);
-      setReplyTo(null);
-      return;
-    }
-
-    const entry: Comment = {
-      id: `local-${Date.now()}`,
-      author: user ?? CURRENT_USER,
-      text,
-      timestamp: "now",
-      likes: 0,
-      replyToName: replyTo?.replyToName,
-    };
-
-    setComments((current) =>
-      replyTo
-        ? addReply(current, replyTo.parentId, entry)
-        : // A brand new top-level comment lands at the top of the list.
-          [entry, ...current],
-    );
-    setJustAddedId(entry.id);
-    if (!replyTo) listRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     setReplyTo(null);
-    onCommentAdded();
+    return postBackendComment(text, replyTo);
   };
 
   const deleteOwnComment = async (id: string) => {
@@ -390,10 +220,6 @@ export function CommentPanel({
     const previous = comments;
     setComments((current) => removeCommentById(current, id));
     onCommentDeleted();
-    if (!isBackend) {
-      toast.success("Comment deleted.");
-      return;
-    }
     try {
       await deleteCommentApi(videoId, id);
       toast.success("Comment deleted.");
@@ -446,16 +272,20 @@ export function CommentPanel({
         ref={listRef}
         className="no-scrollbar flex-1 overflow-y-scroll [overscroll-behavior:contain]"
       >
+        {/* Even with comments off: what waited before the switch is still the
+            owner's to approve or delete, and nowhere else shows it. */}
+        {isOwner && <HeldComments videoId={videoId} onApproved={onCommentAdded} />}
+
         {/* A video whose count is 0 has nothing to wait for: skip the skeleton
             and show the empty state at once, rather than flashing placeholder
             rows that resolve to nothing. */}
         {comments.length === 0 &&
-          (commentsDisabled ? (
-            <CommentsOff />
-          ) : loading && commentCount > 0 ? (
+          (loading && commentCount > 0 && !commentsDisabled ? (
             <CommentListSkeleton
               count={Math.min(commentCount, COMMENT_FIRST_PAGE_SIZE)}
             />
+          ) : lockMessage ? (
+            <CommentsLocked message={lockMessage} />
           ) : (
             <NoCommentsYet />
           ))}
@@ -465,11 +295,10 @@ export function CommentPanel({
             key={comment.id}
             comment={comment}
             videoId={videoId}
-            isBackend={isBackend}
-            onReply={startReply}
+            onReply={lockMessage ? undefined : startReply}
             justAddedId={justAddedId}
             currentUserId={user?.userId}
-            canModerate={Boolean(user) && user?.userId === videoOwnerId}
+            canModerate={isOwner}
             onDelete={deleteOwnComment}
             onRepliesLoaded={appendReplies}
           />
@@ -488,13 +317,16 @@ export function CommentPanel({
         )}
       </div>
 
-      {!commentsDisabled && (
+      {/* An empty locked thread already says why in the middle of the list. */}
+      {!lockMessage ? (
         <CommentComposer
           ref={composerRef}
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(null)}
           onPost={post}
         />
+      ) : (
+        comments.length > 0 && <CommentLockNotice message={lockMessage} />
       )}
     </section>
   );

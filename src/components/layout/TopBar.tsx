@@ -36,19 +36,12 @@ export function TopBar() {
     return () => observer.disconnect();
   }, []);
 
-  // `/login` and `/signup` are the only routes with chrome of their own: the
-  // live pages drop the sidebar and this bar for a header holding just the
-  // logo and a help link. Nothing else on the site does, so the exception is
-  // a check here rather than a second root layout.
-  if (pathname.startsWith("/login") || pathname.startsWith("/signup")) {
-    return null;
-  }
-
   // The single-video view carries the owner's own controls (Follow, or Delete /
   // Private for your own upload) in its right column, so the floating avatar bar
   // is redundant there and is hidden — matching the request to drop this chrome
-  // on `/video/{id}`.
-  if (pathname.startsWith("/video/")) {
+  // on `/video/{id}`. Settings is the same: the page has its own back button
+  // and the avatar would float over the panel's top-right corner.
+  if (pathname.startsWith("/video/") || pathname === "/setting") {
     return null;
   }
 
@@ -102,12 +95,13 @@ export function TopBar() {
 /**
  * The avatar, and the menu behind it.
  *
- * Logging out is a real request, not a local reset: `POST /auth/logout`
+ * "Log out" asks first, in the live site's confirm modal. Logging out is a
+ * real request, not a local reset: `POST /auth/logout`
  * blacklists the access token server-side, so a token that leaked before the
  * click stops working immediately instead of living out its 15 minutes.
  */
 function AccountMenu() {
-  const { user, signOut } = useSession();
+  const { user, confirmSignOut } = useSession();
   const [open, setOpen] = useState(false);
 
   if (!user) return null;
@@ -124,6 +118,7 @@ function AccountMenu() {
         <img
           src={user.avatarUrl}
           alt="Your profile"
+          referrerPolicy="no-referrer"
           width={32}
           height={32}
           className="h-8 w-8 rounded-full object-cover"
@@ -163,7 +158,7 @@ function AccountMenu() {
               role="menuitem"
               onClick={() => {
                 setOpen(false);
-                signOut();
+                confirmSignOut();
               }}
               className="block w-full px-4 py-2 text-left text-[15px] text-[var(--tt-text)] hover:bg-white/10"
             >

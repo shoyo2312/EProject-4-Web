@@ -3,10 +3,10 @@
 import { useCallback, useState } from "react";
 
 /**
- * A Cloudflare Turnstile token for a form that always requires one now — every
- * OTP-issuing call (register, addEmail, resendVerification, forgotPassword) is
- * gated on the backend, not just suspicious ones (see auth-service
- * `TurnstileService.verify`).
+ * A Cloudflare Turnstile token for a form that always requires one — the first
+ * send of a code (startSignup, addEmail, resendVerification, forgotPassword) is
+ * gated on the backend, not just suspicious ones, and only a resend can go on
+ * a ticket instead (see auth-service `OtpSendGate`).
  *
  * A solved token is single-use and expires ~5 minutes after solving, so it has
  * to be thrown away after every submit attempt — success or failure — and a

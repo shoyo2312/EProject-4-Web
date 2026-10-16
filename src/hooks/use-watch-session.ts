@@ -108,9 +108,9 @@ export function useWatchSession({
 
     sent.current = true;
     // Deliberately not awaited and errors dropped: this is telemetry leaving on
-    // the way out, and there is no one left to tell. It is also why a tab closed
-    // mid-request loses the row — `sendBeacon` cannot carry the bearer header,
-    // so the trade is a lost sample against sending the token in a query string.
+    // the way out, and there is no one left to tell. `recordWatch` sends it with
+    // `keepalive`, which, unlike `sendBeacon`, carries the bearer header and
+    // survives the tab closing.
     void recordWatch(id, watchedMs.current, seconds * 1000).catch(() => undefined);
   }, []);
 

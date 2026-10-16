@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import {
@@ -8,13 +8,14 @@ import {
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  referencesUser,
   type NotificationResponse,
   type NotificationType,
 } from "@/lib/api/notifications";
-import { getAccessToken } from "@/lib/api/tokens";
 import { getProfiles, MAX_PROFILE_BATCH } from "@/lib/api/users";
 import { getVideosByIds } from "@/lib/api/videos";
 import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
+import { showBrowserNotification } from "@/lib/settings/browser-notifications";
 import {
   useNotificationRealtime,
   type NotificationFrame,
@@ -27,9 +28,9 @@ import {
  */
 export const NOTIFICATION_FILTERS = [
   { label: "All activity", types: null },
-  { label: "Likes", types: ["LIKE"] },
+  { label: "Likes", types: ["LIKE", "COMMENT_LIKE"] },
   { label: "Comments", types: ["COMMENT"] },
-  { label: "Followers", types: ["NEW_FOLLOWER"] },
+  { label: "Followers", types: ["NEW_FOLLOWER", "FOLLOW_REQUEST", "FOLLOW_REQUEST_ACCEPTED"] },
 ] as const satisfies readonly {
   label: string;
   types: readonly NotificationType[] | null;
@@ -112,8 +113,8 @@ export interface NotificationInbox {
   /** Actor avatar/username, keyed by `NotificationResponse.actorId`. Fills in as resolved. */
   actors: Map<string, UserProfileResponse>;
   /**
-   * The referenced video, keyed by `NotificationResponse.referenceId`, for LIKE/COMMENT/SHARE
-   * only — NEW_FOLLOWER's `referenceId` is a userId, not a videoId, and SYSTEM has none.
+   * The referenced video, keyed by `NotificationResponse.referenceId`, for every type
+   * except the follow ones (their `referenceId` is a userId) and SYSTEM (it has none).
    */
   videos: Map<string, VideoResponse>;
   markRead: (notificationId: string) => void;
@@ -135,7 +136,9 @@ export interface NotificationInbox {
  */
 export function useNotifications(): NotificationInbox {
   const { user } = useSession();
-  const token = user ? getAccessToken() : null;
+  // The inbox belongs to an account, not to a render of it: keyed on `user`,
+  // every `/me` read and profile edit refetched it.
+  const viewerId = user?.userId;
   const [items, setItems] = useState<NotificationResponse[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -146,12 +149,28 @@ export function useNotifications(): NotificationInbox {
     () => new Map(),
   );
 
+  // The sidebar never unmounts, so switching accounts keeps this hook alive.
+  // Cleared during render, as `useLikeStatuses` does, so no frame shows the
+  // previous account's inbox — or keeps it for good if the new fetch fails.
+  const [inboxViewerId, setInboxViewerId] = useState(viewerId);
+  if (inboxViewerId !== viewerId) {
+    setInboxViewerId(viewerId);
+    setItems([]);
+    setUnreadCount(0);
+    setLoaded(false);
+  }
+
+  /** Ids already counted in `unreadCount`, so a relayed copy is not counted twice. */
+  const countedIds = useRef(new Set<string>());
+
   useEffect(() => {
-    if (!user) return;
+    countedIds.current = new Set();
+    if (!viewerId) return;
     let cancelled = false;
     Promise.all([listNotifications(), getUnreadCount()])
       .then(([inbox, unread]) => {
         if (cancelled) return;
+        for (const item of inbox) countedIds.current.add(item.id);
         setItems(inbox);
         setUnreadCount(unread);
       })
@@ -167,7 +186,7 @@ export function useNotifications(): NotificationInbox {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [viewerId]);
 
   // Batch-resolve whichever actors the current list names that a prior batch
   // has not already answered. Runs after every items change rather than only
@@ -212,13 +231,14 @@ export function useNotifications(): NotificationInbox {
   }, [unresolvedActorIds]);
 
   // Same batching as actors above, keyed by referenceId instead of actorId —
-  // only LIKE/COMMENT/SHARE name a video at all.
+  // The follow types and SYSTEM are the only ones that do not name a video.
   const unresolvedVideoIds = useMemo(() => {
     const ids = new Set<string>();
     for (const item of items) {
       if (
         item.referenceId &&
-        (item.type === "LIKE" || item.type === "COMMENT" || item.type === "SHARE") &&
+        !referencesUser(item.type) &&
+        item.type !== "SYSTEM" &&
         !videos.has(item.referenceId)
       ) {
         ids.add(item.referenceId);
@@ -252,7 +272,7 @@ export function useNotifications(): NotificationInbox {
   }, [unresolvedVideoIds]);
 
   useNotificationRealtime(
-    token,
+    user !== null,
     useCallback((frame: NotificationFrame) => {
       setItems((current) =>
         // A frame can arrive for an entry the REST list already carried, when a
@@ -261,7 +281,23 @@ export function useNotifications(): NotificationInbox {
           ? current
           : [fromFrame(frame), ...current],
       );
-      setUnreadCount((count) => count + 1);
+      if (!countedIds.current.has(frame.notificationId)) {
+        countedIds.current.add(frame.notificationId);
+        setUnreadCount((count) => count + 1);
+      }
+
+      // Gated inside — on the viewer's switch, the browser permission and
+      // whether this tab is even hidden. Called for every frame rather than
+      // only the ones the list kept: whether this id is already in `items` can
+      // only be answered inside the updater above, and a flag set there is
+      // still false on this line (see `markRead`). The duplicate is harmless —
+      // the notification carries the id as its `tag`, so a second one for the
+      // same entry replaces the first instead of alerting twice.
+      showBrowserNotification({
+        id: frame.notificationId,
+        title: frame.title,
+        body: frame.body,
+      });
     }, []),
   );
 

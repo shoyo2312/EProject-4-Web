@@ -1,7 +1,7 @@
 "use client";
 
 import { apiFetch } from "@/lib/api/client";
-import type { FeedItemResponse } from "@/lib/api/types";
+import type { FeedItemResponse, TrendingVideoResponse } from "@/lib/api/types";
 
 /**
  * recommendation-service. The personalized feed needs a token — the ranking is
@@ -27,6 +27,22 @@ export function getPersonalizedFeed(
 ): Promise<FeedItemResponse[]> {
   return apiFetch<FeedItemResponse[]>("/recommendations/feed", {
     auth: "required",
+    query: { limit },
+    signal,
+  });
+}
+
+/**
+ * `GET /api/v1/recommendations/trending`. The chart is the same for everyone,
+ * so it is read without a token, signed out included. Ids in rank order —
+ * hydrate with `getVideosByIds`. The server clamps `limit` to 1..100.
+ */
+export function getTrending(
+  limit = 20,
+  signal?: AbortSignal,
+): Promise<TrendingVideoResponse[]> {
+  return apiFetch<TrendingVideoResponse[]>("/recommendations/trending", {
+    auth: "none",
     query: { limit },
     signal,
   });

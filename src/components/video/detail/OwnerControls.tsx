@@ -32,11 +32,14 @@ export function OwnerControls({
   initialVisibility,
   initialCommentsDisabled,
   onDeleted,
+  onCommentsSwitchChange,
 }: {
   videoId: string;
   initialVisibility?: VideoVisibility;
   initialCommentsDisabled?: boolean;
   onDeleted: () => void;
+  /** The comment panel beside the video has to close or reopen its composer too. */
+  onCommentsSwitchChange?: (off: boolean) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [dialog, setDialog] = useState<null | "privacy" | "delete">(null);
@@ -70,9 +73,10 @@ export function OwnerControls({
     }
     if (draftCommentsOff !== commentsOff) {
       jobs.push(
-        updateVideoCommentsSetting(videoId, draftCommentsOff).then(() =>
-          setCommentsOff(draftCommentsOff),
-        ),
+        updateVideoCommentsSetting(videoId, draftCommentsOff).then(() => {
+          setCommentsOff(draftCommentsOff);
+          onCommentsSwitchChange?.(draftCommentsOff);
+        }),
       );
     }
     if (jobs.length === 0) {

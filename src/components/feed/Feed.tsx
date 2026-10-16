@@ -2,21 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ActionRail } from "@/components/feed/ActionRail";
 import { CommentPanel } from "@/components/feed/CommentPanel";
-import { VideoCard } from "@/components/feed/VideoCard";
+import { FeedNavArrows } from "@/components/feed/list/FeedNavArrows";
+import { FeedVideoCard } from "@/components/feed/list/FeedVideoCard";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
-import { useLikeDebounce } from "@/hooks/use-like-debounce";
-import { useVideoRealtime, withLikeCount, type VideoFrame } from "@/hooks/use-video-realtime";
-import { isBackendHandle } from "@/lib/api/adapters";
+import { useHotkeys } from "@/hooks/use-hotkeys";
+import { useLikeStatuses } from "@/hooks/use-like-statuses";
+import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
+import { isApiError } from "@/lib/api/errors";
 import { useSavedVideos } from "@/hooks/use-saved-videos";
-import { getLikeStatuses, likeVideo, unlikeVideo } from "@/lib/api/interactions";
-import { getAccessToken } from "@/lib/api/tokens";
 import { getVideo } from "@/lib/api/videos";
 import { loadFirstCommentPage } from "@/lib/comment-cache";
 import { cn } from "@/lib/utils";
-import type { Comment, FeedVideo } from "@/types/tiktok";
+import type { FeedVideo } from "@/types/tiktok";
 
 /** Matches the wrapper's `transition-duration: 300ms` on the live site. */
 const SIDEBAR_TRANSITION_MS = 300;
@@ -41,12 +40,9 @@ const SIDEBAR_TRANSITION_MS = 300;
  */
 export function Feed({
   videos,
-  comments,
   onReachEnd,
 }: {
   videos: FeedVideo[];
-  /** Comments keyed by video id — the panel reads its own list out of this. */
-  comments: Record<string, Comment[]>;
   /**
    * Fired when the viewer is within a couple of cards of the end, so a paged
    * feed can fetch the next page. Absent for a fixed list.
@@ -56,65 +52,27 @@ export function Feed({
   const listRef = useRef<HTMLDivElement>(null);
 
   /** Set from the card's right-click menu; see `PlayerSettingsProvider`. */
-  const { autoScroll } = usePlayerSettings();
+  const { autoScroll, toggleMuted } = usePlayerSettings();
+
+  const { user } = useSession();
+
+  // The scope of the hearts' batch and of the realtime subscriptions: the whole
+  // rendered feed, not just the playing card.
+  const backendVideoIds = useMemo(() => videos.map((video) => video.id), [videos]);
 
   /**
-   * Like state is lifted here because two things drive it: the action rail's
-   * heart button (toggles) and double-tapping the video (likes only, never
-   * un-likes).
+   * The server's side of every heart, lifted here so one batch request seeds
+   * the whole list. Each card's own taps — the rail's heart and a double tap
+   * on the video — go through that card's `useVideoLike`.
    */
-  const [likedIds, setLikedIds] = useState<ReadonlySet<string>>(new Set());
+  const likes = useLikeStatuses(backendVideoIds, user?.userId);
+  const { syncCount: syncLikeCount } = likes;
 
   /**
-   * Bookmarks. Unlike the hearts above this is one request for the whole set
-   * rather than one per card — see `useSavedVideos`.
+   * Bookmarks — the viewer's whole saved set, fetched once and shared by every
+   * card; see `useSavedVideos`.
    */
-  const { isSaved, toggleSave } = useSavedVideos();
-
-  /**
-   * Server-known like counts, by video id, overriding the count the feed was
-   * rendered with. Needed because `stats.likes` already counts the viewer's own
-   * like: the heart cannot add one on top without showing 2 for a single like.
-   */
-  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
-
-  // Liking needs an account: signed out, the live site swallows the tap and
-  // opens the login modal instead. Both entry points funnel through here, so
-  // the gate only has to exist once.
-  const { user, requireSignIn } = useSession();
-
-  // Seed hearts for videos the viewer already liked in a previous session.
-  // Backend videos only — mock ids have no like-status endpoint to ask.
-  useEffect(() => {
-    if (!user) return;
-    const backendIds = videos.filter((v) => isBackendHandle(v.id)).map((v) => v.id);
-    if (backendIds.length === 0) return;
-    let cancelled = false;
-
-    getLikeStatuses(backendIds).then((statuses) => {
-      if (cancelled) return;
-      setLikedIds((current) => {
-        const next = new Set(current);
-        statuses.forEach((status) => {
-          if (status.liked) next.add(status.videoId);
-        });
-        return next;
-      });
-      setLikeCounts((current) => {
-        const next = { ...current };
-        statuses.forEach((status) => {
-          next[status.videoId] = status.likeCount;
-        });
-        return next;
-      });
-    }).catch(() => {
-      // No session, or the call failed — hearts just start unfilled.
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [videos, user]);
+  const { isSaved, wasSaved, toggleSave } = useSavedVideos();
 
   /**
    * Snapshot of the latest `counts` realtime frame per video id — a video not
@@ -133,57 +91,36 @@ export function Feed({
    */
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
 
-  /**
-   * Confirmed once a per-video `useLikeDebounce` (see `FeedVideoCard` below)
-   * gets a real response back — `likedIds` is that hook's `serverLiked`, and
-   * has to move in lockstep with `likeCounts` or the offset each card
-   * computes (`liked !== serverLiked ? ±1 : 0`) double-counts against a
-   * `likeCounts` entry that already includes the change.
-   */
-  const onLikeConfirmed = useCallback((id: string, liked: boolean, likeCount: number) => {
-    setLikeCounts((current) => ({ ...current, [id]: likeCount }));
-    // The last counts frame was read before this like landed, and the card
-    // prefers the frame over `likeCounts` — see `withLikeCount`. Left alone it
-    // pulls the count back to its pre-like value for the ~150ms until the next
-    // frame arrives, which is the flicker this corrects.
-    setLiveFrames((current) => withLikeCount(current, id, likeCount));
-    setLikedIds((current) => {
-      if (current.has(id) === liked) return current;
-      const next = new Set(current);
-      if (liked) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
-
   const handleRealtimeFrame = useCallback((frame: VideoFrame) => {
     if (frame.type === "counts") {
       setLiveFrames((current) => ({ ...current, [frame.videoId]: frame }));
+      // The heart reads its count from the ledger, where a like reply newer
+      // than this frame can still correct it.
+      if (frame.likeCount !== undefined) syncLikeCount(frame.videoId, frame.likeCount);
       return;
     }
+    const setVisible = (visible: boolean) =>
+      setHiddenIds((current) => {
+        if (current.has(frame.videoId) === !visible) return current;
+        const next = new Set(current);
+        if (visible) next.delete(frame.videoId);
+        else next.add(frame.videoId);
+        return next;
+      });
+
     getVideo(frame.videoId)
       .then((video) => {
-        const visible = video.status === "PUBLISHED" && video.visibility === "PUBLIC";
-        setHiddenIds((current) => {
-          if (current.has(frame.videoId) === !visible) return current;
-          const next = new Set(current);
-          if (visible) next.delete(frame.videoId);
-          else next.add(frame.videoId);
-          return next;
-        });
+        setVisible(video.status === "PUBLISHED" && video.visibility === "PUBLIC");
       })
-      .catch(() => {
-        // Transient — leave visibility as it was until the next frame.
+      .catch((cause: unknown) => {
+        // A 404 is the answer, not a failure: deleted, or no longer readable
+        // by this viewer — either way the card has to go.
+        if (isApiError(cause) && cause.status === 404) setVisible(false);
+        // Anything else is transient — leave visibility as it was until the next frame.
       });
-  }, []);
+  }, [syncLikeCount]);
 
-  // The realtime scope is the whole rendered feed, not just the playing card.
-  const backendVideoIds = useMemo(
-    () => videos.filter((video) => isBackendHandle(video.id)).map((video) => video.id),
-    [videos],
-  );
-  const wsToken = user ? getAccessToken() : null;
-  useVideoRealtime(backendVideoIds, wsToken, handleRealtimeFrame);
+  useVideoRealtime(backendVideoIds, handleRealtimeFrame);
 
   const visibleVideos = useMemo(
     () => videos.filter((video) => !hiddenIds.has(video.id)),
@@ -264,7 +201,14 @@ export function Feed({
    * `useHlsSource`. Reported by the cards themselves, because the observer that
    * decides which one is playing is the only thing that knows.
    */
-  const [activeIndex, setActiveIndex] = useState(0);
+  // Kept by id, not position: a video hidden above the active one (a `state`
+  // frame) shifts every index below it, and the playing card would fall out of
+  // its own media window.
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeIndex = Math.max(
+    0,
+    visibleVideos.findIndex((video) => video.id === activeId),
+  );
 
   const followActiveVideo = useCallback((video: FeedVideo) => {
     if (!commentsOpenRef.current) return;
@@ -313,7 +257,7 @@ export function Feed({
   useEffect(() => {
     if (!commentsOpen) return;
     const next = visibleVideos[activeIndex + 1];
-    if (!next || !isBackendHandle(next.id) || next.commentsDisabled) return;
+    if (!next || next.commentsDisabled) return;
     loadFirstCommentPage(next.id).catch(() => {
       // A prefetch that fails changes nothing: the panel retries on open.
     });
@@ -326,6 +270,18 @@ export function Feed({
     if (!item) return;
     list.scrollBy({ top: item.clientHeight * direction, behavior: "smooth" });
   }, []);
+
+  // TikTok's own: ↑/↓ step, M mutes, C opens comments. Space and L belong to
+  // the card on screen — see `VideoCard` and `FeedVideoCard`.
+  useHotkeys({
+    ArrowUp: () => scrollByItem(-1),
+    ArrowDown: () => scrollByItem(1),
+    m: toggleMuted,
+    c: () => {
+      const video = visibleVideos[activeIndex];
+      if (video) toggleComments(video);
+    },
+  });
 
   return (
     <main className="flex flex-1 flex-row">
@@ -344,20 +300,21 @@ export function Feed({
               video={video}
               index={index}
               activeIndex={activeIndex}
+              isActive={video.id === activeId}
               commentsOpen={commentsOpen && commentVideo?.id === video.id}
               commentCount={video.stats.comments + (extraComments[video.id] ?? 0)}
               liveFrame={liveFrames[video.id]}
-              baseLikeCount={likeCounts[video.id] ?? video.stats.likes}
-              serverLiked={likedIds.has(video.id)}
-              requireSignIn={requireSignIn}
-              onLikeConfirmed={onLikeConfirmed}
+              serverLiked={likes.liked[video.id] ?? false}
+              serverLikeCount={likes.counts[video.id] ?? video.stats.likes}
+              onLikeConfirmed={likes.confirm}
               onActive={() => {
-                setActiveIndex(index);
+                setActiveId(video.id);
                 followActiveVideo(video);
               }}
               onEnded={autoScroll ? () => scrollByItem(1) : undefined}
               onCommentClick={() => toggleComments(video)}
               saved={isSaved(video.id)}
+              savedAtLoad={wasSaved(video.id)}
               onToggleSave={() => toggleSave(video.id)}
             />
           ))}
@@ -385,7 +342,6 @@ export function Feed({
             key={commentVideo.id}
             videoId={commentVideo.id}
             videoOwnerId={commentVideo.author.userId}
-            comments={comments[commentVideo.id] ?? []}
             commentsDisabled={commentVideo.commentsDisabled}
             commentCount={
               // Same source of truth as the card: the counts frame is
@@ -402,199 +358,5 @@ export function Feed({
         )}
       </aside>
     </main>
-  );
-}
-
-/**
- * One card + its action rail. Pulled out of `Feed`'s `.map` because the like
- * state now lives behind `useLikeDebounce` — a hook, which cannot be called a
- * variable number of times inside a loop in the parent's own render. Each
- * mounted instance owns exactly one `useLikeDebounce` call, so the feed's
- * length can change across renders without breaking the rules of hooks.
- */
-function FeedVideoCard({
-  video,
-  index,
-  activeIndex,
-  commentsOpen,
-  commentCount,
-  liveFrame,
-  baseLikeCount,
-  serverLiked,
-  requireSignIn,
-  onLikeConfirmed,
-  onActive,
-  onEnded,
-  onCommentClick,
-  saved,
-  onToggleSave,
-}: {
-  video: FeedVideo;
-  index: number;
-  activeIndex: number;
-  /** True when this video's comment sidebar is the one currently open. */
-  commentsOpen: boolean;
-  /** Mock count plus anything the viewer posted this session or the server broadcast. */
-  commentCount: number;
-  /** Latest `counts` realtime frame for this video, if one has arrived. */
-  liveFrame?: VideoFrame;
-  /** Server-confirmed like count, before this card's own pending toggle. */
-  baseLikeCount: number;
-  /** Server-confirmed liked state — `useLikeDebounce`'s `serverLiked`. */
-  serverLiked: boolean;
-  requireSignIn: () => boolean;
-  onLikeConfirmed: (id: string, liked: boolean, likeCount: number) => void;
-  onActive: () => void;
-  onEnded?: () => void;
-  onCommentClick: () => void;
-  saved: boolean;
-  onToggleSave: () => void;
-}) {
-  const send = useCallback(
-    async (liked: boolean) => {
-      if (!isBackendHandle(video.id)) return;
-      const status = liked ? await likeVideo(video.id) : await unlikeVideo(video.id);
-      // The reply carries the true state and count — the debounced tap only
-      // guessed, and is stale the moment anyone else likes the same video.
-      onLikeConfirmed(video.id, status.liked, status.likeCount);
-    },
-    [video.id, onLikeConfirmed],
-  );
-
-  const { liked, toggle } = useLikeDebounce(serverLiked, send);
-
-  const toggleLike = useCallback(() => {
-    if (!requireSignIn()) return;
-    toggle();
-  }, [requireSignIn, toggle]);
-
-  const likeOnly = useCallback(() => {
-    if (!requireSignIn()) return;
-    if (!liked) toggle();
-  }, [requireSignIn, liked, toggle]);
-
-  const likesBase = liveFrame?.likeCount ?? baseLikeCount;
-  const displayLikes = liked === serverLiked ? likesBase : likesBase + (liked ? 1 : -1);
-  const displayComments = liveFrame?.commentCount ?? commentCount;
-
-  return (
-    <article
-      className={cn(
-        // Live site uses the two-axis value `start center` (block/inline).
-        "relative flex snap-always items-center justify-center gap-4 overflow-hidden py-4",
-        "[scroll-snap-align:start_center]",
-        "[min-height:calc(100vh-var(--one-column-top-content-height)-var(--one-column-item-bottom-content-height))]",
-        "mx-auto transition-[margin,height,width,padding] duration-300 ease-[var(--tt-ease)]",
-        commentsOpen
-          ? // With the sidebar open the live site swaps in an emotion class
-            // whose only padding declaration is `padding-inline: 1rem` — all
-            // four breakpoint branches below collapse into it.
-            "[padding-inline:1rem]"
-          : [
-              // >1280 — mirrors the base rule on the live site
-              "[padding-inline-start:calc(var(--feed-nav-button-width)+1rem)]",
-              "[padding-inline-end:calc(15rem-var(--feed-nav-button-width)-1rem)]",
-              // <=1280
-              "tt-1280:[padding-inline-start:1rem]",
-              "tt-1280:[padding-inline-end:calc(15rem-(var(--feed-nav-button-width)*2)-1rem)]",
-              // <=1024
-              "tt-1024:[padding-inline-start:var(--feed-nav-button-width)]",
-              "tt-1024:[padding-inline-end:1rem]",
-              // <=768
-              "tt-768:[padding-inline:1rem]",
-            ].join(" "),
-      )}
-    >
-      {/*
-       * `.DivContentFlexLayout` — full article content width, centred,
-       * 16px gap; the card grows into it and its own max-width decides
-       * where it stops. Cross-axis alignment is the one thing that
-       * differs by orientation, measured live at 1920×936:
-       *   portrait  align-items: end     rail bottom-aligned  (y 1476)
-       *   landscape align-items: center  rail centred         (y 252)
-       */}
-      <div
-        className={cn(
-          // `min-w-0`: without it this row's automatic minimum is the
-          // card's min-content, which the feed column cannot shrink
-          // past — that is what put a horizontal scrollbar on the page
-          // between 1025px and 1083px with the comment sidebar open.
-          "flex w-full min-w-0 flex-1 justify-center gap-4",
-          video.width > video.height ? "items-center" : "items-end",
-        )}
-      >
-        <VideoCard
-          video={video}
-          distance={index - activeIndex}
-          onLike={likeOnly}
-          onActive={onActive}
-          // The feed's counterpart to auto scroll on `/video/[id]`:
-          // there, finishing a clip navigates to the next video; here
-          // it scrolls the snap container on by one card. Passing this
-          // also turns `loop` off, which is what lets `ended` fire.
-          onEnded={onEnded}
-        />
-        <ActionRail
-          video={video}
-          commentCount={displayComments}
-          commentsOpen={commentsOpen}
-          onCommentClick={onCommentClick}
-          liked={liked}
-          likes={displayLikes}
-          onToggleLike={toggleLike}
-          saved={saved}
-          saveCount={liveFrame?.saveCount}
-          onToggleSave={onToggleSave}
-        />
-      </div>
-    </article>
-  );
-}
-
-/**
- * `[data-e2e="feed-navigation-prev"|"feed-navigation-next"]` — 48×48, sitting
- * 16px from the feed column's right edge with a 16px gap. They live inside the
- * column, so opening the comment sidebar shifts them by exactly the panel width
- * (measured live: x 1856 → 1472, a 384px delta).
- */
-function FeedNavArrows({
-  onUp,
-  onDown,
-}: {
-  onUp: () => void;
-  onDown: () => void;
-}) {
-  return (
-    <div className="absolute right-4 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-4 tt-1024:hidden">
-      <ArrowButton onClick={onUp} label="Previous video" direction="up" />
-      <ArrowButton onClick={onDown} label="Next video" direction="down" />
-    </div>
-  );
-}
-
-function ArrowButton({
-  onClick,
-  label,
-  direction,
-}: {
-  onClick: () => void;
-  label: string;
-  direction: "up" | "down";
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--tt-field)] text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-shape-neutral-3)]"
-    >
-      <svg
-        viewBox="0 0 48 48"
-        className={`h-6 w-6 ${direction === "down" ? "rotate-180" : ""}`}
-        fill="currentColor"
-      >
-        <path d="M24 15.4 8.7 30.7a1 1 0 0 0 0 1.4l1.4 1.4a1 1 0 0 0 1.4 0L24 20.9l12.5 12.6a1 1 0 0 0 1.4 0l1.4-1.4a1 1 0 0 0 0-1.4L24 15.4Z" />
-      </svg>
-    </button>
   );
 }

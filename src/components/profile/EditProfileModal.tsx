@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { CloseIcon, EditPencilIcon } from "@/components/icons";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import { ACCEPTED_AVATAR_TYPES, MAX_AVATAR_BYTES } from "@/lib/api/users";
-import { editProfileSchema } from "@/lib/forms/schemas";
+import { formatDateTime } from "@/lib/format";
+import { editProfileSchemaFor } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
+import { changedProfileFields } from "@/lib/profile/changed-fields";
+import { lockedUntil } from "@/lib/profile/rename-limits";
 import { cn } from "@/lib/utils";
 import type { UserProfile } from "@/types/tiktok";
 
@@ -43,7 +47,8 @@ export function EditProfileModal({
   onSave,
   saving,
   error: saveError,
-  usernameLocked,
+  usernameChangeableAt,
+  nicknameChangeableAt,
 }: {
   profile: UserProfile;
   onClose: () => void;
@@ -53,19 +58,28 @@ export function EditProfileModal({
   /** A failed save, shown above the footer. */
   error?: string | null;
   /**
-   * Handles are issued by auth-service at registration and there is no rename
-   * endpoint, so a backend profile shows its handle read-only rather than
-   * offering an edit that cannot be saved.
+   * When the handle (once every 30 days) and the nickname (once every 7) open
+   * again, as the server said. Until then the field is shown read-only with
+   * that date, rather than offered and then refused on Save.
    */
-  usernameLocked?: boolean;
+  usernameChangeableAt?: string | null;
+  nicknameChangeableAt?: string | null;
 }) {
+  const schema = useMemo(
+    () => editProfileSchemaFor(profile.author.username),
+    [profile.author.username],
+  );
+
   /**
    * The same hook the auth forms use, so the rules and the focus behaviour are
    * one implementation. The modal differs in one way only: Save is not a form
    * submit button, so `handleSubmit` is called from its `onClick`.
+   *
+   * Trimmed on the way out, so a stray space is never saved as part of a name
+   * or bio — the same trimmed values `changedProfileFields` compares.
    */
   const form = useForm({
-    schema: editProfileSchema,
+    schema,
     initialValues: {
       username: profile.author.username,
       nickname: profile.author.nickname,
@@ -73,8 +87,17 @@ export function EditProfileModal({
       avatarUrl: profile.author.avatarUrl,
     },
     onSubmit: (values) =>
-      onSave({ ...values, bio: values.bio.trim(), avatarFile }),
+      onSave({
+        ...values,
+        username: values.username.trim(),
+        nickname: values.nickname.trim(),
+        bio: values.bio.trim(),
+        avatarFile,
+      }),
   });
+
+  const usernameLockedUntil = lockedUntil(usernameChangeableAt);
+  const nicknameLockedUntil = lockedUntil(nicknameChangeableAt);
 
   const draft = form.values;
   const setDraft = (patch: Partial<ProfileDraft>) => {
@@ -102,11 +125,16 @@ export function EditProfileModal({
   }, []);
 
   useEscapeKey(onClose);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef);
 
+  const changes = changedProfileFields(draft, {
+    username: profile.author.username,
+    nickname: profile.author.nickname,
+    bio: profile.bio,
+  });
   const dirty =
-    draft.username !== profile.author.username ||
-    draft.nickname !== profile.author.nickname ||
-    draft.bio !== profile.bio ||
+    Object.keys(changes).length > 0 ||
     draft.avatarUrl !== profile.author.avatarUrl ||
     avatarFile !== null;
 
@@ -148,6 +176,7 @@ export function EditProfileModal({
       <div aria-hidden className="absolute inset-0 bg-black/[0.68]" />
 
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-profile-title"
@@ -180,6 +209,7 @@ export function EditProfileModal({
               <img
                 src={draft.avatarUrl || DEFAULT_AVATAR}
                 alt=""
+                referrerPolicy="no-referrer"
                 className="ml-32 h-24 w-24 rounded-full bg-white/[0.12] object-cover"
               />
               <button
@@ -206,12 +236,13 @@ export function EditProfileModal({
           </Row>
 
           <Row label="Username">
-            {usernameLocked ? (
+            {usernameLockedUntil ? (
               <>
-                <p className="flex h-[38px] w-[360px] max-w-full items-center rounded-[4px] bg-white/[0.06] px-3 text-[16px] leading-6 text-[var(--tt-text-secondary)]">
-                  {draft.username}
-                </p>
-                <Tip>Your username was set when you registered and can’t be changed.</Tip>
+                <ReadOnlyField>{draft.username}</ReadOnlyField>
+                <Tip>
+                  You can change your username again on{" "}
+                  {formatDateTime(usernameLockedUntil)}.
+                </Tip>
               </>
             ) : (
               <>
@@ -226,6 +257,10 @@ export function EditProfileModal({
                     Usernames can only contain letters, numbers, underscores, and
                     periods. Changing your username will also change your profile
                     link.
+                    {/* Only once an edit is under way, so the resting modal
+                        keeps the live site's row heights. */}
+                    {changes.username !== undefined &&
+                      " You can only change your username once every 30 days."}
                   </Tip>
                 )}
               </>
@@ -233,11 +268,23 @@ export function EditProfileModal({
           </Row>
 
           <Row label="Name">
-            <Field {...form.field("nickname")} placeholder="Name" />
-            {errors.nickname ? (
-              <Tip error>{errors.nickname}</Tip>
+            {nicknameLockedUntil ? (
+              <>
+                <ReadOnlyField>{draft.nickname}</ReadOnlyField>
+                <Tip>
+                  You can change your nickname again on{" "}
+                  {formatDateTime(nicknameLockedUntil)}.
+                </Tip>
+              </>
             ) : (
-              <Tip>Your nickname can only be changed once every 7 days.</Tip>
+              <>
+                <Field {...form.field("nickname")} placeholder="Name" />
+                {errors.nickname ? (
+                  <Tip error>{errors.nickname}</Tip>
+                ) : (
+                  <Tip>Your nickname can only be changed once every 7 days.</Tip>
+                )}
+              </>
             )}
           </Row>
 
@@ -342,6 +389,15 @@ function Field({
         error && "border-[var(--tt-red-active)]",
       )}
     />
+  );
+}
+
+/** A field that cannot be edited right now: the input's box, dimmed, as text. */
+function ReadOnlyField({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="flex h-[38px] w-[360px] max-w-full items-center rounded-[4px] bg-white/[0.06] px-3 text-[16px] leading-6 text-[var(--tt-text-secondary)]">
+      {children}
+    </p>
   );
 }
 

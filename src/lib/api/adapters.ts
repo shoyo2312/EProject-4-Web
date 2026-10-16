@@ -1,4 +1,9 @@
-import type { MeResponse, UserProfileResponse, VideoResponse } from "@/lib/api/types";
+import type {
+  InteractionCountResponse,
+  MeResponse,
+  UserProfileResponse,
+  VideoResponse,
+} from "@/lib/api/types";
 import type { Author, ExploreItem, FeedVideo, ProfileVideo, UserProfile } from "@/types/tiktok";
 
 /**
@@ -6,23 +11,21 @@ import type { Author, ExploreItem, FeedVideo, ProfileVideo, UserProfile } from "
  * what the services return and what the cloned UI renders is resolved here and
  * nowhere else, so components stay unaware of the wire format.
  *
- * Three gaps are worth knowing about, because they are backend limitations
- * rather than choices made here:
+ * Gaps worth knowing about, because they are backend limitations rather than
+ * choices made here:
  *
- *  1. **user-service has no handle.** A profile carries `displayName` but no
- *     username, and there is no lookup-by-username endpoint. So a backend
- *     account's route handle is its numeric id — `/@123456789012345` — which
- *     resolves through `GET /users/{userId}`. Only the signed-in viewer knows
- *     their own username, which comes from auth-service.
+ *  1. **Not every account has a handle.** user-service copies it off the
+ *     registration event, so accounts older than that have none. A profile's
+ *     route segment is therefore its numeric id — `/@123456789012345` — which
+ *     always resolves; `/@name` still works through `by-username`.
  *  2. **No duration until transcoding lands.** `durationSeconds` is 0 until
  *     the file has been probed. `width`/`height` are real once transcoding
  *     finishes; portrait 1080×1920 is only the fallback before that, or for
  *     videos uploaded before video-service measured them.
- *  3. **No music, no bookmark counter, no baseline share counter.** Bookmarking
- *     has no backing service at all. Sharing does — interaction-service records
- *     it — but `VideoResponse` carries no denormalized share count the way it
- *     does like/comment counts, so `shares` starts at 0 here and the UI adds
- *     this-session's shares on top (`ActionRail`, `VideoDetail`).
+ *  3. **No music, and no share or save counts on the video.** interaction-service
+ *     counts both, but `VideoResponse` carries neither the way it carries likes
+ *     and comments, so a card built without that service's counts
+ *     (`getVideoCounts`) shows 0 for them.
  */
 
 /** The route segment for a backend account: its id, since there is no handle. */
@@ -30,16 +33,27 @@ export function handleFor(userId: string): string {
   return userId;
 }
 
-/** True when a `/@…` segment addresses a backend account rather than mock data. */
+/** True when a `/@…` segment is a user-service id rather than a handle. */
 export function isBackendHandle(handle: string): boolean {
   return /^\d+$/.test(handle);
 }
 
 /**
+ * True when a video id is shaped like video-service's: a 19-digit Snowflake.
+ * Anything else ("1", "x7") cannot be a video, so it 404s without a request.
+ * Length matters — any run of digits, as `isBackendHandle` takes it, would let
+ * "1" through to the backend — and it is tested as a string: parsing a
+ * Snowflake into a JS number loses precision silently.
+ */
+export function isBackendVideoId(id: string): boolean {
+  return /^\d{15,}$/.test(id);
+}
+
+/**
  * The "@handle" to show in a header or list row, or null when there isn't a
- * real one to show. `author.handle` is the auth-service handle; `username` is
- * only a usable fallback for mock authors — on a backend account it is the
- * numeric id, which is never what a reader wants to see.
+ * real one to show. `author.handle` is the real handle; `username` is only a
+ * usable fallback when it is not the numeric id, which is never what a reader
+ * wants to see.
  */
 export function displayHandle(
   author: Pick<Author, "username" | "handle">,
@@ -92,7 +106,7 @@ export function unknownAuthor(userId: string): Author {
 export function videoToFeedVideo(
   video: VideoResponse,
   author: Author,
-  options: { isFollowing?: boolean } = {},
+  options: { isFollowing?: boolean; counts?: InteractionCountResponse } = {},
 ): FeedVideo {
   return {
     id: video.id,
@@ -106,12 +120,11 @@ export function videoToFeedVideo(
     },
     stats: {
       likes: video.likeCount,
-      // Null when the owner turned comments off — `commentsDisabled` is what the UI reads then.
+      // Null when comments are off — `commentsDisabled` is what the UI reads then.
       comments: video.commentCount ?? 0,
-      // See the module doc: bookmarks have no source at all; shares does,
-      // but not as a count on this DTO — the UI tracks it from a 0 baseline.
-      bookmarks: 0,
-      shares: 0,
+      // See the module doc: these two come from interaction-service, or not at all.
+      bookmarks: options.counts?.saveCount ?? 0,
+      shares: options.counts?.shareCount ?? 0,
     },
     // Empty until transcoding produces the HLS manifest — VideoCard falls back
     // to a poster-only card, which is exactly the PROCESSING state.
@@ -129,15 +142,18 @@ export function videoToFeedVideo(
     isFollowing: options.isFollowing ?? false,
     hasTranslation: false,
     visibility: video.visibility,
-    commentsDisabled: video.commentsDisabled,
+    // Either switch closes the video the same way; only the owner's own toggle
+    // needs to tell them apart.
+    commentsDisabled: video.commentsDisabled || video.accountCommentsOff,
+    commentsSwitchOff: video.commentsDisabled,
   };
 }
 
 /**
- * No stand-in poster on purpose. video-service returns `thumbnailUrl: null`
- * for everything it has transcoded so far, and one shared fallback image made
- * every tile in the grid the same picture. Empty instead, which `ProfileTile`
- * reads as "let the browser draw the first frame".
+ * No stand-in poster on purpose: `thumbnailUrl` is null until transcoding
+ * extracts one, and one shared fallback image made every tile in the grid the
+ * same picture. Empty instead, which `ProfileTile` reads as "let the browser
+ * draw the first frame".
  */
 export function videoToProfileVideo(video: VideoResponse): ProfileVideo {
   return {
@@ -176,16 +192,15 @@ export function videoToExploreItem(
 /**
  * A profile page from what the backend can actually supply.
  *
- * `isVerified` does not exist as a concept in user-service, and the reposts tab has no
- * service behind it, so it renders empty rather than borrowing mock content that would be a
- * lie. `likes` is video-service's aggregate, and favourites/liked are filled in by
+ * `isVerified` does not exist as a concept in user-service. `likes` is
+ * video-service's aggregate, and reposts/favourites/liked are filled in by
  * `BackendProfilePage` when their tab is opened.
  */
 export function profileToUserProfile(
   profile: UserProfileResponse,
   author: Author,
   videos: ProfileVideo[],
-  options: { isFollowing?: boolean; totalLikes?: number } = {},
+  options: { isFollowing?: boolean; followRequested?: boolean; totalLikes?: number } = {},
 ): UserProfile {
   return {
     author,
@@ -199,6 +214,7 @@ export function profileToUserProfile(
       likes: options.totalLikes ?? 0,
     },
     isFollowing: options.isFollowing ?? false,
+    followRequested: options.followRequested ?? false,
     posts: {
       videos,
       reposts: [],

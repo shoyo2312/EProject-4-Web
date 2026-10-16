@@ -7,9 +7,8 @@ import { SpeedPills, Switch } from "@/components/player/PlayerMenu";
 import { OwnerControls } from "@/components/video/detail/OwnerControls";
 import { ReportControl } from "@/components/video/detail/ReportControl";
 import { VerticalVolumeControl } from "@/components/video/detail/VerticalVolumeControl";
+import { useSession } from "@/components/session/SessionProvider";
 import { useDismiss } from "@/hooks/use-dismiss";
-import { useFollow } from "@/hooks/use-follow";
-import { isBackendHandle } from "@/lib/api/adapters";
 import { formatDuration } from "@/lib/format";
 import type { FeedVideo } from "@/types/tiktok";
 
@@ -22,6 +21,7 @@ import type { FeedVideo } from "@/types/tiktok";
 export function ControlBar({
   video,
   onDeleted,
+  onCommentsSwitchChange,
   isPlaying,
   currentTime,
   duration,
@@ -38,6 +38,7 @@ export function ControlBar({
   video: FeedVideo;
   /** Called once the owner's own video is deleted — closes the overlay. */
   onDeleted: () => void;
+  onCommentsSwitchChange?: (off: boolean) => void;
   isPlaying: boolean;
   currentTime: number;
   duration: number;
@@ -98,7 +99,11 @@ export function ControlBar({
           </div>
         </div>
 
-        <VideoActionsControl video={video} onDeleted={onDeleted} />
+        <VideoActionsControl
+          video={video}
+          onDeleted={onDeleted}
+          onCommentsSwitchChange={onCommentsSwitchChange}
+        />
       </div>
     </div>
   );
@@ -157,26 +162,27 @@ function PauseGlyph({ className }: { className?: string }) {
 /**
  * The rightmost control in the player's bottom bar, beside volume. Which one it
  * is depends on who is watching: the owner gets their privacy/delete menu, and
- * everybody else gets Report. A mock video has no backend to call, so the owner
- * branch is skipped there and the viewer branch reports nothing.
+ * everybody else gets Report.
  */
 function VideoActionsControl({
   video,
   onDeleted,
+  onCommentsSwitchChange,
 }: {
   video: FeedVideo;
   onDeleted: () => void;
+  onCommentsSwitchChange?: (off: boolean) => void;
 }) {
-  const { isSelf } = useFollow(video.author.userId, video.isFollowing);
-
-  if (!isBackendHandle(video.id)) return null;
+  const { user } = useSession();
+  const isSelf = user !== null && user.userId === video.author.userId;
 
   return isSelf ? (
     <OwnerControls
       videoId={video.id}
       initialVisibility={video.visibility}
-      initialCommentsDisabled={video.commentsDisabled}
+      initialCommentsDisabled={video.commentsSwitchOff}
       onDeleted={onDeleted}
+      onCommentsSwitchChange={onCommentsSwitchChange}
     />
   ) : (
     <ReportControl videoId={video.id} />

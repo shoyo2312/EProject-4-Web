@@ -16,16 +16,17 @@ import { SeekBar } from "@/components/video/detail/SeekBar";
 import { VideoMeta } from "@/components/video/detail/VideoMeta";
 import { useWheelStep } from "@/components/video/detail/use-wheel-step";
 import { CreatorVideosPanel } from "@/components/video/CreatorVideosPanel";
+import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useHotkeys } from "@/hooks/use-hotkeys";
+import { useLikeStatuses } from "@/hooks/use-like-statuses";
 import { useVideoLike } from "@/hooks/use-video-like";
 import type { VideoPlayback } from "@/hooks/use-video-playback";
 import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
 import { useVideoSave } from "@/hooks/use-video-save";
-import { isBackendHandle } from "@/lib/api/adapters";
-import { getAccessToken } from "@/lib/api/tokens";
 import { COMMENT_PANEL_COOKIE } from "@/lib/comment-panel";
 import { getOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
-import type { Comment, FeedVideo } from "@/types/tiktok";
+import type { FeedVideo } from "@/types/tiktok";
 
 type Step = "next" | "previous";
 type PanelTab = "comments" | "creator";
@@ -65,13 +66,11 @@ export function isCommentPanelOpen(fromServer: boolean) {
 
 export function VideoDetail({
   video,
-  comments,
   previousId,
   nextId,
   initialPanelOpen = true,
 }: {
   video: FeedVideo;
-  comments: Comment[];
   /** Neighbours in the same collection; `null` at either end of it. */
   previousId?: string | null;
   nextId?: string | null;
@@ -105,29 +104,55 @@ export function VideoDetail({
    * budged. Same source of truth as the feed's cards — see `Feed`.
    */
   const [liveFrame, setLiveFrame] = useState<VideoFrame | null>(null);
-  const realtimeIds = useMemo(
-    () => (isBackendHandle(video.id) ? [video.id] : []),
-    [video.id],
-  );
-  const { user: sessionUser } = useSession();
+  /**
+   * The owner's own comments switch, once they flip it here — `video` is the
+   * page-load copy. Turning it back on still leaves comments closed when the
+   * account-wide setting is what closed them.
+   */
+  const [commentsSwitchOff, setCommentsSwitchOff] = useState<boolean | null>(null);
+  const commentsDisabled =
+    commentsSwitchOff === null
+      ? video.commentsDisabled
+      : commentsSwitchOff || (video.commentsDisabled && !video.commentsSwitchOff);
+  /** The scope of the heart's seed and of realtime. */
+  const backendIds = useMemo(() => [video.id], [video.id]);
+  const { user: sessionUser, requireSignIn } = useSession();
+  const signedIn = sessionUser !== null;
+
+  // The same heart as a feed card: the server's side seeded for this one
+  // video, and the viewer's debounced taps on top of it.
+  const likes = useLikeStatuses(backendIds, sessionUser?.userId);
+  const { syncCount: syncLikeCount } = likes;
+  const like = useVideoLike({
+    videoId: video.id,
+    serverLiked: likes.liked[video.id] ?? false,
+    serverCount: likes.counts[video.id] ?? video.stats.likes,
+    onConfirmed: likes.confirm,
+  });
+  const save = useVideoSave(video.id, signedIn);
+
+  // Saving needs an account, as on the feed: signed out, the tap opens the
+  // login modal instead of a request that can only 401.
+  const toggleSave = () => {
+    if (requireSignIn()) save.toggleSave();
+  };
+
   useVideoRealtime(
-    realtimeIds,
-    sessionUser ? getAccessToken() : null,
-    useCallback((frame: VideoFrame) => {
-      // `state` frames carry no counters; only the counts ones say anything here.
-      if (frame.type === "counts") setLiveFrame(frame);
-    }, []),
+    backendIds,
+    useCallback(
+      (frame: VideoFrame) => {
+        // `state` frames carry no counters; only the counts ones say anything here.
+        if (frame.type !== "counts") return;
+        setLiveFrame(frame);
+        if (frame.likeCount !== undefined) syncLikeCount(frame.videoId, frame.likeCount);
+      },
+      [syncLikeCount],
+    ),
   );
   // The frame is authoritative — it already counts this tab's own comments, so
   // the local delta is only the gap before the first frame lands.
   const commentCount =
     liveFrame?.commentCount ?? video.stats.comments + extraComments;
-
-  const { liked, likeCount, toggleLike, likeOnly } = useVideoLike(
-    video.id,
-    video.stats.likes,
-  );
-  const { saved, toggleSave } = useVideoSave(video.id);
 
   /**
    * `router.back()` keeps the Explore scroll position, so it is preferred — but
@@ -195,8 +220,6 @@ export function VideoDetail({
     panelOpenPreference = panelOpen;
     document.cookie = `${COMMENT_PANEL_COOKIE}=${panelOpen ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
   }, [panelOpen]);
-  /* Mock authors have no backend id, so there is no listing to build the tab
-     from — it is dropped rather than shown empty. */
   const creatorId = video.author.userId;
 
   const closePanel = useCallback(() => setPanelOpen(false), []);
@@ -214,6 +237,19 @@ export function VideoDetail({
     setTab("comments");
     setPanelOpen(true);
   }, [panelOpen, tab]);
+
+  // The feed's keys, with ↑/↓ stepping through the same list the wheel does.
+  // Escape leaves the overlay, but not from under a field the viewer is typing in.
+  useHotkeys({
+    ArrowUp: () => step("previous"),
+    ArrowDown: () => step("next"),
+    m: toggleMuted,
+    l: like.toggleLike,
+    c: togglePanel,
+  });
+  useEscapeKey(() => {
+    if (!document.activeElement?.closest("input, textarea")) close();
+  });
 
   useEffect(() => {
     const list = tablistRef.current;
@@ -266,8 +302,12 @@ export function VideoDetail({
         </button>
 
         {/* Previous / next, stacked against the column edge. They go through
-            `step` as the wheel does, so both routes animate the same way. */}
-        <div className="absolute right-6 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-3">
+            `step` as the wheel does, so both routes animate the same way.
+            Centred, but never lower than 16px above the action rail: on a
+            viewport under ~790px the centre lands on the rail, and Next sat
+            over the heart and took its clicks. 394px = 82px of seek and
+            control bars + the 250px compact rail + 16px + half this stack. */}
+        <div className="absolute right-6 top-[min(50%,calc(100%-394px))] z-20 flex -translate-y-1/2 flex-col gap-3">
           <OverlayButton
             label="Previous video"
             onClick={() => step("previous")}
@@ -302,7 +342,7 @@ export function VideoDetail({
           >
             <VideoCard
               video={video}
-              onLike={likeOnly}
+              onLike={like.likeOnly}
               showCaption={false}
               showVolumeControl={false}
               showContextMenu={false}
@@ -327,10 +367,11 @@ export function VideoDetail({
                 commentCount={commentCount}
                 commentsOpen={panelOpen}
                 onCommentClick={togglePanel}
-                liked={liked}
-                likes={likeCount}
-                onToggleLike={toggleLike}
-                saved={saved}
+                liked={like.liked}
+                likes={like.likeCount}
+                onToggleLike={like.toggleLike}
+                saved={save.saved}
+                savedAtLoad={save.savedAtLoad}
                 onToggleSave={toggleSave}
               />
             </div>
@@ -348,6 +389,7 @@ export function VideoDetail({
         <ControlBar
           video={video}
           onDeleted={close}
+          onCommentsSwitchChange={setCommentsSwitchOff}
           isPlaying={playback?.isPlaying ?? false}
           currentTime={playback?.currentTime ?? 0}
           duration={playback?.duration ?? video.durationSeconds}
@@ -399,14 +441,12 @@ export function VideoDetail({
               >
                 Comments
               </PanelTabButton>
-              {creatorId && (
-                <PanelTabButton
-                  active={tab === "creator"}
-                  onClick={() => setTab("creator")}
-                >
-                  Creator videos
-                </PanelTabButton>
-              )}
+              <PanelTabButton
+                active={tab === "creator"}
+                onClick={() => setTab("creator")}
+              >
+                Creator videos
+              </PanelTabButton>
               <span
                 aria-hidden
                 className="absolute bottom-0 h-0.5 rounded-full bg-[var(--tt-text)] transition-[left,width] duration-300 ease-out"
@@ -429,13 +469,12 @@ export function VideoDetail({
           {/* One tab at a time, each owning the column's whole remaining height —
               there is no summary block above it any more. */}
           <div className="min-h-0 flex-1">
-            {tab === "comments" || !creatorId ? (
+            {tab === "comments" ? (
               <CommentPanel
                 variant="detail"
                 videoId={video.id}
                 videoOwnerId={video.author.userId}
-                comments={comments}
-                commentsDisabled={video.commentsDisabled}
+                commentsDisabled={commentsDisabled}
                 commentCount={commentCount}
                 onClose={closePanel}
                 onCommentAdded={() => setExtraComments((n) => n + 1)}

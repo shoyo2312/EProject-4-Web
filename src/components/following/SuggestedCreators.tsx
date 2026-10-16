@@ -53,7 +53,7 @@ export function SuggestedCreators({
       {!isLoading && creators.length === 0 && (
         <p className="px-4 py-24 text-center text-[15px] text-[var(--tt-text-muted)]">
           {error
-            ? "Can’t reach the API gateway on :8080."
+            ? "Can’t connect right now. Check your connection and try again."
             : "No creators to suggest yet."}
         </p>
       )}
@@ -78,7 +78,7 @@ export function SuggestedCreators({
  */
 function CreatorCard({ creator }: { creator: SuggestedCreator }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { following, toggle } = useFollow(creator.author.userId, creator.isFollowing);
+  const { following, requested, toggle } = useFollow(creator.author.userId, creator.isFollowing);
 
   const preview = (playing: boolean) => {
     const video = videoRef.current;
@@ -121,6 +121,7 @@ function CreatorCard({ creator }: { creator: SuggestedCreator }) {
         <img
           src={creator.author.avatarUrl}
           alt=""
+          referrerPolicy="no-referrer"
           className="mb-[14px] h-12 w-12 rounded-full bg-[rgb(136_136_136/0.5)] object-cover"
         />
 
@@ -148,12 +149,12 @@ function CreatorCard({ creator }: { creator: SuggestedCreator }) {
           aria-pressed={following}
           className={cn(
             "mt-2 h-[37px] w-[164px] rounded-[4px] text-[18px] leading-[25px] font-semibold transition-colors",
-            following
+            following || requested
               ? "bg-[var(--tt-field)] text-white hover:bg-[var(--tt-shape-neutral-3)]"
               : "bg-[var(--tt-red-active)] text-white hover:bg-[var(--tt-red)]",
           )}
         >
-          {following ? "Following" : "Follow"}
+          {following ? "Following" : requested ? "Requested" : "Follow"}
         </button>
       </div>
     </Link>

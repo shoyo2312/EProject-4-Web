@@ -3,75 +3,30 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { BackendVideoDetail } from "@/components/video/BackendVideoDetail";
-import { VideoDetail } from "@/components/video/VideoDetail";
+import { isBackendVideoId } from "@/lib/api/adapters";
 import { COMMENT_PANEL_COOKIE } from "@/lib/comment-panel";
-import {
-  getCommentsForVideo,
-  getVideoById,
-  getVideoNeighbours,
-} from "@/lib/data";
 
 type Params = {
   params: Promise<{ id: string }>;
 };
 
-/**
- * video-service ids are 19-digit Snowflakes; the mock feed's are "1", "x7",
- * "citylapse~videos~3". Length separates them cleanly, and it is tested as a
- * string — parsing a Snowflake into a JS number loses precision silently.
- */
-function isBackendVideoId(id: string): boolean {
-  return /^\d{15,}$/.test(id);
-}
-
-export async function generateMetadata({
-  params,
-}: Pick<Params, "params">): Promise<Metadata> {
-  const { id } = await params;
-  if (isBackendVideoId(id)) return { title: "Nowa" };
-
-  const video = await getVideoById(id);
-  if (!video) return { title: "Video not found | Nowa" };
-
-  return {
-    title: `${video.author.nickname} on Nowa`,
-    description: video.description || video.title,
-  };
-}
+export const metadata: Metadata = { title: "Nowa" };
 
 /**
- * The single-video page. Reached from an Explore tile, and it also resolves the
- * feed's own ids, so `/video/1` works as a permalink for a For You video.
+ * The single-video page, reached from a feed card, an Explore tile or a
+ * profile grid.
  *
- * Backend videos are fetched in the browser instead: the viewer's token decides
- * whether their own PROCESSING or PRIVATE video is visible at all, and the
- * server rendering this page has no token.
+ * The video is fetched in the browser: the viewer's token decides whether their
+ * own PROCESSING or PRIVATE video is visible at all, and the server rendering
+ * this page has no token.
  */
 export default async function VideoPage({ params }: Params) {
   const { id } = await params;
+  if (!isBackendVideoId(id)) notFound();
+
   /* The comment panel opens unless the reader closed it last time, and this
      runs on the server so the first paint is already right. */
   const panelOpen = (await cookies()).get(COMMENT_PANEL_COOKIE)?.value !== "0";
 
-  if (isBackendVideoId(id)) {
-    return <BackendVideoDetail videoId={id} initialPanelOpen={panelOpen} />;
-  }
-
-  const video = await getVideoById(id);
-  if (!video) notFound();
-
-  const [comments, neighbours] = await Promise.all([
-    getCommentsForVideo(video),
-    getVideoNeighbours(id),
-  ]);
-
-  return (
-    <VideoDetail
-      video={video}
-      comments={comments}
-      previousId={neighbours.previousId}
-      nextId={neighbours.nextId}
-      initialPanelOpen={panelOpen}
-    />
-  );
+  return <BackendVideoDetail videoId={id} initialPanelOpen={panelOpen} />;
 }

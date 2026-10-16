@@ -201,6 +201,28 @@
 }
 
 /*
+ * Accessibility -> "Increase color contrast", written on <html> by
+ * `HighContrastSync`.
+ *
+ * Only the alpha-blended values move. The brand red and the page black are
+ * already at full strength, so repainting them would make this a second theme
+ * rather than the contrast bump the row actually offers. Every value here is
+ * the token's own colour at a higher alpha, which is why nothing else in the
+ * app needs to know this mode exists.
+ */
+.high-contrast {
+  --tt-text: rgb(255 255 255 / 1);
+  --tt-text-secondary: rgb(255 255 255 / 0.92);
+  --tt-text-muted: rgb(255 255 255 / 0.8);
+  --tt-placeholder: rgb(255 255 255 / 0.7);
+  --tt-field: rgb(255 255 255 / 0.24);
+  --tt-shape-neutral-3: rgb(255 255 255 / 0.32);
+  --tt-comment-panel: rgb(255 255 255 / 0.2);
+  --tt-divider: rgb(255 255 255 / 0.32);
+  --tt-progress-track: rgb(255 255 255 / 0.6);
+}
+
+/*
  * Comment sidebar width. `Feed` toggles `.comments-open` on <html> so this
  * cascades to both the sidebar itself and to the TopBar, which must step aside
  * for it — the two are siblings, so a variable on the root is the only way to
@@ -226,6 +248,9 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* Thumb, then track: every scrollbar sits on the page black. `.no-scrollbar` still wins. */
+    scrollbar-color: rgb(255 255 255 / 0.3) var(--tt-page);
+    scrollbar-width: thin;
   }
   body {
     background-color: var(--tt-page);
@@ -255,6 +280,23 @@
   }
   input[type="range"] {
     cursor: pointer;
+  }
+  /* `useFocusTrap` focuses the dialog itself on open; that is not a control to ring. */
+  [role="dialog"]:focus,
+  [role="alertdialog"]:focus {
+    outline: none;
+  }
+  /*
+   * Chrome paints autofilled fields with its own `background-color` and
+   * `color` marked `!important` in the UA stylesheet, which author CSS cannot
+   * beat. Stalling the background transition keeps our fill, and
+   * `-webkit-text-fill-color` sits outside that rule so the text stays ours.
+   */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--tt-text);
+    transition: background-color 600000s 0s;
   }
 }
 

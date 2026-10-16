@@ -4,7 +4,9 @@ import { apiFetch } from "@/lib/api/client";
 import type {
   CommentLikeResponse,
   CommentPageResponse,
+  CommentPermissionResponse,
   CommentResponse,
+  InteractionCountResponse,
   LikeStatusResponse,
   RepostContextResponse,
   RepostStatusResponse,
@@ -42,6 +44,7 @@ export function recordWatch(
     method: "POST",
     body: { watchedMs: Math.round(watchedMs), durationMs: Math.round(durationMs) },
     auth: "required",
+    keepalive: true,
   });
 }
 
@@ -78,14 +81,6 @@ export function unlikeVideo(videoId: string): Promise<LikeStatusResponse> {
     method: "DELETE",
     auth: "required",
   });
-}
-
-/** `GET /interactions/videos/{videoId}/like-status` — whether the viewer liked it. */
-export function getLikeStatus(videoId: string): Promise<LikeStatusResponse> {
-  return apiFetch<LikeStatusResponse>(
-    `/interactions/videos/${videoId}/like-status`,
-    { auth: "required" },
-  );
 }
 
 /**
@@ -134,6 +129,23 @@ export function getRepostContexts(videoIds: string[]): Promise<RepostContextResp
   return apiFetch<RepostContextResponse[]>("/interactions/videos/repost-context/batch", {
     auth: "required",
     query: { ids: videoIds.join(",") },
+  });
+}
+
+/**
+ * `GET /interactions/videos/counts/batch` — every counter for a page of videos
+ * in one hop. Public. The server answers for at most 50 distinct ids, which a
+ * feed page stays under; an id with no interactions comes back as zeros.
+ */
+export function getVideoCounts(
+  videoIds: string[],
+  signal?: AbortSignal,
+): Promise<InteractionCountResponse[]> {
+  if (videoIds.length === 0) return Promise.resolve([]);
+  return apiFetch<InteractionCountResponse[]>("/interactions/videos/counts/batch", {
+    auth: "none",
+    query: { videoIds: videoIds.join(",") },
+    signal,
   });
 }
 
@@ -205,6 +217,48 @@ export function addComment(
     body: parentId ? { content, parentId } : { content },
     auth: "required",
   });
+}
+
+/** `GET /interactions/videos/{videoId}/comment-permission` — may the viewer comment here. */
+export function getCommentPermission(
+  videoId: string,
+): Promise<CommentPermissionResponse> {
+  return apiFetch<CommentPermissionResponse>(
+    `/interactions/videos/${videoId}/comment-permission`,
+    { auth: "required" },
+  );
+}
+
+/**
+ * `GET /interactions/videos/{videoId}/held-comments` — the owner's review queue:
+ * comments the text rules held, newest first, cursor paged like `listComments`.
+ * Fails closed: while video-service cannot confirm who owns the video, the owner
+ * gets `NOT_VIDEO_OWNER` like anyone else.
+ */
+export function listHeldComments(
+  videoId: string,
+  cursor?: string,
+): Promise<CommentPageResponse> {
+  return apiFetch<CommentPageResponse>(`/interactions/videos/${videoId}/held-comments`, {
+    auth: "required",
+    query: { cursor },
+  });
+}
+
+/**
+ * `POST /interactions/videos/{videoId}/comments/{commentId}/approve` — the owner
+ * publishes a held comment, which then counts and announces itself like a new
+ * one. A repeat answers the same without counting twice. Rejecting one is
+ * `deleteComment`.
+ */
+export function approveComment(
+  videoId: string,
+  commentId: string,
+): Promise<CommentResponse> {
+  return apiFetch<CommentResponse>(
+    `/interactions/videos/${videoId}/comments/${commentId}/approve`,
+    { method: "POST", auth: "required" },
+  );
 }
 
 /** `DELETE /interactions/videos/{videoId}/comments/{commentId}` — owner only. */

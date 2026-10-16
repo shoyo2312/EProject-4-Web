@@ -24,7 +24,7 @@ export function formatDuration(seconds: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-/** A backend comment's `createdAt` as "3d ago", matching the mock comments' style. */
+/** An ISO timestamp as "3d ago", the way TikTok dates comments and videos. */
 export function formatRelativeTime(iso: string): string {
   const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
   if (seconds < 60) return "now";
@@ -37,6 +37,19 @@ export function formatRelativeTime(iso: string): string {
   const weeks = days / 7;
   if (weeks < 4) return `${Math.floor(weeks)}w ago`;
   return `${Math.floor(days / 30)}mo ago`;
+}
+
+/**
+ * A moment to the minute, as "Oct 13, 2026, 9:05 PM" in the viewer's own zone —
+ * for limits that lift at a time of day rather than at midnight, like the
+ * rename locks. `timeZone` exists for tests.
+ */
+export function formatDateTime(at: Date, timeZone?: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone,
+  }).format(at);
 }
 
 /** File size for the upload preview — MB below a gigabyte, GB from there. */

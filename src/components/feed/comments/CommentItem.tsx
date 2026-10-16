@@ -7,20 +7,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 
 import { CommentText } from "@/components/feed/comments/CommentStates";
+import { ReplyThread } from "@/components/feed/comments/ReplyThread";
 import type { ReplyTarget } from "@/components/feed/comments/types";
 import { HeartIcon, ReportIcon } from "@/components/icons";
 import { ReportDialog } from "@/components/report/ReportDialog";
 import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
 import { useDismiss } from "@/hooks/use-dismiss";
-import {
-  REPLY_PAGE_SIZE,
-  likeComment,
-  listReplies,
-  unlikeComment,
-} from "@/lib/api/interactions";
+import { likeComment, unlikeComment } from "@/lib/api/interactions";
 import { COMMENT_REPORT_REASONS } from "@/lib/api/reports";
-import { toUiComments } from "@/lib/comment-cache";
 import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Comment } from "@/types/tiktok";
@@ -65,7 +60,6 @@ import type { Comment } from "@/types/tiktok";
  */export function CommentItem({
   comment,
   videoId,
-  isBackend,
   isReply = false,
   onReply,
   justAddedId,
@@ -79,8 +73,6 @@ import type { Comment } from "@/types/tiktok";
   comment: Comment;
   /** Backend video id — used to persist a like against this comment. */
   videoId: string;
-  /** A real video persists likes through interaction-service; a mock one toggles locally. */
-  isBackend: boolean;
   isReply?: boolean;
   onReply?: (target: ReplyTarget) => void;
   justAddedId?: string | null;
@@ -108,15 +100,15 @@ import type { Comment } from "@/types/tiktok";
   const menuRef = useRef<HTMLDivElement>(null);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
   // A comment still waiting on its POST has no real id to like against yet.
-  const canPersistLike = isBackend && /^\d+$/.test(comment.id);
+  const canPersistLike = /^\d+$/.test(comment.id);
 
   const toggleLike = async () => {
-    if (isBackend && !user) {
+    if (!user) {
       openLogin();
       return;
     }
     if (!canPersistLike) {
-      // Mock video, or an optimistic row not yet saved — keep the old local-only toggle.
+      // An optimistic row not yet saved — toggle locally until it has an id.
       setLiked((v) => !v);
       setLikeCount((n) => n + (liked ? -1 : 1));
       return;
@@ -141,13 +133,14 @@ import type { Comment } from "@/types/tiktok";
     }
   };
   const avatarSize = isReply ? 24 : 32;
-  // Mock authors carry no `userId`, so this is false for every mock comment —
-  // the "⋯" stays decorative there, same as before this was wired up.
   const canDelete =
     Boolean(currentUserId) && (comment.author.userId === currentUserId || canModerate);
-  // Someone else's comment on a real video: report it instead. A mock comment
-  // or an optimistic row not yet saved has no id admin-service could act on.
-  const canReport = !canDelete && canPersistLike;
+  // Reporting stands beside Delete rather than replacing it: an owner who
+  // clears a comment off their video still wants it in front of a moderator,
+  // and the comment's own author is the one who notices when their account has
+  // been posting things they did not write. An optimistic row not yet saved
+  // has no id admin-service could act on.
+  const canReport = canPersistLike;
   const menuHasItems = canDelete || canReport;
 
   /* Click anywhere else — including the next comment's "⋯" — closes the menu. */
@@ -223,31 +216,25 @@ import type { Comment } from "@/types/tiktok";
                 type="button"
                 onClick={menuHasItems ? () => setMenuOpen((open) => !open) : undefined}
                 aria-label="More options"
+                aria-haspopup={menuHasItems ? "menu" : undefined}
                 aria-expanded={menuHasItems ? menuOpen : undefined}
                 className="flex h-5 w-3.5 items-center justify-center text-white/60 hover:text-[var(--tt-text)]"
               >
                 <MoreDotsGlyph />
               </button>
 
-              {/* The viewer's own comment (or one on their video) can be
-                  deleted; anyone else's can be reported. */}
+              {/* Report is offered to everyone the comment is actionable for;
+                  Delete only to its author and the video's owner, and last, so
+                  the destructive item is never the one under a stray click. */}
               {menuOpen && menuHasItems && (
-                <div className="absolute right-0 top-6 z-20 w-max animate-[tt-comment-in_150ms_ease-out] overflow-hidden rounded-[8px] border border-[var(--tt-divider)] bg-black shadow-lg">
-                  {canDelete ? (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-6 z-20 w-max animate-[tt-comment-in_150ms_ease-out] overflow-hidden rounded-[8px] border border-[var(--tt-divider)] bg-black shadow-lg"
+                >
+                  {canReport && (
                     <button
                       type="button"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onDelete?.(comment.id);
-                      }}
-                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:text-[var(--tt-red)]"
-                    >
-                      <Trash2 className="h-4 w-4 flex-none" strokeWidth={2} />
-                      Delete
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
+                      role="menuitem"
                       onClick={() => {
                         setMenuOpen(false);
                         if (!user) {
@@ -256,10 +243,24 @@ import type { Comment } from "@/types/tiktok";
                         }
                         setReportOpen(true);
                       }}
-                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:bg-[var(--tt-shape-neutral-3)]"
+                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:bg-white/10"
                     >
                       <ReportIcon className="h-4 w-4 flex-none" />
                       Report
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDelete?.(comment.id);
+                      }}
+                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:bg-white/10 hover:text-[var(--tt-red)]"
+                    >
+                      <Trash2 className="h-4 w-4 flex-none" strokeWidth={2} />
+                      Delete
                     </button>
                   )}
                 </div>
@@ -289,25 +290,28 @@ import type { Comment } from "@/types/tiktok";
               <span className="text-[13px] leading-[19.5px] text-[var(--tt-placeholder)]">
                 {comment.timestamp}
               </span>
-              <button
-                type="button"
-                onClick={() =>
-                  onReply?.({
-                    parentId: parentId ?? comment.id,
-                    username: comment.author.username,
-                    replyToCommentId: comment.id,
-                    replyToName: isReply ? comment.author.nickname : undefined,
-                  })
-                }
-                className={cn(
-                  "text-white/60 hover:underline",
-                  isReply
-                    ? "text-[13px] font-semibold leading-[16.9px]"
-                    : "text-[14px] font-medium leading-[18.2px]",
-                )}
-              >
-                Reply
-              </button>
+              {/* Absent when the viewer may not comment — a reply is a comment. */}
+              {onReply && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onReply({
+                      parentId: parentId ?? comment.id,
+                      username: comment.author.username,
+                      replyToCommentId: comment.id,
+                      replyToName: isReply ? comment.author.nickname : undefined,
+                    })
+                  }
+                  className={cn(
+                    "text-white/60 hover:underline",
+                    isReply
+                      ? "text-[13px] font-semibold leading-[16.9px]"
+                      : "text-[14px] font-medium leading-[18.2px]",
+                  )}
+                >
+                  Reply
+                </button>
+              )}
             </div>
 
             <button
@@ -337,182 +341,24 @@ import type { Comment } from "@/types/tiktok";
           replyCount={comment.replyCount ?? comment.replies?.length ?? 0}
           parentId={comment.id}
           videoId={videoId}
-          isBackend={isBackend}
-          onReply={onReply}
           justAddedId={justAddedId}
           onRepliesLoaded={onRepliesLoaded}
+          renderReply={(reply) => (
+            <CommentItem
+              comment={reply}
+              videoId={videoId}
+              isReply
+              parentId={comment.id}
+              onReply={onReply}
+              justAddedId={justAddedId}
+              currentUserId={currentUserId}
+              canModerate={canModerate}
+              onDelete={onDelete}
+            />
+          )}
         />
       )}
     </div>
-  );
-}
-
-/**
- * `.DivReplyContainer` — flex column, gap 16px, **margin-left 52px**. Note the
- * indent is 52px from the comment row's left edge, i.e. 12px *past* where the
- * parent's own text starts (32px avatar + 8px gap = 40px), so replies do not
- * line up with the text above them.
- *
- * Collapsed:
- *   .DivViewMoreRepliesWrapper  flex row, gap 8px, margin-left -6px
- *   └ .DivViewRepliesContainer  flex row, gap 6px
- *     ├ button "View N replies" 14px / 500 / 18px, rgba(255,255,255,.6)
- *     └ chevron                 13×13, same colour
- *
- * Expanded, the wrapper becomes `justify-between`: "View N replies" keeps the
- * left slot and "Hide" takes the right, matching the live site's pagination.
- * Replies come down `REPLY_PAGE_SIZE` at a time, one request per click — a
- * comment with 30 replies costs nothing until somebody opens it.
- */
-function ReplyThread({
-  replies,
-  replyCount,
-  parentId,
-  videoId,
-  isBackend,
-  onReply,
-  justAddedId,
-  onRepliesLoaded,
-}: {
-  /** The replies already loaded — fetched pages plus anything posted locally. */
-  replies: Comment[];
-  /** What the server says the thread holds, which is what the button counts down. */
-  replyCount: number;
-  parentId: string;
-  videoId: string;
-  isBackend: boolean;
-  onReply?: (target: ReplyTarget) => void;
-  justAddedId?: string | null;
-  onRepliesLoaded?: (parentId: string, replies: Comment[]) => void;
-}) {
-  /** How many replies are on screen — 0 is the collapsed thread. */
-  const [shownCount, setShownCount] = useState(0);
-  const [revealedFor, setRevealedFor] = useState<string | null>(null);
-  const [cursor, setCursor] = useState<string | null>(null);
-  /** Mock videos have no thread endpoint: their replies are all in the prop already. */
-  const [exhausted, setExhausted] = useState(!isBackend);
-  const [loading, setLoading] = useState(false);
-
-  // Posting a reply into a collapsed thread has to reveal it, or the comment
-  // the user just wrote would appear to vanish. Adjusting state during render
-  // (rather than in an effect) is React's sanctioned way to react to a changed
-  // prop; `revealedFor` makes it fire once, so "Hide" still works afterwards.
-  // A new reply is appended last, so revealing the whole thread is what shows it.
-  if (
-    justAddedId &&
-    justAddedId !== revealedFor &&
-    replies.some((reply) => reply.id === justAddedId)
-  ) {
-    setRevealedFor(justAddedId);
-    setShownCount(replies.length);
-  }
-
-  const shown = replies.slice(0, shownCount);
-  // `replies` can outrun the server's tally — a reply posted locally is on
-  // screen before any listing counts it — so the larger of the two is the
-  // thread's real length.
-  const remaining = Math.max(0, Math.max(replyCount, replies.length) - shown.length);
-
-  const showMore = async () => {
-    const next = shownCount + REPLY_PAGE_SIZE;
-    setShownCount(next);
-    // Replies already in hand (posted locally, or a page fetched then hidden)
-    // are revealed for free; only a click that runs past them goes back out.
-    if (exhausted || loading || replies.length >= next) return;
-
-    setLoading(true);
-    try {
-      const page = await listReplies(videoId, parentId, cursor ?? undefined);
-      const entries = await toUiComments(page.items);
-      onRepliesLoaded?.(parentId, entries.map((entry) => entry.ui));
-      setCursor(page.nextCursor);
-      setExhausted(!page.hasMore);
-    } catch {
-      // Leave the button where it is — clicking again retries.
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="ml-[52px] flex flex-col gap-4">
-      {shown.map((reply) => (
-        <CommentItem
-          key={reply.id}
-          comment={reply}
-          videoId={videoId}
-          isBackend={isBackend}
-          isReply
-          parentId={parentId}
-          onReply={onReply}
-          justAddedId={justAddedId}
-        />
-      ))}
-
-      <div className="-ml-1.5 flex flex-row items-center justify-between gap-2">
-        {remaining > 0 ? (
-          <div className="flex flex-row items-center gap-1.5">
-            <span className="w-6 border-t border-white/40" />
-
-            <button
-              type="button"
-              onClick={() => void showMore()}
-              disabled={loading}
-              aria-expanded={shownCount > 0}
-              aria-busy={loading}
-              className={cn(
-                "flex flex-row items-center gap-1.5 py-px font-medium text-white/60 hover:opacity-80 transition-opacity duration-200 ease-in-out",
-                shownCount > 0 ? "text-[14px] leading-[21px]" : "text-[14px] leading-[18px]",
-              )}
-            >
-              {`View ${remaining} ${remaining === 1 ? "reply" : "replies"}`}
-              <ChevronDownGlyph />
-            </button>
-          </div>
-        ) : (
-          // Keeps "Hide" in the right slot once every reply is shown.
-          <span />
-        )}
-
-        {shownCount > 0 && (
-          <button
-            type="button"
-            onClick={() => setShownCount(0)}
-            className="flex flex-row items-center gap-1.5 py-px text-[14px] font-medium leading-[21px] text-white/60 hover:opacity-80 transition-opacity duration-200 ease-in-out"
-          >
-            Hide
-            <ChevronUpGlyph />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** The 13×13 chevron beside "View N replies" — path taken from the live SVG. */
-function ChevronDownGlyph() {
-  return (
-    <svg
-      viewBox="0 0 48 48"
-      className="h-[13px] w-[13px] flex-none text-white/60"
-      fill="currentColor"
-      aria-hidden
-    >
-      <path d="m24 27.76 13.17-13.17a1 1 0 0 1 1.42 0l2.82 2.82a1 1 0 0 1 0 1.42L25.06 35.18a1.5 1.5 0 0 1-2.12 0L6.59 18.83a1 1 0 0 1 0-1.42L9.4 14.6a1 1 0 0 1 1.42 0L24 27.76Z" />
-    </svg>
-  );
-}
-
-function ChevronUpGlyph() {
-  return (
-      <svg
-          viewBox="0 0 48 48"
-          className="h-[13px] w-[13px] flex-none text-white/60"
-          fill="currentColor"
-          aria-hidden
-      >
-        <path d="m24 20.24 13.17 13.17a1 1 0 0 0 1.42 0l2.82-2.82a1 1 0 0 0 0-1.42L25.06 12.82a1.5 1.5 0 0 0-2.12 0L6.59 29.17a1 1 0 0 0 0 1.42l2.81 2.81a1 1 0 0 0 1.42 0L24 20.24Z" />
-      </svg>
   );
 }
 

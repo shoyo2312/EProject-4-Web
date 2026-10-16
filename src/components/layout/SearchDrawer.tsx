@@ -8,8 +8,12 @@ import { useEscapeKey } from "@/hooks/use-escape-key";
 import { ClockIcon, CloseIcon, DotIcon, SearchIcon, TrendingIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
+import { getTrending } from "@/lib/api/recommendations";
+import { SEARCH_MAX_LENGTH } from "@/lib/api/search";
 import { searchUsers } from "@/lib/api/users";
 import type { UserProfileResponse } from "@/lib/api/types";
+import { getVideosByIds } from "@/lib/api/videos";
+import { suggestionTerms } from "@/lib/search-suggestions";
 import { cn } from "@/lib/utils";
 
 /** How long the field sits still before it asks the server. */
@@ -18,30 +22,20 @@ const SEARCH_DEBOUNCE_MS = 250;
 /**
  * Where the viewer's own recent searches live. The live site keeps this
  * server-side, per account; there is no such endpoint here, so it is the one
- * piece of this panel that is deliberately local to the browser.
+ * piece of this panel that is deliberately local to the browser — but still
+ * one list per account, so a shared browser does not show the last person's.
  */
-const HISTORY_KEY = "nowa:search-history";
+const historyKey = (userId: string | undefined) =>
+  `nowa:search-history:${userId ?? "guest"}`;
 const HISTORY_LIMIT = 8;
 
-/**
- * Suggestions under "You may like". The live panel is fed by TikTok's own
- * trending index — ours is a fixed list of our own terms, and stays a constant
- * until there is a trending endpoint to read.
- */
-const SUGGESTIONS: readonly { term: string; trending?: boolean }[] = [
-  { term: "dance challenge", trending: true },
-  { term: "street food tour", trending: true },
-  { term: "study with me", trending: true },
-  { term: "gym motivation" },
-  { term: "cat compilation" },
-  { term: "acoustic covers" },
-  { term: "phone photography tips" },
-  { term: "one pan dinners" },
-];
+/** Rows under "You may like", and how many of the top ones get the rising mark. */
+const SUGGESTION_LIMIT = 8;
+const MARKED_TRENDING = 3;
 
-function readHistory(): string[] {
+function readHistory(key: string): string[] {
   try {
-    const raw = localStorage.getItem(HISTORY_KEY);
+    const raw = localStorage.getItem(key);
     const parsed: unknown = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === "string") : [];
   } catch {
@@ -51,9 +45,9 @@ function readHistory(): string[] {
   }
 }
 
-function writeHistory(terms: string[]): void {
+function writeHistory(key: string, terms: string[]): void {
   try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(terms));
+    localStorage.setItem(key, JSON.stringify(terms));
   } catch {
     // Storage full or blocked — the in-memory list still drives this session.
   }
@@ -90,10 +84,14 @@ function writeHistory(terms: string[]): void {
 export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
   const { user } = useSession();
+  const signedIn = user !== null;
   const [query, setQuery] = useState("");
   const [history, setHistory] = useState<string[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const key = historyKey(user?.userId);
+  /** Whose list `history` holds; null until the first open. */
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [results, setResults] = useState<UserProfileResponse[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const term = query.trim();
@@ -102,9 +100,9 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
   // in an effect: `localStorage` does not exist in the server render, so the
   // list has to start empty on both sides of hydration and fill in only once a
   // click has proved we are in a browser.
-  if (open && !loaded) {
-    setLoaded(true);
-    setHistory(readHistory());
+  if (open && loadedKey !== key) {
+    setLoadedKey(key);
+    setHistory(readHistory(key));
   }
 
   useEffect(() => {
@@ -120,8 +118,24 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
   useEscapeKey(onClose, open);
 
   useEffect(() => {
-    // user-service has no public read, so there is nothing to ask for signed out.
-    if (!user || term.length === 0) return;
+    if (!open) return;
+    // Read on every open: the chart is rebuilt each minute. Twice the rows
+    // asked for, since deleted videos and repeated titles drop out on the way.
+    const controller = new AbortController();
+    getTrending(SUGGESTION_LIMIT * 2, controller.signal)
+      .then((ranked) => getVideosByIds(ranked.map((item) => item.videoId), controller.signal))
+      .then((videos) =>
+        setSuggestions(suggestionTerms(videos.map((video) => video.title), SUGGESTION_LIMIT)),
+      )
+      .catch(() => {
+        // Aborted, or the chart is unreachable — the previous list stays.
+      });
+    return () => controller.abort();
+  }, [open]);
+
+  useEffect(() => {
+    // Account search needs a token, so there is nothing to ask for signed out.
+    if (!signedIn || term.length === 0) return;
 
     const controller = new AbortController();
     // Debounced, and the in-flight request is aborted when the next keystroke
@@ -140,7 +154,7 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
       clearTimeout(timer);
       controller.abort();
     };
-  }, [term, user, open]);
+  }, [term, signedIn, open]);
 
   /**
    * Submitting the field is a video search, not an account one: the accounts
@@ -163,18 +177,18 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
     if (!entry) return;
     setHistory((current) => {
       const next = [entry, ...current.filter((t) => t !== entry)].slice(0, HISTORY_LIMIT);
-      writeHistory(next);
+      writeHistory(key, next);
       return next;
     });
-  }, []);
+  }, [key]);
 
   const forget = useCallback((value: string) => {
     setHistory((current) => {
       const next = current.filter((t) => t !== value);
-      writeHistory(next);
+      writeHistory(key, next);
       return next;
     });
-  }, []);
+  }, [key]);
 
   const showLists = term.length === 0;
 
@@ -192,7 +206,7 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
       )}
 
       <div
-        aria-hidden={!open}
+        inert={!open || undefined}
         className={cn(
           // z-1 puts the panel *under* the sidebar's animation cover. That is what
           // keeps the slide from reading as a pane flying across the search
@@ -241,6 +255,7 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
             type="text"
             placeholder="Search"
             aria-label="Search"
+            maxLength={SEARCH_MAX_LENGTH}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className="mx-2 w-full bg-transparent text-[14px] leading-[21px] text-[var(--tt-text)] placeholder:text-[var(--tt-placeholder)] focus:outline-none"
@@ -282,27 +297,29 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
                 </ul>
               )}
 
-              <ul>
-                <ListHeader>You may like</ListHeader>
-                {SUGGESTIONS.map((suggestion) => (
-                  <Row
-                    key={suggestion.term}
-                    icon={
-                      suggestion.trending ? (
-                        <TrendingIcon className="h-4 w-4 text-[var(--tt-red)]" />
-                      ) : (
-                        <DotIcon className="h-4 w-4 text-[rgb(255_255_255/0.34)]" />
-                      )
-                    }
-                    label={suggestion.term}
-                    onSelect={() => {
-                      setQuery(suggestion.term);
-                      remember(suggestion.term);
-                      submit(suggestion.term);
-                    }}
-                  />
-                ))}
-              </ul>
+              {suggestions.length > 0 && (
+                <ul>
+                  <ListHeader>You may like</ListHeader>
+                  {suggestions.map((suggestion, index) => (
+                    <Row
+                      key={suggestion}
+                      icon={
+                        index < MARKED_TRENDING ? (
+                          <TrendingIcon className="h-4 w-4 text-[var(--tt-red)]" />
+                        ) : (
+                          <DotIcon className="h-4 w-4 text-[rgb(255_255_255/0.34)]" />
+                        )
+                      }
+                      label={suggestion}
+                      onSelect={() => {
+                        setQuery(suggestion);
+                        remember(suggestion);
+                        submit(suggestion);
+                      }}
+                    />
+                  ))}
+                </ul>
+              )}
             </>
           ) : (
             <ul>
@@ -338,6 +355,7 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
                       <img
                         src={result.avatarUrl || DEFAULT_AVATAR}
                         alt=""
+                        referrerPolicy="no-referrer"
                         width={40}
                         height={40}
                         className="h-10 w-10 flex-none rounded-full object-cover"

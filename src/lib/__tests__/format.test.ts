@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { formatBytes, formatCount, formatDuration } from "@/lib/format";
+import { formatBytes, formatCount, formatDateTime, formatDuration } from "@/lib/format";
+
+describe("formatDateTime", () => {
+  it("names the day and the minute, in the zone asked for", () => {
+    const at = new Date("2026-10-13T14:05:00Z");
+
+    // ICU puts a narrow no-break space before "PM"; compare on plain spaces.
+    expect(formatDateTime(at, "UTC").replace(/\s/g, " ")).toBe("Oct 13, 2026, 2:05 PM");
+    expect(formatDateTime(at, "Asia/Ho_Chi_Minh").replace(/\s/g, " ")).toBe(
+      "Oct 13, 2026, 9:05 PM",
+    );
+  });
+});
 
 describe("formatBytes", () => {
   it("reads in MB below a gigabyte and GB above", () => {

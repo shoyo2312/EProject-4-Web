@@ -5,8 +5,9 @@ import "./globals.css";
 import { TopBar } from "@/components/layout/TopBar";
 import { PlayerSettingsProvider } from "@/components/player/PlayerSettingsProvider";
 import { SessionProvider } from "@/components/session/SessionProvider";
+import { HighContrastSync } from "@/components/settings/HighContrastSync";
 import { Toaster } from "@/components/ui/toast";
-import { getLoginOptions } from "@/lib/data";
+import { LOGIN_OPTIONS, SIGNUP_OPTIONS } from "@/lib/site-config";
 
 // TikTok ships a proprietary self-hosted webfont ("TikTokFont") that cannot be
 // redistributed. Inter is the closest freely-licensable match by metrics.
@@ -36,7 +37,7 @@ export const metadata: Metadata = {
  * width goes directly in `app/<route>/page.tsx`. Either way it renders its own
  * `<main>` and inherits the top bar from here.
  */
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -44,12 +45,14 @@ export default async function RootLayout({
   // The viewer is NOT resolved here: the JWT pair lives in the browser, so the
   // server renders the signed-out shell and `SessionProvider` fills it in from
   // `GET /api/v1/me` on mount.
-  const loginOptions = await getLoginOptions();
-
   return (
     <html lang="en" className={`${tiktokFont.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <SessionProvider loginOptions={loginOptions}>
+        <SessionProvider loginOptions={LOGIN_OPTIONS} signupOptions={SIGNUP_OPTIONS}>
+          {/* Renders nothing; writes the accessibility class on <html>, which
+              every route reads through the design tokens. */}
+          <HighContrastSync />
+
           {/* Sound is a viewer preference shared by the feed and /video/[id],
               so it lives above the route that happens to be mounted. */}
           <PlayerSettingsProvider>

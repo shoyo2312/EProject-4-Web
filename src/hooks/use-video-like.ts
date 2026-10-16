@@ -1,91 +1,62 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 
-import { isBackendHandle } from "@/lib/api/adapters";
-import { getLikeStatus, likeVideo, unlikeVideo } from "@/lib/api/interactions";
-
-/** How often the single-video page re-asks the server for the like tally. */
-const LIKE_POLL_MS = 10_000;
+import { useSession } from "@/components/session/SessionProvider";
+import { useLikeDebounce } from "@/hooks/use-like-debounce";
+import { likeVideo, unlikeVideo } from "@/lib/api/interactions";
+import type { LikeStatusResponse } from "@/lib/api/types";
+import { displayLikeCount } from "@/lib/likes";
 
 /**
- * Heart state for one video on `/video/[id]`.
+ * The heart for one video, shared by the feed's cards and `/video/[id]`.
  *
- * Seeds the heart for a returning viewer, then keeps the count live: the tally
- * moves whenever anyone else likes the video, and `getLikeStatus` returns the
- * absolute figure, so re-asking it on an interval is the whole of the refresh.
- * Mock videos have no backend to ask and toggle locally.
- *
- * Deliberately dumb polling. A single open video page does not warrant a live
- * channel; if the comment list needs the same treatment that is where SSE
- * earns its keep, not here.
- *
- * `initialCount` already counts the viewer's own like, so a filled heart must
- * not add another — the server figure overrides the rendered one.
+ * Taps flip it at once and go out as one request per burst — see
+ * `useLikeDebounce`. The reply goes to `onConfirmed`, because the server's
+ * side lives with whoever seeded it (`useLikeStatuses`). Liking needs an
+ * account: signed out, the live site swallows the tap and opens the login
+ * modal instead.
  */
-export function useVideoLike(videoId: string, initialCount: number) {
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(initialCount);
+export function useVideoLike({
+  videoId,
+  serverLiked,
+  serverCount,
+  onConfirmed,
+}: {
+  videoId: string;
+  /** The viewer's like as the server last confirmed it. */
+  serverLiked: boolean;
+  /** The server's latest count — it already includes a confirmed like. */
+  serverCount: number;
+  onConfirmed: (status: LikeStatusResponse) => void;
+}) {
+  const { requireSignIn } = useSession();
 
-  /** Set while a like/unlike round trip is open, so a poll landing mid-flight
-   *  does not overwrite the optimistic heart with a server count that has not
-   *  caught up yet — the mutation's own `.then` is the authority in that window. */
-  const inFlight = useRef(false);
-
-  useEffect(() => {
-    if (!isBackendHandle(videoId)) return;
-    let cancelled = false;
-
-    const sync = () =>
-      getLikeStatus(videoId)
-        .then((status) => {
-          if (cancelled || inFlight.current) return;
-          setLiked(status.liked);
-          setLikeCount(status.likeCount);
-        })
-        .catch(() => {
-          // No session, or the call failed — leave whatever is on screen.
-        });
-
-    sync();
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") sync();
-    }, LIKE_POLL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [videoId]);
-
-  const setLike = useCallback(
-    (next: boolean) => {
-      setLiked(next);
-      setLikeCount((count) => count + (next ? 1 : -1));
-      if (!isBackendHandle(videoId)) return;
-
-      inFlight.current = true;
-      (next ? likeVideo(videoId) : unlikeVideo(videoId))
-        // The optimistic bump above is only a guess at the shared count.
-        .then((status) => setLikeCount(status.likeCount))
-        .catch(() => {
-          // Silent rollback, matching the feed's like button.
-          setLiked(!next);
-          setLikeCount((count) => count + (next ? -1 : 1));
-        })
-        .finally(() => {
-          inFlight.current = false;
-        });
+  const send = useCallback(
+    async (liked: boolean) => {
+      const status = liked ? await likeVideo(videoId) : await unlikeVideo(videoId);
+      // The reply carries the true state and count — the debounced tap only
+      // guessed, and is stale the moment anyone else likes the same video.
+      onConfirmed(status);
     },
-    [videoId],
+    [videoId, onConfirmed],
   );
 
-  const toggleLike = useCallback(() => setLike(!liked), [liked, setLike]);
+  const { liked, toggle } = useLikeDebounce(serverLiked, send);
+
+  const toggleLike = useCallback(() => {
+    if (requireSignIn()) toggle();
+  }, [requireSignIn, toggle]);
 
   /** The double-tap path: only ever fills the heart, never clears it. */
   const likeOnly = useCallback(() => {
-    if (!liked) setLike(true);
-  }, [liked, setLike]);
+    if (requireSignIn() && !liked) toggle();
+  }, [requireSignIn, liked, toggle]);
 
-  return { liked, likeCount, toggleLike, likeOnly };
+  return {
+    liked,
+    likeCount: displayLikeCount(serverCount, liked, serverLiked),
+    toggleLike,
+    likeOnly,
+  };
 }

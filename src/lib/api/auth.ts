@@ -3,30 +3,82 @@
 import { apiFetch } from "@/lib/api/client";
 import { clearTokens, getRefreshToken, storeTokens } from "@/lib/api/tokens";
 import type {
+  AccountResponse,
   MeResponse,
+  OtpSentResponse,
+  PasswordResetTicketResponse,
+  SignupTicketResponse,
   SocialLoginResponse,
   TokenResponse,
-  UserAccount,
 } from "@/lib/api/types";
 import type { SocialProvider } from "@/lib/auth/social";
 
 /**
- * `POST /api/v1/auth/register` — 201, and the account is NOT usable yet.
- *
- * `turnstileToken` is required — auth-service verifies it before doing
- * anything else, on every call, not just suspicious ones.
+ * What a call that mails a code needs to be let through: a solved Turnstile
+ * token, or the `resendTicket` the previous send to the same address answered
+ * with (auth-service `OtpSendGate`).
  */
-export function register(input: {
+export type SendProof = { turnstileToken: string } | { resendTicket: string };
+
+/** `data` is null from an auth-service that predates the ticket, which is no ticket. */
+function codeSent(sent: OtpSentResponse | null): OtpSentResponse {
+  return { resendTicket: sent?.resendTicket ?? null };
+}
+
+/**
+ * `POST /api/v1/auth/register/start` — the email-first signup the modal uses.
+ * Mails a code to an address that has no account yet; nothing is created.
+ * 409 `EMAIL_ALREADY_EXISTS` for a taken address. Calling it again resends,
+ * and the previous code stops working.
+ *
+ * The first send needs a Turnstile token — auth-service checks it before doing
+ * anything else — and a resend can carry the ticket instead.
+ */
+export async function startSignup(email: string, proof: SendProof): Promise<OtpSentResponse> {
+  return codeSent(
+    await apiFetch<OtpSentResponse | null>("/auth/register/start", {
+      method: "POST",
+      body: { email, ...proof },
+      auth: "none",
+    }),
+  );
+}
+
+/**
+ * `POST /api/v1/auth/register/verify` — spends the code and answers the
+ * ticket `completeSignup` redeems (good for 30 minutes).
+ */
+export function verifySignup(email: string, otp: string): Promise<SignupTicketResponse> {
+  return apiFetch<SignupTicketResponse>("/auth/register/verify", {
+    method: "POST",
+    body: { email, otp },
+    auth: "none",
+  });
+}
+
+/**
+ * `POST /api/v1/auth/register/complete` — creates the account, already
+ * verified, and signs it in, so the pair is stored here like `login`'s.
+ * 409 `USERNAME_ALREADY_EXISTS` leaves the ticket usable; 400
+ * `SIGNUP_SESSION_EXPIRED` means start again from the email.
+ */
+export async function completeSignup(input: {
+  signupToken: string;
   username: string;
-  email: string;
   password: string;
-  turnstileToken: string;
-}): Promise<UserAccount> {
-  return apiFetch<UserAccount>("/auth/register", {
+}): Promise<TokenResponse> {
+  const tokens = await apiFetch<TokenResponse>("/auth/register/complete", {
     method: "POST",
     body: input,
     auth: "none",
   });
+
+  storeTokens({
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+  });
+
+  return tokens;
 }
 
 /**
@@ -107,19 +159,22 @@ export async function confirmSocialLink(
 }
 
 /**
- * `POST /api/v1/auth/email` — 204, and authenticated, unlike the rest of the
- * email flow: the account being given an address is the one holding the token,
- * and it has no address to name itself by. An OTP follows, spent at
- * `verify-email` like any other.
+ * `POST /api/v1/auth/email` — authenticated, unlike the rest of the email
+ * flow: the account being given an address is the one holding the token, and
+ * it has no address to name itself by. An OTP follows, spent at `verify-email`
+ * like any other; its resends go through `resendVerification`, with the ticket
+ * this answers.
  *
- * `turnstileToken` is required, same as every other OTP-issuing call.
+ * `turnstileToken` is required, as on every first send of a code.
  */
-export function addEmail(email: string, turnstileToken: string): Promise<void> {
-  return apiFetch<void>("/auth/email", {
-    method: "POST",
-    body: { email, turnstileToken },
-    auth: "required",
-  });
+export async function addEmail(email: string, turnstileToken: string): Promise<OtpSentResponse> {
+  return codeSent(
+    await apiFetch<OtpSentResponse | null>("/auth/email", {
+      method: "POST",
+      body: { email, turnstileToken },
+      auth: "required",
+    }),
+  );
 }
 
 /** `POST /api/v1/auth/verify-email` — 204. Six digits, 15-minute lifetime. */
@@ -135,50 +190,65 @@ export function verifyEmail(input: {
 }
 
 /**
- * `POST /api/v1/auth/resend-verification` — 204 even for unknown emails.
- *
- * `turnstileToken` is required, same as every other OTP-issuing call.
+ * `POST /api/v1/auth/resend-verification` — the same answer even for unknown
+ * emails. Takes a Turnstile token, or the ticket of the previous send.
  */
-export function resendVerification(
+export async function resendVerification(
   email: string,
-  turnstileToken: string,
-): Promise<void> {
-  return apiFetch<void>("/auth/resend-verification", {
+  proof: SendProof,
+): Promise<OtpSentResponse> {
+  return codeSent(
+    await apiFetch<OtpSentResponse | null>("/auth/resend-verification", {
+      method: "POST",
+      body: { email, ...proof },
+      auth: "none",
+    }),
+  );
+}
+
+/**
+ * `POST /api/v1/auth/forgot-password` — the same answer whether or not the
+ * email exists. Takes a Turnstile token, or the ticket of the previous send.
+ */
+export async function forgotPassword(
+  email: string,
+  proof: SendProof,
+): Promise<OtpSentResponse> {
+  return codeSent(
+    await apiFetch<OtpSentResponse | null>("/auth/forgot-password", {
+      method: "POST",
+      body: { email, ...proof },
+      auth: "none",
+    }),
+  );
+}
+
+/**
+ * `POST /api/v1/auth/reset-password/verify` — spends the reset code and
+ * answers the ticket `completePasswordReset` redeems (good for 15 minutes), so
+ * a wrong code is refused on the code step. 400 `INVALID_OTP`.
+ */
+export function verifyPasswordReset(email: string, otp: string): Promise<PasswordResetTicketResponse> {
+  return apiFetch<PasswordResetTicketResponse>("/auth/reset-password/verify", {
     method: "POST",
-    body: { email, turnstileToken },
+    body: { email, otp },
     auth: "none",
   });
 }
 
 /**
- * `POST /api/v1/auth/forgot-password` — 204 whether or not the email exists.
- *
- * `turnstileToken` is required, same as every other OTP-issuing call.
- */
-export function forgotPassword(
-  email: string,
-  turnstileToken: string,
-): Promise<void> {
-  return apiFetch<void>("/auth/forgot-password", {
-    method: "POST",
-    body: { email, turnstileToken },
-    auth: "none",
-  });
-}
-
-/**
- * `POST /api/v1/auth/reset-password` — 204.
+ * `POST /api/v1/auth/reset-password/complete` — 204. 400
+ * `RESET_SESSION_EXPIRED` means ask for a new code.
  *
  * Every session of the account dies the moment this succeeds, including this
  * device's: the local tokens are dropped here so nothing tries to use a token
  * the server has already invalidated.
  */
-export async function resetPassword(input: {
-  email: string;
-  otp: string;
+export async function completePasswordReset(input: {
+  resetToken: string;
   newPassword: string;
 }): Promise<void> {
-  await apiFetch<void>("/auth/reset-password", {
+  await apiFetch<void>("/auth/reset-password/complete", {
     method: "POST",
     body: input,
     auth: "none",
@@ -207,11 +277,6 @@ export async function logout(): Promise<void> {
   }
 }
 
-/** `GET /api/v1/auth/me` — the account, without the social profile. */
-export function getAccount(): Promise<UserAccount> {
-  return apiFetch<UserAccount>("/auth/me", { auth: "required" });
-}
-
 /**
  * `GET /api/v1/me` — the gateway's aggregate of account + profile. One round
  * trip instead of two, and it degrades to `profileReady: false` rather than
@@ -219,4 +284,21 @@ export function getAccount(): Promise<UserAccount> {
  */
 export function getMe(): Promise<MeResponse> {
   return apiFetch<MeResponse>("/me", { auth: "required" });
+}
+
+/**
+ * `PUT /api/v1/auth/me/username` — a new handle, once every 30 days.
+ * 409 `USERNAME_ALREADY_EXISTS`, 429 `USERNAME_CHANGE_TOO_SOON`. The current
+ * handle is a no-op that spends nothing.
+ *
+ * user-service learns of the change through Kafka, so for a few seconds
+ * `/users/by-username/{new}` can still 404: route to the viewer's own page from
+ * the session, not by looking the new handle up.
+ */
+export function changeUsername(username: string): Promise<AccountResponse> {
+  return apiFetch<AccountResponse>("/auth/me/username", {
+    method: "PUT",
+    body: { username },
+    auth: "required",
+  });
 }

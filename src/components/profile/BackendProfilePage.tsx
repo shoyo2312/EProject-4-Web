@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import type { ProfileDraft } from "@/components/profile/EditProfileModal";
 import { ProfilePage } from "@/components/profile/ProfilePage";
@@ -11,13 +12,19 @@ import {
   profileToUserProfile,
   videoToProfileVideo,
 } from "@/lib/api/adapters";
+import * as authApi from "@/lib/api/auth";
+import { forgetAuthor } from "@/lib/api/authors";
 import { isApiError, messageFor } from "@/lib/api/errors";
 import { listLikedVideos, listRepostedVideos, listSavedVideos } from "@/lib/api/interactions";
-import { getAccessToken } from "@/lib/api/tokens";
+import { isLastPage, type AccountResponse } from "@/lib/api/types";
 import * as usersApi from "@/lib/api/users";
 import { getUserVideoStats, getUserVideos, getVideosByIds } from "@/lib/api/videos";
+import { clearCommentCache } from "@/lib/comment-cache";
+import { appendUnique } from "@/lib/paging";
+import { changedProfileFields } from "@/lib/profile/changed-fields";
+import { toast } from "@/components/ui/toast";
 import { useUserRealtime } from "@/hooks/use-user-realtime";
-import type { ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
+import type { FollowStatus, ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
 
 /** How many videos the grid asks for in one page. */
 const VIDEO_PAGE = 30;
@@ -33,10 +40,8 @@ const MAX_GRID_SKELETON = 10;
 /**
  * A profile page built from user-service and video-service.
  *
- * Addressed by id, or by `userId: undefined` for "whoever is signed in",
- * because user-service has no handle to look up by — see the note in
- * `lib/api/adapters.ts`. The signed-in viewer still reaches their own page
- * through their real handle, which the route resolves against the session.
+ * Addressed by id, or by `userId: undefined` for "whoever is signed in" —
+ * `ProfileRouter` resolves a `/@name` handle to one of the two first.
  *
  * The prop is a plain string rather than a `{ kind }` object on purpose: an
  * object literal from the parent would be a new value on every render, which
@@ -45,6 +50,7 @@ const MAX_GRID_SKELETON = 10;
  */
 export function BackendProfilePage({ userId }: { userId?: string }) {
   const session = useSession();
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** Tab whose videos are in flight, and how many of them to expect. */
@@ -52,6 +58,11 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
     tab: ProfileTab;
     count: number;
   } | null>(null);
+
+  /** The Videos grid's last fetched page, and whether the server has more. */
+  const videoPage = useRef(0);
+  const [moreVideos, setMoreVideos] = useState(false);
+  const loadingMoreVideos = useRef(false);
 
   const viewerId = session.user?.userId;
   const sessionSettled = !session.isLoading;
@@ -62,7 +73,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
     // `/me` is still in flight would compute "not following" from a viewer id
     // that does not exist yet, and the Follow button would lie.
     if (!sessionSettled) return;
-    if (!userId && !session.user) return;
+    if (!userId && !viewerId) return;
 
     setError(null);
 
@@ -72,9 +83,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
         : await usersApi.getMyProfile();
 
       const isOwnPage = viewerId !== undefined && viewerId === raw.userId;
-
-      const author =
-        isOwnPage && session.user ? { ...session.user } : authorFromProfile(raw);
+      const author = authorFromProfile(raw);
 
       /**
        * Started here, awaited below. The grid is the slow request, so making
@@ -85,10 +94,10 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
        */
       const videosLoading = getUserVideos(raw.userId, 0, VIDEO_PAGE);
 
-      const [isFollowing, stats] = await Promise.all([
+      const [friendship, stats] = await Promise.all([
         viewerId !== undefined && !isOwnPage
-          ? usersApi.isFollowing(viewerId, raw.userId).catch(() => false)
-          : Promise.resolve(false),
+          ? usersApi.getFriendship(raw.userId).catch(() => null)
+          : Promise.resolve(null),
         // The header's "Likes" and video totals. Not fatal if it fails — the
         // profile still renders, with a zero, rather than the whole page
         // becoming an error over one number.
@@ -97,7 +106,8 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
 
       const withVideos = (videos: ProfileVideo[]) =>
         profileToUserProfile(raw, author, videos, {
-          isFollowing,
+          isFollowing: friendship?.following ?? false,
+          followRequested: friendship?.requested ?? false,
           totalLikes: stats?.totalLikes,
         });
 
@@ -119,13 +129,41 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       const videos = await videosLoading;
 
       setProfile(withVideos(videos.content.map(videoToProfileVideo)));
+      videoPage.current = 0;
+      setMoreVideos(!isLastPage(videos.page));
       setPending(null);
     } catch (cause) {
       // A 404 is deliberately ambiguous — no such account, or a block in either
       // direction. It is never presented as one or the other.
       setError(messageFor(cause));
     }
-  }, [userId, sessionSettled, session.user, viewerId]);
+  }, [userId, sessionSettled, viewerId]);
+
+  /** The next page of the Videos grid, when the reader scrolls to its end. */
+  const profileId = profile?.author.userId;
+  const loadMoreVideos = useCallback(async () => {
+    if (!profileId || loadingMoreVideos.current) return;
+    loadingMoreVideos.current = true;
+    try {
+      const next = videoPage.current + 1;
+      const page = await getUserVideos(profileId, next, VIDEO_PAGE);
+      videoPage.current = next;
+      const incoming = page.content.map(videoToProfileVideo);
+      setProfile((current) =>
+        current
+          ? {
+              ...current,
+              posts: { ...current.posts, videos: appendUnique(current.posts.videos, incoming) },
+            }
+          : current,
+      );
+      setMoreVideos(!isLastPage(page.page));
+    } catch {
+      // Left as it was: the sentinel is still there, so scrolling retries.
+    } finally {
+      loadingMoreVideos.current = false;
+    }
+  }, [profileId]);
 
   /**
    * Followers/following/total-likes only, no video refetch. Used after a
@@ -236,8 +274,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
    * the focus/visibility listener below is the only thing that updates the
    * numbers.
    */
-  const wsToken = session.user ? getAccessToken() : null;
-  useUserRealtime(targetId ?? null, wsToken, (frame) => {
+  useUserRealtime(targetId ?? null, (frame) => {
     setProfile((current) =>
       current
         ? {
@@ -285,41 +322,6 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
     return <ProfileSkeleton />;
   }
 
-  const saveProfile = async (draft: ProfileDraft) => {
-    /**
-     * Only what actually changed goes in the body. This is not tidiness: on
-     * this endpoint an empty string **deletes** the field, so posting the whole
-     * form would wipe a bio the viewer never touched.
-     */
-    const patch: { displayName?: string; bio?: string; avatarUrl?: string } = {};
-    if (draft.nickname !== profile.author.nickname) {
-      patch.displayName = draft.nickname;
-    }
-    if (draft.bio !== profile.bio) patch.bio = draft.bio;
-
-    try {
-      /**
-       * The photo is uploaded here and nowhere earlier: picking one only
-       * previewed a `blob:` URL, which is meaningless to the server and must
-       * never reach `avatarUrl`. The upload comes first so that a failing one
-       * aborts the whole save — the modal stays open with the error rather than
-       * reporting success for a name change that went through beside a photo
-       * that did not.
-       */
-      if (draft.avatarFile) {
-        const uploaded = await usersApi.uploadMyAvatar(draft.avatarFile);
-        session.updateUser({ avatarUrl: uploaded.avatarUrl ?? undefined });
-      } else if (Object.keys(patch).length === 0) {
-        return;
-      }
-
-      if (Object.keys(patch).length > 0) await session.updateProfile(patch);
-      await load();
-    } catch (cause) {
-      throw new Error(messageFor(cause));
-    }
-  };
-
   /**
    * Ownership is decided by the id that came back, not by how the page was
    * addressed: `/@<your id>` and `/@<your handle>` are the same account, and
@@ -329,24 +331,109 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
   const isOwner =
     session.user !== null && session.user.userId === profile.author.userId;
 
-  const toggleFollow = async (next: boolean) => {
-    if (targetId === undefined || isOwner) return;
+  /**
+   * Your own header is drawn from the session, at render time: it repaints the
+   * moment an edit lands, and it knows a new handle before user-service hears
+   * of it through Kafka. Folding the session into `load` instead made every
+   * session update — each step of a profile save — reload the whole page.
+   */
+  const shown: UserProfile =
+    isOwner && session.user ? { ...profile, author: { ...session.user } } : profile;
+
+  /**
+   * The page is addressed by handle, so a new one needs a new URL. The session
+   * takes the handle in the same transition as the navigation: updated alone,
+   * the old URL would stop matching the viewer and `ProfileRouter` would put up
+   * a skeleton to look that handle up — at user-service, which hears of renames
+   * through Kafka and can still be answering with the old one.
+   */
+  const moveToHandle = (account: AccountResponse) => {
+    startTransition(() => {
+      session.updateUser({
+        username: account.username,
+        handle: account.username,
+        usernameChangeableAt: account.usernameChangeableAt,
+      });
+      router.replace(`/@${encodeURIComponent(account.username)}`);
+    });
+  };
+
+  const saveProfile = async (draft: ProfileDraft) => {
+    /**
+     * Only what actually changed goes in the body. This is not tidiness: on
+     * this endpoint an empty string **deletes** the field, so posting the whole
+     * form would wipe a bio the viewer never touched.
+     */
+    const changes = changedProfileFields(draft, {
+      username: shown.author.username,
+      nickname: shown.author.nickname,
+      bio: shown.bio,
+    });
+    const patch: { displayName?: string; bio?: string; avatarUrl?: string } = {};
+    if (changes.nickname !== undefined) patch.displayName = changes.nickname;
+    if (changes.bio !== undefined) patch.bio = changes.bio;
+
+    const newUsername = changes.username;
+    if (
+      newUsername === undefined &&
+      !draft.avatarFile &&
+      Object.keys(patch).length === 0
+    ) {
+      return;
+    }
 
     try {
-      if (next) await usersApi.follow(targetId);
-      else await usersApi.unfollow(targetId);
+      /**
+       * The rename goes last because it is the one step that moves the page:
+       * the URL follows the handle. Any failure, the rename's own included (a
+       * handle is often taken), then leaves the modal open with its message,
+       * over a page already showing whatever did save. The photo is uploaded
+       * here and nowhere earlier: picking one only previewed a `blob:` URL,
+       * which is meaningless to the server and must never reach `avatarUrl`.
+       */
+      if (draft.avatarFile) {
+        const uploaded = await usersApi.uploadMyAvatar(draft.avatarFile);
+        session.updateUser({ avatarUrl: uploaded.avatarUrl ?? undefined });
+      }
+
+      if (Object.keys(patch).length > 0) await session.updateProfile(patch);
+
+      if (newUsername !== undefined) {
+        moveToHandle(await authApi.changeUsername(newUsername));
+      } else {
+        await load();
+      }
+    } catch (cause) {
+      throw new Error(messageFor(cause));
+    } finally {
+      // Your own name, handle and photo are cached like anyone else's, by id
+      // and inside every comment page fetched so far, for the life of the tab.
+      if (viewerId) forgetAuthor(viewerId);
+      clearCommentCache();
+    }
+  };
+
+  /** `next` false unfollows, or withdraws a request — the same DELETE. */
+  const toggleFollow = async (next: boolean): Promise<FollowStatus> => {
+    if (targetId === undefined || isOwner) return "NONE";
+
+    try {
+      if (!next) {
+        await usersApi.unfollow(targetId);
+        return "NONE";
+      }
+      const { status } = await usersApi.follow(targetId);
+      if (status === "REQUESTED") toast.success("Follow request sent.");
+      return status;
     } catch (cause) {
       /**
-       * `ALREADY_FOLLOWING` / `NOT_FOLLOWING` mean the server already agrees
-       * with where the button just moved — a stale view, not a failure, so the
-       * optimistic state stands. Everything else propagates and reverts it.
+       * These three mean the server already knows where things stand — a
+       * stale view, not a failure — so the button goes there. Everything else
+       * propagates and reverts it.
        */
-      if (
-        isApiError(cause) &&
-        (cause.is("ALREADY_FOLLOWING") || cause.is("NOT_FOLLOWING"))
-      ) {
-        return;
-      }
+      if (isApiError(cause) && cause.is("ALREADY_FOLLOWING")) return "FOLLOWING";
+      if (isApiError(cause) && cause.is("ALREADY_REQUESTED")) return "REQUESTED";
+      if (isApiError(cause) && cause.is("NOT_FOLLOWING")) return "NONE";
       throw cause;
     } finally {
       /**
@@ -361,11 +448,13 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
 
   return (
     <ProfilePage
-      profile={profile}
+      profile={shown}
       onSaveProfile={isOwner ? saveProfile : undefined}
       onToggleFollow={toggleFollow}
-      usernameLocked
+      usernameChangeableAt={session.user?.usernameChangeableAt}
+      nicknameChangeableAt={session.user?.nicknameChangeableAt}
       onTabSelect={loadTab}
+      onLoadMoreVideos={moreVideos ? loadMoreVideos : undefined}
       pendingTab={pending?.tab ?? null}
       pendingCount={pending?.count ?? 0}
     />

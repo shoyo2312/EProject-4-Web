@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { codePointLength } from "@/lib/code-points";
+import { keywordKey } from "@/lib/comments/keyword-key";
+
 /**
  * Every field rule the app enforces, in one place.
  *
@@ -75,13 +78,6 @@ export const strongPasswordField = z
     }
   });
 
-/** Six digits. The field itself already strips everything else. */
-export const otpField = z
-  .string()
-  .trim()
-  .min(1, "Enter the 6-digit code.")
-  .regex(/^\d{6}$/, "The code is 6 digits.");
-
 /* --- login ---------------------------------------------------------------- */
 
 /**
@@ -102,8 +98,6 @@ export const loginSchema = z.object({
     ),
   password: z.string().min(1, "Enter your password."),
 });
-
-export type LoginValues = z.infer<typeof loginSchema>;
 
 /* --- signup --------------------------------------------------------------- */
 
@@ -130,45 +124,55 @@ export const MINIMUM_AGE = 18;
  * an error key with no value of its own — the form points it at the Month
  * select so focusing it lands somewhere sensible.
  */
-export const signupSchema = z
-  .object({
-    birthMonth: z.string(),
-    birthDay: z.string(),
-    birthYear: z.string(),
-    email: emailField,
-    username: usernameField,
-    password: strongPasswordField,
-  })
-  .superRefine((values, ctx) => {
-    const fail = (message: string) =>
-      ctx.addIssue({ code: "custom", path: ["birthday"], message });
+const birthdayFields = {
+  birthMonth: z.string(),
+  birthDay: z.string(),
+  birthYear: z.string(),
+};
 
-    if (!values.birthMonth || !values.birthDay || !values.birthYear) {
-      return fail("Select your birthday.");
-    }
+/**
+ * Signup asks one screen at a time — birthday and email, then the password,
+ * then the username — so each screen validates only what is on it.
+ */
+export const signupDetailsSchema = z
+  .object({ ...birthdayFields, email: emailField })
+  .superRefine(checkBirthday);
 
-    const month = MONTHS.indexOf(values.birthMonth as (typeof MONTHS)[number]);
-    const day = Number(values.birthDay);
-    const year = Number(values.birthYear);
-    const birthday = new Date(year, month, day);
+export const passwordSchema = z.object({ password: strongPasswordField });
 
-    // `new Date(2009, 1, 31)` silently becomes 3 March. Reading the parts back
-    // is the only way to catch a day the chosen month does not have.
-    if (
-      birthday.getFullYear() !== year ||
-      birthday.getMonth() !== month ||
-      birthday.getDate() !== day
-    ) {
-      return fail("That date doesn’t exist — check the day.");
-    }
+export const usernameSchema = z.object({ username: usernameField });
 
-    if (birthday > new Date()) return fail("That date is in the future.");
-    if (ageOn(birthday, new Date()) < MINIMUM_AGE) {
-      return fail(`You need to be at least ${MINIMUM_AGE} to sign up.`);
-    }
-  });
+function checkBirthday(
+  values: { birthMonth: string; birthDay: string; birthYear: string },
+  ctx: z.RefinementCtx,
+) {
+  const fail = (message: string) =>
+    ctx.addIssue({ code: "custom", path: ["birthday"], message });
 
-export type SignupValues = z.infer<typeof signupSchema>;
+  if (!values.birthMonth || !values.birthDay || !values.birthYear) {
+    return fail("Select your birthday.");
+  }
+
+  const month = MONTHS.indexOf(values.birthMonth as (typeof MONTHS)[number]);
+  const day = Number(values.birthDay);
+  const year = Number(values.birthYear);
+  const birthday = new Date(year, month, day);
+
+  // `new Date(2009, 1, 31)` silently becomes 3 March. Reading the parts back
+  // is the only way to catch a day the chosen month does not have.
+  if (
+    birthday.getFullYear() !== year ||
+    birthday.getMonth() !== month ||
+    birthday.getDate() !== day
+  ) {
+    return fail("That date doesn’t exist — check the day.");
+  }
+
+  if (birthday > new Date()) return fail("That date is in the future.");
+  if (ageOn(birthday, new Date()) < MINIMUM_AGE) {
+    return fail(`You need to be at least ${MINIMUM_AGE} to sign up.`);
+  }
+}
 
 /** Whole years elapsed — the month/day comparison is what makes it exact. */
 function ageOn(birthday: Date, today: Date): number {
@@ -182,42 +186,32 @@ function ageOn(birthday: Date, today: Date): number {
 
 /* --- the rest of the forms ------------------------------------------------ */
 
-export const verifyEmailSchema = z.object({
-  email: emailField,
-  otp: otpField,
-});
-
-export const forgotPasswordSchema = z.object({ email: emailField });
-
-/** `/signup/add-email` — the address a social account is claiming. */
-export const addEmailSchema = z.object({ email: emailField });
-
-/** The new password is being *set*, so the full strength rule applies. */
-export const resetPasswordSchema = z.object({
-  otp: otpField,
-  password: strongPasswordField,
-});
+/** An address on its own: where a reset code goes, or one a social account adds. */
+export const emailSchema = z.object({ email: emailField });
 
 /**
  * The file itself is not validated here: it is picked, not typed, so its type
  * and size are checked where it is chosen and the URL is whatever the upload
  * came back with. What is left is the metadata, and the limits mirror
- * video-service's DTO.
+ * video-service's DTO — in code points, as `@MaxCodePoints` counts.
  */
 export const uploadSchema = z.object({
   title: z
     .string()
     .trim()
     .min(1, "Give the video a title.")
-    .max(150, "Titles can be at most 150 characters."),
+    .refine((value) => codePointLength(value) <= 150, "Titles can be at most 150 characters."),
   description: z
     .string()
     .trim()
-    .max(2000, "Descriptions can be at most 2000 characters."),
+    .refine(
+      (value) => codePointLength(value) <= 2000,
+      "Descriptions can be at most 2000 characters.",
+    ),
   visibility: z.enum(["PUBLIC", "PRIVATE"]),
 });
 
-export const editProfileSchema = z.object({
+const editProfileSchema = z.object({
   username: usernameField,
   nickname: z
     .string()
@@ -233,3 +227,63 @@ export const editProfileSchema = z.object({
       "The avatar must be an https URL.",
     ),
 });
+
+/**
+ * The Edit profile form for an account whose handle is `currentUsername`. The
+ * handle is held to the rule only once it is edited: one from before the rule
+ * — a generated handle can start with a digit — is the owner's to keep, and
+ * must not stop them saving a new bio.
+ */
+export function editProfileSchemaFor(currentUsername: string) {
+  return editProfileSchema.extend({
+    username: z.string().superRefine((value, ctx) => {
+      if (value.trim() === currentUsername) return;
+
+      const result = usernameField.safeParse(value);
+      if (result.success) return;
+      for (const issue of result.error.issues) {
+        ctx.addIssue({ code: "custom", message: issue.message });
+      }
+    }),
+  });
+}
+
+/** user-service's cap on `commentKeywords`. */
+export const COMMENT_KEYWORDS_MAX = 50;
+
+/**
+ * `/setting` → Comment filters: one more keyword for `existing`. Mirrors
+ * user-service — 1–30 code points with a letter or digit in them, 50 at most.
+ * The server drops a repeat without a word, so a repeat is caught here instead.
+ */
+export function commentKeywordSchemaFor(existing: readonly string[]) {
+  const taken = new Set(existing.map(keywordKey));
+  return z.object({
+    keyword: z
+      .string()
+      .trim()
+      .min(1, "Enter a keyword.")
+      .refine((value) => codePointLength(value) <= 30, "Keywords can be at most 30 characters.")
+      .refine((value) => keywordKey(value) !== "", "Keywords need a letter or a number.")
+      .refine((value) => !taken.has(keywordKey(value)), "You already filter this keyword.")
+      .refine(
+        () => existing.length < COMMENT_KEYWORDS_MAX,
+        `You can filter up to ${COMMENT_KEYWORDS_MAX} keywords.`,
+      ),
+  });
+}
+
+/**
+ * `/setting` → Sleep hours: two `<input type="time">` values, already the
+ * server's "HH:mm". Mirrors user-service — both ends, and not the same minute.
+ * Start after end is not an error: that is a night crossing midnight.
+ */
+export const sleepHoursSchema = z
+  .object({
+    start: z.string().min(1, "Choose a start time."),
+    end: z.string().min(1, "Choose an end time."),
+  })
+  .refine((values) => values.start !== values.end, {
+    path: ["end"],
+    message: "Start and end can’t be the same time.",
+  });

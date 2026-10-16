@@ -83,11 +83,13 @@ export function loadFirstCommentPage(
         cursor: page.nextCursor,
         hasMore: page.hasMore,
       };
-      settled.set(videoId, result);
+      // An invalidate, or a newer refresh, while this was in flight means the
+      // page is already stale — it must not land back in the cache.
+      if (pages.get(videoId) === pending) settled.set(videoId, result);
       return result;
     })
     .catch((error: unknown) => {
-      pages.delete(videoId);
+      if (pages.get(videoId) === pending) pages.delete(videoId);
       throw error;
     });
 

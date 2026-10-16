@@ -5,27 +5,50 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PlayIcon } from "@/components/icons";
+import { UserRow } from "@/components/profile/FollowListModal";
+import { useSession } from "@/components/session/SessionProvider";
+import { authorFromProfile } from "@/lib/api/adapters";
 import { isApiError } from "@/lib/api/errors";
 import { searchVideos } from "@/lib/api/search";
 import { isLastPage } from "@/lib/api/types";
-import type { VideoSearchResponse } from "@/lib/api/types";
+import type { UserProfileResponse, VideoSearchResponse } from "@/lib/api/types";
+import { searchUsers } from "@/lib/api/users";
 import { formatCount } from "@/lib/format";
 import { markOverlayOrigin } from "@/lib/overlay-origin";
+import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 24;
+// ponytail: one page of accounts, most-followed first. Give `searchUsers` a
+// page argument and a Load more here if 30 stops being enough.
+const ACCOUNT_LIMIT = 30;
+
+type Tab = "videos" | "accounts";
+const TABS: readonly { id: Tab; label: string }[] = [
+  { id: "videos", label: "Videos" },
+  { id: "accounts", label: "Accounts" },
+];
+
+function searchFailure(cause: unknown): string {
+  return isApiError(cause) && cause.status === 0
+    ? "Can’t connect right now. Check your connection and try again."
+    : "Search is unavailable right now.";
+}
 
 /**
  * `/search?q=` — video results from search-service, in the Explore grid's
- * shape.
+ * shape; with `&tab=accounts`, the matching accounts from user-service.
  *
- * The term is read from the URL rather than held in state: the search drawer
- * navigates here, so the address bar is the one thing that says what is being
- * searched, and a shared or reloaded link has to reproduce the same page.
+ * The term and the tab are read from the URL rather than held in state: the
+ * search drawer navigates here, so the address bar is the one thing that says
+ * what is being searched, and a shared or reloaded link has to reproduce the
+ * same page.
  *
  * A leading `#` switches the request to the tag filter — see `searchParamsFor`.
  */
 export function SearchResults() {
-  const term = (useSearchParams().get("q") ?? "").trim();
+  const params = useSearchParams();
+  const term = (params.get("q") ?? "").trim();
+  const tab: Tab = params.get("tab") === "accounts" ? "accounts" : "videos";
 
   /**
    * Results carry the term they answer, so a term change needs no state reset
@@ -68,11 +91,7 @@ export function SearchResults() {
         }));
       } catch (cause) {
         if (controller.signal.aborted) return;
-        setError(
-          isApiError(cause) && cause.status === 0
-            ? "Can\u2019t reach the API gateway on :8080."
-            : "Search is unavailable right now.",
-        );
+        setError(searchFailure(cause));
       } finally {
         if (!controller.signal.aborted) setLoadingMore(false);
       }
@@ -81,10 +100,10 @@ export function SearchResults() {
   );
 
   useEffect(() => {
-    if (!term) return;
+    if (!term || tab !== "videos") return;
     void load(0);
     return () => controllerRef.current?.abort();
-  }, [term, load]);
+  }, [term, tab, load]);
 
   const fresh = answer.term === term && term !== "";
   const results = fresh ? answer.items : [];
@@ -98,50 +117,133 @@ export function SearchResults() {
         {term ? `Results for “${term}”` : "Search"}
       </h1>
 
-      {error && (
-        <p className="pb-6 text-[15px] text-[var(--tt-red)]">{error}</p>
+      {term && (
+        <nav className="mb-6 flex border-b border-[var(--tt-divider)]">
+          {TABS.map(({ id, label }) => (
+            <Link
+              key={id}
+              replace
+              href={`/search?q=${encodeURIComponent(term)}${id === "accounts" ? "&tab=accounts" : ""}`}
+              aria-current={id === tab ? "page" : undefined}
+              className={cn(
+                "-mb-px flex h-11 items-center border-b-2 px-8 text-[18px] leading-6 font-semibold transition-colors tt-840:px-3",
+                id === tab
+                  ? "border-[var(--tt-text)] text-[var(--tt-text)]"
+                  : "border-transparent text-[rgb(255_255_255/0.5)] hover:text-[var(--tt-text)]",
+              )}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
       )}
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-        {results.map((result) => (
-          <ResultTile key={result.id} result={result} />
-        ))}
-      </div>
+      {term && tab === "accounts" ? (
+        <AccountResults term={term} />
+      ) : (
+        <>
+          {error && (
+            <p className="pb-6 text-[15px] text-[var(--tt-red)]">{error}</p>
+          )}
 
-      {!loading && !error && term && results.length === 0 && (
-        <p className="py-24 text-center text-[15px] text-[var(--tt-text-muted)]">
-          No videos match “{term}”.
-        </p>
-      )}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            {results.map((result) => (
+              <ResultTile key={result.id} result={result} />
+            ))}
+          </div>
 
-      {!term && (
-        <p className="py-24 text-center text-[15px] text-[var(--tt-text-muted)]">
-          Type in the search field to find videos, or start with{" "}
-          <span className="font-semibold">#</span> to search one hashtag.
-        </p>
-      )}
+          {!loading && !error && term && results.length === 0 && (
+            <p className="py-24 text-center text-[15px] text-[var(--tt-text-muted)]">
+              No videos match “{term}”.
+            </p>
+          )}
 
-      {(loading || loadingMore) && (
-        <p className="py-8 text-center text-[15px] text-[var(--tt-text-muted)]">
-          Searching…
-        </p>
-      )}
+          {!term && (
+            <p className="py-24 text-center text-[15px] text-[var(--tt-text-muted)]">
+              Type in the search field to find videos, or start with{" "}
+              <span className="font-semibold">#</span> to search one hashtag.
+            </p>
+          )}
 
-      {more && !loadingMore && (
-        <div className="flex justify-center py-8">
-          <button
-            type="button"
-            onClick={() => {
-              setLoadingMore(true);
-              void load(answer.page + 1);
-            }}
-            className="h-[42px] rounded-[8px] bg-[var(--tt-field)] px-6 text-[15px] font-medium text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-shape-neutral-3)]"
-          >
-            Load more
-          </button>
-        </div>
+          {(loading || loadingMore) && (
+            <p className="py-8 text-center text-[15px] text-[var(--tt-text-muted)]">
+              Searching…
+            </p>
+          )}
+
+          {more && !loadingMore && (
+            <div className="flex justify-center py-8">
+              <button
+                type="button"
+                onClick={() => {
+                  setLoadingMore(true);
+                  void load(answer.page + 1);
+                }}
+                className="h-[42px] rounded-[8px] bg-[var(--tt-field)] px-6 text-[15px] font-medium text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-shape-neutral-3)]"
+              >
+                Load more
+              </button>
+            </div>
+          )}
+        </>
       )}
     </main>
+  );
+}
+
+/**
+ * The Accounts tab. Account search needs a token, so a signed-out viewer
+ * gets the login prompt instead of an empty list that looks like no matches.
+ */
+function AccountResults({ term }: { term: string }) {
+  const { user, requireSignIn } = useSession();
+  const signedIn = user !== null;
+  const [answer, setAnswer] = useState<{ term: string; accounts: UserProfileResponse[] } | null>(
+    null,
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    const controller = new AbortController();
+    searchUsers(term, ACCOUNT_LIMIT, controller.signal)
+      .then((page) => {
+        setError(null);
+        setAnswer({ term, accounts: page.content });
+      })
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted) setError(searchFailure(cause));
+      });
+    return () => controller.abort();
+  }, [term, signedIn]);
+
+  if (!signedIn) {
+    return (
+      <p className="py-24 text-center text-[15px] text-[var(--tt-text-muted)]">
+        <button type="button" onClick={requireSignIn} className="font-semibold text-[var(--tt-red)] hover:underline">
+          Log in
+        </button>{" "}
+        to search accounts.
+      </p>
+    );
+  }
+  if (error) return <p className="pb-6 text-[15px] text-[var(--tt-red)]">{error}</p>;
+  if (answer?.term !== term) {
+    return <p className="py-8 text-center text-[15px] text-[var(--tt-text-muted)]">Searching…</p>;
+  }
+  if (answer.accounts.length === 0) {
+    return (
+      <p className="py-24 text-center text-[15px] text-[var(--tt-text-muted)]">
+        No accounts match “{term}”.
+      </p>
+    );
+  }
+  return (
+    <div className="max-w-[680px]">
+      {answer.accounts.map((account) => (
+        <UserRow key={account.userId} author={authorFromProfile(account)} />
+      ))}
+    </div>
   );
 }
 

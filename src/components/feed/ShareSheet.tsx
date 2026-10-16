@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 
   CodeXml,
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { CloseIcon } from "@/components/icons";
 import { toast } from "@/components/ui/toast";
 import { useSession } from "@/components/session/SessionProvider";
@@ -21,13 +22,14 @@ import { authorFromProfile } from "@/lib/api/adapters";
 import { isApiError } from "@/lib/api/errors";
 import { repostVideo } from "@/lib/api/interactions";
 import { setRepostedByMe } from "@/lib/repost-context";
+import { shareIntentUrl } from "@/lib/share";
 import { getFollowing, searchUsers } from "@/lib/api/users";
+import { SHARE_TARGETS } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
-import { SHARE_FRIENDS, SHARE_TARGETS } from "@/lib/mock-feed";
 import type { Author, ShareTarget } from "@/types/tiktok";
 
 /** How many tiles the friends row shows, following or search results alike —
- * matches the mock row it replaces and the sheet's own scroller width. */
+ * what the sheet's own scroller fits. */
 const FRIEND_LIMIT = 8;
 
 /** Same debounce as the comment panel's @mention search — see CommentPanel. */
@@ -66,36 +68,37 @@ export function ShareSheet({
   shares,
   onClose,
 }: {
-  /** Mock video has no backend id to repost/share against — those tiles fall
-   *  back to a local toast rather than a request that has nothing to hit. */
   videoId: string;
   /** Rendered into the title row's count on the live sheet's parent button. */
   shares: number;
   onClose: () => void;
 }) {
   const { user, openLogin } = useSession();
+  const viewerId = user?.userId;
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [friends, setFriends] = useState<Author[]>(SHARE_FRIENDS);
+  const [friends, setFriends] = useState<Author[]>([]);
   const [results, setResults] = useState<Author[] | null>(null);
 
   useEscapeKey(onClose);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef);
 
-  /* Real accounts once signed in — the mock trio (see SHARE_FRIENDS) stands
-     in for a guest, who has no following list to show. */
+  /* The accounts the viewer follows. A guest has none, and the row is left
+     out rather than drawn empty. */
   useEffect(() => {
-    if (!user) return;
-    getFollowing(user.userId, 0, FRIEND_LIMIT)
+    if (!viewerId) return;
+    getFollowing(viewerId, 0, FRIEND_LIMIT)
       .then((page) => setFriends(page.content.map(authorFromProfile)))
       .catch(() => {
-        // Left on the mock trio — a failed fetch should not empty the row.
+        // No row then — the share targets below still work.
       });
-  }, [user]);
+  }, [viewerId]);
 
   /* The search icon's own row: user-service's search over every account,
      same debounce-and-abort shape as the comment panel's @mention lookup. */
   useEffect(() => {
-    if (!searchOpen || !user) return;
+    if (!searchOpen || !viewerId) return;
     const trimmed = query.trim();
     // Clearing back to the friends row on an empty query is a direct response
     // to the keystroke that emptied it — handled in the input's own onChange,
@@ -106,7 +109,7 @@ export function ShareSheet({
       searchUsers(trimmed, FRIEND_LIMIT, controller.signal)
         .then((page) => {
           if (controller.signal.aborted) return;
-          setResults(page.content.filter((p) => p.userId !== user.userId).map(authorFromProfile));
+          setResults(page.content.filter((p) => p.userId !== viewerId).map(authorFromProfile));
         })
         .catch(() => {
           // Aborted or failed — the previous results stay rather than blinking out.
@@ -116,7 +119,7 @@ export function ShareSheet({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [searchOpen, query, user]);
+  }, [searchOpen, query, viewerId]);
 
   const toggleSearch = () => {
     setSearchOpen((open) => !open);
@@ -124,13 +127,11 @@ export function ShareSheet({
     setResults(null);
   };
 
-  const isMockVideo = !/^\d+$/.test(videoId);
+  const videoLink = () => new URL(`/video/${videoId}`, window.location.origin).href;
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(
-        new URL(`/video/${videoId}`, window.location.origin).href,
-      );
+      await navigator.clipboard.writeText(videoLink());
       toast.success("Link copied.");
       onClose();
     } catch {
@@ -141,11 +142,6 @@ export function ShareSheet({
   const repost = async () => {
     if (!user) {
       openLogin();
-      return;
-    }
-    if (isMockVideo) {
-      toast.success("Reposted.");
-      onClose();
       return;
     }
     try {
@@ -167,8 +163,18 @@ export function ShareSheet({
     repost,
   };
 
+  /** Hands the link to the service's own share page — a new tab, or the mail app. */
+  const shareTo = (targetId: string) => {
+    const href = shareIntentUrl(targetId, videoLink());
+    if (!href) return;
+    if (href.startsWith("mailto:")) window.location.assign(href);
+    else window.open(href, "_blank", "noopener,noreferrer");
+    onClose();
+  };
+
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={`Share to — ${shares} shares`}
@@ -219,17 +225,25 @@ export function ShareSheet({
         </div>
 
         <div className="flex flex-col gap-3">
-          <ScrollRow>
-            {(results ?? friends).map((friend) => (
-              <FriendTile key={friend.username} friend={friend} />
-            ))}
-          </ScrollRow>
+          {(searchOpen || friends.length > 0) && (
+            <>
+              <ScrollRow>
+                {(results ?? friends).map((friend) => (
+                  <FriendTile key={friend.username} friend={friend} />
+                ))}
+              </ScrollRow>
 
-          <div className="h-px bg-[rgba(255,255,255,0.19)]" />
+              <div className="h-px bg-[rgba(255,255,255,0.19)]" />
+            </>
+          )}
 
           <ScrollRow>
             {SHARE_TARGETS.map((target) => (
-              <TargetTile key={target.id} target={target} onClick={targetActions[target.id]} />
+              <TargetTile
+                key={target.id}
+                target={target}
+                onClick={targetActions[target.id] ?? (() => shareTo(target.id))}
+              />
             ))}
           </ScrollRow>
         </div>
@@ -303,9 +317,9 @@ function FriendTile({ friend }: { friend: Author }) {
  * Lucide v1 dropped its brand icons (no `Facebook`, `Twitter`, `Linkedin`), so
  * substituting logos from the icon set was not an option regardless.
  *
- * `onClick` is only set for the tiles TikTok owns end to end here (Copy,
- * Repost) — the third-party targets have no share-intent wiring yet and stay
- * inert, same as before.
+ * Copy and Repost act here; the third-party tiles open the service's own share
+ * page (`lib/share.ts`). Embed has no embeddable player route to point at yet,
+ * so it stays inert.
  */
 function TargetTile({ target, onClick }: { target: ShareTarget; onClick?: () => void }) {
   const Glyph = NATIVE_GLYPHS[target.id];

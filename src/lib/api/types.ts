@@ -59,26 +59,32 @@ export interface CursorPage<T> {
 export type UserRole = "USER" | "ADMIN";
 export type UserStatus = "ACTIVE" | "LOCKED";
 
-export interface UserAccount {
-  /** Snowflake, as a string — see `lib/api/json.ts` for why never a number. */
-  id: string;
-  username: string;
-  /**
-   * Null when the account came from a social login the provider gave no
-   * address for. Nothing forces one to exist — `POST /auth/email` is how one
-   * arrives later — so every reader has to cope with its absence.
-   */
-  email: string | null;
-  role: UserRole;
-  status: UserStatus;
-  emailVerified: boolean;
-  createdAt: string;
-}
-
 export interface TokenResponse {
   accessToken: string;
   refreshToken: string;
   expiresInMillis: number;
+}
+
+/** `POST /auth/register/verify` — proof the mailbox was verified. */
+export interface SignupTicketResponse {
+  signupToken: string;
+  expiresInMillis: number;
+}
+
+/** `POST /auth/reset-password/verify` — proof the reset code was right. */
+export interface PasswordResetTicketResponse {
+  resetToken: string;
+  expiresInMillis: number;
+}
+
+/**
+ * What every call that mails a code answers. `resendTicket` goes in place of
+ * the Turnstile token on the next send to the same address in the same flow,
+ * for 15 minutes from the check that earned it. Null when the server gave
+ * none, and the next send needs Turnstile again.
+ */
+export interface OtpSentResponse {
+  resendTicket: string | null;
 }
 
 /**
@@ -89,6 +95,22 @@ export interface TokenResponse {
 export interface SocialLoginResponse {
   tokens: TokenResponse;
   requiresEmail: boolean;
+}
+
+/**
+ * auth-service's `UserResponse` — the account itself, as `PUT /auth/me/username`
+ * answers it.
+ */
+export interface AccountResponse {
+  id: string;
+  username: string;
+  email: string | null;
+  role: UserRole;
+  status: UserStatus;
+  emailVerified: boolean;
+  createdAt: string;
+  /** When the handle may change again; null when it may change now. */
+  usernameChangeableAt: string | null;
 }
 
 /* --- user-service -------------------------------------------------------- */
@@ -105,11 +127,62 @@ export interface UserProfileResponse {
   avatarUrl: string | null;
   followerCount: number;
   followingCount: number;
+  /**
+   * When the display name may change again. Only on the owner's own profile:
+   * null for everyone else, and for the owner when it may change now.
+   */
+  displayNameChangeableAt?: string | null;
 }
 
 export interface FollowResponse {
   followerId: string;
   followingId: string;
+  /** REQUESTED when the account is private and its owner has to approve first. */
+  status: "FOLLOWING" | "REQUESTED";
+}
+
+/** `GET /users/{id}/friendship` — the viewer's relationship to one account. */
+export interface FriendshipResponse {
+  userId: string;
+  /** Mutual following. */
+  friends: boolean;
+  following: boolean;
+  /** A follow request from the viewer is waiting on the owner's approval. */
+  requested: boolean;
+  privateAccount: boolean;
+}
+
+/** Who may comment on, or message, an account. `FRIENDS` is mutual followers. */
+export type SettingsAudience = "EVERYONE" | "FRIENDS" | "NO_ONE";
+
+/**
+ * `GET /api/v1/users/me/settings` — never 404: an account that never changed a
+ * setting reads the defaults. Null on the screen-time fields means off.
+ */
+export interface UserSettingsResponse {
+  commentAudience: SettingsAudience;
+  dmAudience: SettingsAudience;
+  /** 10–1440 when set. */
+  screenTimeLimitMinutes: number | null;
+  /** "HH:mm" wall-clock with no timezone. Both ends set, or both null. */
+  sleepHoursStart: string | null;
+  sleepHoursEnd: string | null;
+  weeklyScreenTimeDigest: boolean;
+  /**
+   * Kept on the profile, switched here. On, only approved followers see the
+   * videos; turning it off approves every request still waiting.
+   */
+  privateAccount: boolean;
+  /**
+   * The owner's comment filters, applied by interaction-service to each new
+   * comment under their videos: a match is held for their review, never
+   * refused. Spam and offensive off lets through what is only profane,
+   * insulting or spammy — never hate, threats or scams.
+   */
+  filterSpamOffensive: boolean;
+  filterAllComments: boolean;
+  /** Replaced whole by a PATCH. At most 50, each 1–30 code points. */
+  commentKeywords: string[];
 }
 
 /* --- api-gateway aggregate ----------------------------------------------- */
@@ -123,7 +196,11 @@ export interface FollowResponse {
 export interface MeResponse {
   id: string;
   username: string;
-  /** Null for the same reason as `UserAccount.email`. */
+  /**
+   * Null when the account came from a social login the provider gave no
+   * address for. Nothing forces one to exist — `POST /auth/email` is how one
+   * arrives later — so every reader has to cope with its absence.
+   */
   email: string | null;
   role: UserRole;
   status: UserStatus;
@@ -134,6 +211,18 @@ export interface MeResponse {
   followerCount: number | null;
   followingCount: number | null;
   profileReady: boolean;
+  /**
+   * When the handle (once every 30 days) and the display name (once every 7)
+   * may change again; null when they may change now. A gateway older than these
+   * fields leaves them out, which reads the same as null.
+   */
+  usernameChangeableAt?: string | null;
+  displayNameChangeableAt?: string | null;
+  /**
+   * False for a social account that has never set a password. Left out by a
+   * gateway older than the field, which reads as true: nothing is offered.
+   */
+  hasPassword?: boolean;
 }
 
 /* --- video-service ------------------------------------------------------- */
@@ -183,10 +272,22 @@ export interface VideoResponse {
   visibility: VideoVisibility;
   viewCount: number;
   likeCount: number;
-  /** Null when `commentsDisabled` — a video with comments off exposes no comment total. */
+  /**
+   * Null when `commentsDisabled` or `accountCommentsOff` — a video with comments
+   * off exposes no comment total.
+   */
   commentCount: number | null;
-  /** The owner turned comments off; interaction-service then rejects new comments. */
+  /**
+   * The video's own switch: the owner turned comments off for this video.
+   * interaction-service then rejects new comments.
+   */
   commentsDisabled: boolean;
+  /**
+   * The owner's account accepts comments from no one, which closes every video
+   * they own — to everyone, the owner included — whatever the video's own
+   * switch says.
+   */
+  accountCommentsOff: boolean;
   /** Why the transcode failed; present only when `status === "FAILED"`. */
   failureReason?: string | null;
   /**
@@ -245,6 +346,16 @@ export interface FeedItemResponse {
   reasons: string[];
 }
 
+/**
+ * `GET /api/v1/recommendations/trending` — the last 24 hours' chart, the same
+ * for every viewer. Ids in rank order, hydrated like the feed; `score` decays
+ * by the hour and means something only against the other rows it came with.
+ */
+export interface TrendingVideoResponse {
+  videoId: string;
+  score: number;
+}
+
 /* --- interaction-service -------------------------------------------------- */
 
 /**
@@ -301,6 +412,21 @@ export interface ShareResponse {
   shareCount: number;
 }
 
+/**
+ * `GET /interactions/videos/counts/batch` — interaction-service's counters, the
+ * source of truth for all of them, and the only place shares and saves are
+ * counted at all: `VideoResponse` carries neither.
+ */
+export interface InteractionCountResponse {
+  videoId: string;
+  likeCount: number;
+  commentCount: number;
+  shareCount: number;
+  viewCount: number;
+  saveCount: number;
+  repostCount: number;
+}
+
 /** Repost is a toggle, like a like — not an event log like a share. */
 export interface RepostStatusResponse {
   videoId: string;
@@ -339,6 +465,12 @@ export interface CommentResponse {
   likedByMe: boolean;
   /** Live replies behind "View N replies". Always 0 on a reply — nesting is one level deep. */
   replyCount: number;
+  /**
+   * `HELD`: the text rules kept this comment for the video's owner to approve —
+   * in no listing and no count until then. An interaction-service older than
+   * text moderation leaves it out, which reads as `VISIBLE`.
+   */
+  status?: "VISIBLE" | "HELD";
 }
 
 /** `POST` / `DELETE .../comments/{commentId}/like` — the new state plus the denormalised tally. */
@@ -353,6 +485,25 @@ export interface CommentPageResponse {
   items: CommentResponse[];
   nextCursor: string | null;
   hasMore: boolean;
+}
+
+/**
+ * `GET /interactions/videos/{videoId}/comment-permission` — why the caller may
+ * not comment, or null when they may. The same rule that refuses the post, so
+ * hiding the composer on it never disagrees with the 403 it replaces.
+ * `COMMENTING_RESTRICTED` is about the caller, not the video: too many of
+ * their comments were refused or removed lately.
+ */
+export type CommentRestriction =
+  | "COMMENTS_DISABLED"
+  | "NO_ONE"
+  | "FRIENDS_ONLY"
+  | "COMMENTING_RESTRICTED";
+
+export interface CommentPermissionResponse {
+  restriction: CommentRestriction | null;
+  /** ISO-8601, when `COMMENTING_RESTRICTED` lifts; null with any other answer. */
+  restrictedUntil: string | null;
 }
 
 /* --- search-service ------------------------------------------------------ */
