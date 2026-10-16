@@ -218,6 +218,11 @@ export interface MeResponse {
    */
   usernameChangeableAt?: string | null;
   displayNameChangeableAt?: string | null;
+  /**
+   * False for a social account that has never set a password. Left out by a
+   * gateway older than the field, which reads as true: nothing is offered.
+   */
+  hasPassword?: boolean;
 }
 
 /* --- video-service ------------------------------------------------------- */
@@ -228,11 +233,6 @@ export interface MeResponse {
  * never on a feed before a verdict, and a verdict that could not be reached
  * sends it to a human rather than publishing it.
  *
-  /**
-   * False for a social account that has never set a password. Left out by a
-   * gateway older than the field, which reads as true: nothing is offered.
-   */
-  hasPassword?: boolean;
  * `REJECTED` is the classifier's own removal, `TAKEN_DOWN` an admin's. Both are
  * reversible by an admin; only the owner ever sees either.
  */
@@ -465,6 +465,12 @@ export interface CommentResponse {
   likedByMe: boolean;
   /** Live replies behind "View N replies". Always 0 on a reply — nesting is one level deep. */
   replyCount: number;
+  /**
+   * `HELD`: the text rules kept this comment for the video's owner to approve —
+   * in no listing and no count until then. An interaction-service older than
+   * text moderation leaves it out, which reads as `VISIBLE`.
+   */
+  status?: "VISIBLE" | "HELD";
 }
 
 /** `POST` / `DELETE .../comments/{commentId}/like` — the new state plus the denormalised tally. */
@@ -485,6 +491,8 @@ export interface CommentPageResponse {
  * `GET /interactions/videos/{videoId}/comment-permission` — why the caller may
  * not comment, or null when they may. The same rule that refuses the post, so
  * hiding the composer on it never disagrees with the 403 it replaces.
+ * `COMMENTING_RESTRICTED` is about the caller, not the video: too many of
+ * their comments were refused or removed lately.
  */
 export type CommentRestriction =
   | "COMMENTS_DISABLED"
@@ -494,16 +502,14 @@ export type CommentRestriction =
 
 export interface CommentPermissionResponse {
   restriction: CommentRestriction | null;
+  /** ISO-8601, when `COMMENTING_RESTRICTED` lifts; null with any other answer. */
+  restrictedUntil: string | null;
 }
- * `COMMENTING_RESTRICTED` is about the caller, not the video: too many of
- * their comments were refused or removed lately.
 
 /* --- search-service ------------------------------------------------------ */
 
 /**
  * `GET /api/v1/search/videos` — one hit from the Elasticsearch projection, not
-  /** ISO-8601, when `COMMENTING_RESTRICTED` lifts; null with any other answer. */
-  restrictedUntil: string | null;
  * a `VideoResponse`. It is built from Kafka events, so it carries only what
  * those events published: no `hlsUrl` (a tile shows the poster and links to the
  * detail page, which fetches the playable video), no visibility (the index only

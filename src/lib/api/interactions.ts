@@ -229,6 +229,38 @@ export function getCommentPermission(
   );
 }
 
+/**
+ * `GET /interactions/videos/{videoId}/held-comments` — the owner's review queue:
+ * comments the text rules held, newest first, cursor paged like `listComments`.
+ * Fails closed: while video-service cannot confirm who owns the video, the owner
+ * gets `NOT_VIDEO_OWNER` like anyone else.
+ */
+export function listHeldComments(
+  videoId: string,
+  cursor?: string,
+): Promise<CommentPageResponse> {
+  return apiFetch<CommentPageResponse>(`/interactions/videos/${videoId}/held-comments`, {
+    auth: "required",
+    query: { cursor },
+  });
+}
+
+/**
+ * `POST /interactions/videos/{videoId}/comments/{commentId}/approve` — the owner
+ * publishes a held comment, which then counts and announces itself like a new
+ * one. A repeat answers the same without counting twice. Rejecting one is
+ * `deleteComment`.
+ */
+export function approveComment(
+  videoId: string,
+  commentId: string,
+): Promise<CommentResponse> {
+  return apiFetch<CommentResponse>(
+    `/interactions/videos/${videoId}/comments/${commentId}/approve`,
+    { method: "POST", auth: "required" },
+  );
+}
+
 /** `DELETE /interactions/videos/{videoId}/comments/{commentId}` — owner only. */
 export function deleteComment(
   videoId: string,

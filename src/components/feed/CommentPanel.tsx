@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { CommentComposer } from "@/components/feed/comments/CommentComposer";
 import { CommentItem } from "@/components/feed/comments/CommentItem";
+import { HeldComments } from "@/components/feed/comments/HeldComments";
 import {
   CommentListSkeleton,
   CommentLockNotice,
@@ -16,8 +17,8 @@ import { CloseIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
 import { useCommentRestriction } from "@/hooks/use-comment-restriction";
-import {
 import { isApiError, messageFor, retryAt } from "@/lib/api/errors";
+import {
   COMMENT_FIRST_PAGE_SIZE,
   addComment,
   deleteComment as deleteCommentApi,
@@ -95,6 +96,7 @@ export function CommentPanel({
 }) {
   const isDetail = variant === "detail";
   const { user } = useSession();
+  const isOwner = Boolean(user) && user?.userId === videoOwnerId;
   // The video carries both switches — its own and an account open to no one.
   // Friends-only depends on who is asking, and a restriction for repeated
   // violations follows the viewer everywhere, the owner's own videos included,
@@ -167,6 +169,13 @@ export function CommentPanel({
         text,
         target?.replyToCommentId ?? target?.parentId,
       );
+      if (saved.status === "HELD") {
+        // Waiting on the owner: in no listing and no count, and no frame follows.
+        setComments((current) => removeCommentById(current, optimistic.id));
+        onCommentDeleted();
+        toast.success("Your comment will appear once the creator approves it.");
+        return null;
+      }
       setComments((current) =>
         // The realtime frame for this same comment can land before this HTTP
         // response does — it is a broadcast to every device, including this
@@ -203,6 +212,7 @@ export function CommentPanel({
 
   const post = (text: string) => {
     setReplyTo(null);
+    return postBackendComment(text, replyTo);
   };
 
   const deleteOwnComment = async (id: string) => {
@@ -212,7 +222,6 @@ export function CommentPanel({
     onCommentDeleted();
     try {
       await deleteCommentApi(videoId, id);
-    return postBackendComment(text, replyTo);
       toast.success("Comment deleted.");
     } catch {
       setComments(previous);
@@ -263,6 +272,10 @@ export function CommentPanel({
         ref={listRef}
         className="no-scrollbar flex-1 overflow-y-scroll [overscroll-behavior:contain]"
       >
+        {/* Even with comments off: what waited before the switch is still the
+            owner's to approve or delete, and nowhere else shows it. */}
+        {isOwner && <HeldComments videoId={videoId} onApproved={onCommentAdded} />}
+
         {/* A video whose count is 0 has nothing to wait for: skip the skeleton
             and show the empty state at once, rather than flashing placeholder
             rows that resolve to nothing. */}
@@ -285,7 +298,7 @@ export function CommentPanel({
             onReply={lockMessage ? undefined : startReply}
             justAddedId={justAddedId}
             currentUserId={user?.userId}
-            canModerate={Boolean(user) && user?.userId === videoOwnerId}
+            canModerate={isOwner}
             onDelete={deleteOwnComment}
             onRepliesLoaded={appendReplies}
           />
