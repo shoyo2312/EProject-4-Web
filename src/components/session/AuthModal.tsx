@@ -11,11 +11,12 @@ import { useEscapeKey } from "@/hooks/use-escape-key";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import {
   addEmail,
+  completePasswordReset,
   forgotPassword,
   resendVerification,
-  resetPassword,
   startSignup,
   verifyEmail,
+  verifyPasswordReset,
   verifySignup,
 } from "@/lib/api/auth";
 import { isApiError, messageFor } from "@/lib/api/errors";
@@ -55,7 +56,7 @@ type AuthStep =
   | { name: "login-form"; identifier?: string }
   | { name: "reset-email" }
   | ({ name: "reset-code" } & CodeSent)
-  | { name: "reset-password"; email: string; otp: string }
+  | { name: "reset-password"; email: string; resetToken: string }
   | { name: "signup-details" }
   | ({ name: "signup-code" } & CodeSent)
   | { name: "signup-password" }
@@ -311,9 +312,15 @@ export function AuthModal({
           <CodeStep
             email={step.email}
             resendTicket={step.resendTicket}
-            // The server checks the code together with the new password, so
-            // it is only carried forward here.
-            onSubmit={async (code) => go({ name: "reset-password", email: step.email, otp: code })}
+            onSubmit={async (code) => {
+              const { resetToken } = await verifyPasswordReset(step.email, code);
+              // The code is spent, so Back from the password goes to the
+              // email — which mails a fresh one — not to a dead code screen.
+              setStack((steps) => [
+                ...steps.slice(0, -1),
+                { name: "reset-password", email: step.email, resetToken },
+              ]);
+            }}
             onResend={(proof) => forgotPassword(step.email, proof)}
           />
         );
@@ -323,9 +330,9 @@ export function AuthModal({
           <NewPasswordStep
             onSubmit={async (password) => {
               try {
-                await resetPassword({ email: step.email, otp: step.otp, newPassword: password });
+                await completePasswordReset({ resetToken: step.resetToken, newPassword: password });
               } catch (cause) {
-                if (isApiError(cause) && cause.is("INVALID_OTP")) {
+                if (isApiError(cause) && cause.is("RESET_SESSION_EXPIRED")) {
                   toast.error(messageFor(cause));
                   back();
                   return;

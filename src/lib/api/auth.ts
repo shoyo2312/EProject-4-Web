@@ -6,6 +6,7 @@ import type {
   AccountResponse,
   MeResponse,
   OtpSentResponse,
+  PasswordResetTicketResponse,
   SignupTicketResponse,
   SocialLoginResponse,
   TokenResponse,
@@ -223,18 +224,31 @@ export async function forgotPassword(
 }
 
 /**
- * `POST /api/v1/auth/reset-password` — 204.
+ * `POST /api/v1/auth/reset-password/verify` — spends the reset code and
+ * answers the ticket `completePasswordReset` redeems (good for 15 minutes), so
+ * a wrong code is refused on the code step. 400 `INVALID_OTP`.
+ */
+export function verifyPasswordReset(email: string, otp: string): Promise<PasswordResetTicketResponse> {
+  return apiFetch<PasswordResetTicketResponse>("/auth/reset-password/verify", {
+    method: "POST",
+    body: { email, otp },
+    auth: "none",
+  });
+}
+
+/**
+ * `POST /api/v1/auth/reset-password/complete` — 204. 400
+ * `RESET_SESSION_EXPIRED` means ask for a new code.
  *
  * Every session of the account dies the moment this succeeds, including this
  * device's: the local tokens are dropped here so nothing tries to use a token
  * the server has already invalidated.
  */
-export async function resetPassword(input: {
-  email: string;
-  otp: string;
+export async function completePasswordReset(input: {
+  resetToken: string;
   newPassword: string;
 }): Promise<void> {
-  await apiFetch<void>("/auth/reset-password", {
+  await apiFetch<void>("/auth/reset-password/complete", {
     method: "POST",
     body: input,
     auth: "none",

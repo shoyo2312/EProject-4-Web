@@ -132,8 +132,8 @@ export function ResetEmailStep({
 
 /**
  * "Reset password", second half: the new password, checked against the same
- * rules as signup. The code from the step before goes up with it — the server
- * checks both in one call, so a wrong code only shows up here.
+ * rules as signup. The code was already checked on the step before; this
+ * redeems the ticket it answered. Settings' "Set password" reuses it.
  */
 export function NewPasswordStep({
   onSubmit,

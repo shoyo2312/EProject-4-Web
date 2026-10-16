@@ -71,6 +71,12 @@ export interface SignupTicketResponse {
   expiresInMillis: number;
 }
 
+/** `POST /auth/reset-password/verify` — proof the reset code was right. */
+export interface PasswordResetTicketResponse {
+  resetToken: string;
+  expiresInMillis: number;
+}
+
 /**
  * What every call that mails a code answers. `resendTicket` goes in place of
  * the Turnstile token on the next send to the same address in the same flow,
