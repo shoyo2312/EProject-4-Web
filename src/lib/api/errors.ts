@@ -113,9 +113,18 @@ const MESSAGES: Record<string, string> = {
   UNSUPPORTED_UPLOAD_TYPE: "That file type isn’t supported. Use MP4, MOV or WebM.",
   UPLOAD_URL_UNAVAILABLE: "Uploads are unavailable right now. Try again shortly.",
   FOREIGN_UPLOAD: "That upload belongs to another account.",
-  ALREADY_PUBLISHED: "This file was already posted.",
+  RAW_FILE_ALREADY_PUBLISHED: "This file was already posted.",
   UPLOAD_FAILED: "The file couldn’t be uploaded. Try again.",
   VIDEO_NOT_FOUND: "This video is unavailable.",
+  // A caption refused at publish, one code per field. The upload form shows
+  // each under its own box; tags only ever come from the description's hashtags.
+  VIDEO_TITLE_REJECTED: "This title goes against our Community Guidelines. Edit it and post again.",
+  VIDEO_DESCRIPTION_REJECTED:
+    "This description goes against our Community Guidelines. Edit it and post again.",
+  VIDEO_TAGS_REJECTED:
+    "A hashtag here goes against our Community Guidelines. Edit it and post again.",
+  // Retry-After says when; the upload page shows that beside a held Post button.
+  UPLOAD_RATE_LIMITED: "You’ve posted a lot in a short time. Try again later.",
 
   // interaction-service. Two different 403s on the same button: the owner
   // closed this video's thread, or their account setting excludes this viewer.

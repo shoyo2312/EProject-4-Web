@@ -9,6 +9,7 @@ import { FIELD, Labelled, TextField } from "@/components/upload/page/Fields";
 import { Outcome } from "@/components/upload/page/Outcome";
 import { Preview } from "@/components/upload/page/Preview";
 import { UploadSkeleton } from "@/components/upload/page/UploadSkeleton";
+import { isApiError, messageFor, retryAt } from "@/lib/api/errors";
 import type { VideoStatus, VideoVisibility } from "@/lib/api/types";
 import {
   ACCEPTED_UPLOAD_TYPES,
@@ -17,6 +18,7 @@ import {
   pollUntilReady,
   uploadToStorage,
 } from "@/lib/api/videos";
+import { formatDateTime } from "@/lib/format";
 import { uploadSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
 import { toast } from "@/components/ui/toast";
@@ -61,6 +63,16 @@ const OUTCOME_MESSAGE: Record<VideoStatus, string> = {
   TAKEN_DOWN: "This video was taken down by a moderator.",
 };
 
+/**
+ * The field a caption refused at publish belongs under. The form has no tag
+ * box: tags only come from the description's hashtags, so they answer there.
+ */
+const CAPTION_FIELD: Record<string, "title" | "description"> = {
+  VIDEO_TITLE_REJECTED: "title",
+  VIDEO_DESCRIPTION_REJECTED: "description",
+  VIDEO_TAGS_REJECTED: "description",
+};
+
 export function UploadPage() {
   const { user, isLoading, openLogin } = useSession();
   const router = useRouter();
@@ -88,6 +100,21 @@ export function UploadPage() {
    */
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
+
+  /**
+   * The file already in storage and where it landed. A caption refused at
+   * publish stores nothing, so Post after the fix publishes these same bytes
+   * instead of sending them again.
+   */
+  const uploaded = useRef<{ file: File; fileUrl: string } | null>(null);
+
+  /** When Post works again after `UPLOAD_RATE_LIMITED`; null while it does. */
+  const [postAgainAt, setPostAgainAt] = useState<Date | null>(null);
+  useEffect(() => {
+    if (!postAgainAt) return;
+    const id = window.setTimeout(() => setPostAgainAt(null), postAgainAt.getTime() - Date.now());
+    return () => window.clearTimeout(id);
+  }, [postAgainAt]);
 
   /**
    * The bytes are still on their way to storage. Only this stretch can be
@@ -119,7 +146,7 @@ export function UploadPage() {
       description: "",
       visibility: "PUBLIC" as VideoVisibility,
     },
-    onSubmit: async (values) => {
+    onSubmit: async (values, { setFieldError }) => {
       if (!file) {
         toast.error("Choose a video file first.");
         return;
@@ -128,17 +155,23 @@ export function UploadPage() {
       const controller = new AbortController();
       abort.current = controller;
       const { signal } = controller;
-      setProgress(0);
+      let fileUrl = uploaded.current?.file === file ? uploaded.current.fileUrl : null;
+      setProgress(fileUrl ? 1 : 0);
       try {
-        const target = await createUploadUrl({ contentType: file.type });
-        await uploadToStorage(target.uploadUrl, file, target.formFields, setProgress, signal);
+        if (!fileUrl) {
+          const target = await createUploadUrl({ contentType: file.type });
+          await uploadToStorage(target.uploadUrl, file, target.formFields, setProgress, signal);
+          fileUrl = target.fileUrl;
+          uploaded.current = { file, fileUrl };
+        }
 
         const created = await createVideo({
           title: values.title.trim(),
           description: values.description.trim() || undefined,
-          rawFileUrl: target.fileUrl,
+          rawFileUrl: fileUrl,
           visibility: values.visibility,
         });
+        uploaded.current = null;
 
         /**
          * Stay put and keep the bar on screen. The poll is awaited on purpose:
@@ -190,6 +223,18 @@ export function UploadPage() {
         setProgress(null);
         setProcessing(false);
         if (signal.aborted) return;
+        // Over the account's hourly or daily limit: hold Post and say until when.
+        const again =
+          isApiError(cause) && cause.is("UPLOAD_RATE_LIMITED") ? retryAt(cause) : null;
+        if (again) {
+          setPostAgainAt(again);
+          return;
+        }
+        const field = isApiError(cause) ? CAPTION_FIELD[cause.code ?? ""] : undefined;
+        if (field) {
+          setFieldError(field, messageFor(cause));
+          return;
+        }
         // `useForm` turns this into an error toast.
         throw cause;
       }
@@ -313,7 +358,7 @@ export function UploadPage() {
               <div className="flex gap-3">
                 <button
                   type="submit"
-                  disabled={form.submitting}
+                  disabled={form.submitting || postAgainAt !== null}
                   className="h-11 w-40 rounded-[4px] bg-[var(--tt-red-active)] text-[15px] font-semibold text-white disabled:bg-white/[0.08] disabled:text-white/[0.34]"
                 >
                   {processing
@@ -341,6 +386,12 @@ export function UploadPage() {
                   {uploading ? "Cancel" : "Discard"}
                 </button>
               </div>
+              {postAgainAt && (
+                <p className="text-[14px] leading-5 text-[var(--tt-text-secondary)]">
+                  You’ve reached the posting limit for now. You can post again on{" "}
+                  {formatDateTime(postAgainAt)}.
+                </p>
+              )}
             </form>
           </div>
         )}

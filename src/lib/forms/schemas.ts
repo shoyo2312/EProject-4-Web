@@ -193,18 +193,21 @@ export const emailSchema = z.object({ email: emailField });
  * The file itself is not validated here: it is picked, not typed, so its type
  * and size are checked where it is chosen and the URL is whatever the upload
  * came back with. What is left is the metadata, and the limits mirror
- * video-service's DTO.
+ * video-service's DTO — in code points, as `@MaxCodePoints` counts.
  */
 export const uploadSchema = z.object({
   title: z
     .string()
     .trim()
     .min(1, "Give the video a title.")
-    .max(150, "Titles can be at most 150 characters."),
+    .refine((value) => codePointLength(value) <= 150, "Titles can be at most 150 characters."),
   description: z
     .string()
     .trim()
-    .max(2000, "Descriptions can be at most 2000 characters."),
+    .refine(
+      (value) => codePointLength(value) <= 2000,
+      "Descriptions can be at most 2000 characters.",
+    ),
   visibility: z.enum(["PUBLIC", "PRIVATE"]),
 });
 
@@ -245,9 +248,6 @@ export function editProfileSchemaFor(currentUsername: string) {
   });
 }
 
-/**
- * `/setting` → Sleep hours: two `<input type="time">` values, already the
- * server's "HH:mm". Mirrors user-service — both ends, and not the same minute.
 /** user-service's cap on `commentKeywords`. */
 export const COMMENT_KEYWORDS_MAX = 50;
 
@@ -273,6 +273,9 @@ export function commentKeywordSchemaFor(existing: readonly string[]) {
   });
 }
 
+/**
+ * `/setting` → Sleep hours: two `<input type="time">` values, already the
+ * server's "HH:mm". Mirrors user-service — both ends, and not the same minute.
  * Start after end is not an error: that is a night crossing midnight.
  */
 export const sleepHoursSchema = z

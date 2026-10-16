@@ -1,5 +1,7 @@
 "use client";
 
+import { codePointLength, fitEdit } from "@/lib/code-points";
+
 export const FIELD =
   "h-11 w-full rounded-[4px] border border-transparent bg-white/[0.12] px-3 text-[15px] text-[var(--tt-text)] caret-[var(--tt-red)] outline-none placeholder:text-[rgb(255_255_255/0.34)]";
 
@@ -32,17 +34,23 @@ export function TextField({
   multiline?: boolean;
 }) {
   const className = error ? `${FIELD} border-[var(--tt-red-active)]` : FIELD;
+  // `maxLength` is video-service's, in code points. The native attribute counts
+  // UTF-16 units and would stop a caption of emoji at half of it.
   const shared = {
     ref,
     value,
-    maxLength,
     placeholder,
     onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      onChange(event.target.value),
+      onChange(
+        maxLength === undefined
+          ? event.target.value
+          : fitEdit(value, event.target.value, maxLength),
+      ),
     "aria-invalid": error ? true : undefined,
   } as const;
 
-  const atLimit = maxLength !== undefined && value.length >= maxLength;
+  const length = codePointLength(value);
+  const atLimit = maxLength !== undefined && length >= maxLength;
   const counterId = maxLength !== undefined ? `${label}-count` : undefined;
 
   return (
@@ -65,7 +73,7 @@ export function TextField({
               : "text-[var(--tt-text-secondary)]"
           }`}
         >
-          {value.length} / {maxLength}
+          {length} / {maxLength}
         </p>
       )}
     </Labelled>
