@@ -218,6 +218,11 @@ export interface MeResponse {
  * never on a feed before a verdict, and a verdict that could not be reached
  * sends it to a human rather than publishing it.
  *
+  /**
+   * False for a social account that has never set a password. Left out by a
+   * gateway older than the field, which reads as true: nothing is offered.
+   */
+  hasPassword?: boolean;
  * `REJECTED` is the classifier's own removal, `TAKEN_DOWN` an admin's. Both are
  * reversible by an admin; only the owner ever sees either.
  */

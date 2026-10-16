@@ -136,8 +136,12 @@ export function ResetEmailStep({
  * redeems the ticket it answered. Settings' "Set password" reuses it.
  */
 export function NewPasswordStep({
+  title = "Reset password",
+  submitLabel = "Reset password",
   onSubmit,
 }: {
+  title?: string;
+  submitLabel?: string;
   onSubmit: (
     password: string,
     setFieldError: SubmitHelpers["setFieldError"],
@@ -154,7 +158,7 @@ export function NewPasswordStep({
 
   return (
     <>
-      <ModalTitle className="mb-10">Reset password</ModalTitle>
+      <ModalTitle className="mb-10">{title}</ModalTitle>
 
       <form onSubmit={form.handleSubmit} noValidate className="pt-14 pb-5">
         <FieldHeading required htmlFor={passwordId} className="mb-3">
@@ -174,7 +178,7 @@ export function NewPasswordStep({
           disabled={!meetsPasswordRules(value) || form.submitting}
           className="mt-[51px] mb-4"
         >
-          {form.submitting ? "Saving…" : "Reset password"}
+          {form.submitting ? "Saving…" : submitLabel}
         </PillButton>
       </form>
     </>

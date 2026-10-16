@@ -49,6 +49,8 @@ export interface SessionUser extends Author {
   usernameChangeableAt: string | null;
   /** When the nickname may change again (once every 7 days); null when it may now. */
   nicknameChangeableAt: string | null;
+  /** False for a social account that has never set a password. */
+  hasPassword: boolean;
 }
 
 interface SessionValue {
@@ -65,8 +67,16 @@ interface SessionValue {
   requireSignIn: () => boolean;
   openLogin: () => void;
 
-  /** Real login. Throws `ApiError` so the form can branch on `code`. */
-  signIn: (usernameOrEmail: string, password: string) => Promise<void>;
+  /**
+   * Real login. Throws `ApiError` so the form can branch on `code`. `quiet`
+   * skips the "logged in" toast, for a caller signing back in after a change
+   * of its own that it announces itself.
+   */
+  signIn: (
+    usernameOrEmail: string,
+    password: string,
+    options?: { quiet?: boolean },
+  ) => Promise<void>;
   /**
    * Last step of the email-first signup: creates the account for the address
    * the ticket proved and signs it in. Throws `ApiError` like `signIn`.
@@ -133,6 +143,7 @@ function toSessionUser(me: MeResponse): SessionUser {
     profileReady: me.profileReady,
     usernameChangeableAt: me.usernameChangeableAt ?? null,
     nicknameChangeableAt: me.displayNameChangeableAt ?? null,
+    hasPassword: me.hasPassword ?? true,
   };
 }
 
@@ -282,10 +293,10 @@ export function SessionProvider({
   }, [loadMe]);
 
   const signIn = useCallback(
-    async (usernameOrEmail: string, password: string) => {
+    async (usernameOrEmail: string, password: string, options?: { quiet?: boolean }) => {
       await authApi.login({ usernameOrEmail, password });
       await settleSignIn();
-      toast.success("You’re logged in.");
+      if (!options?.quiet) toast.success("You’re logged in.");
     },
     [settleSignIn],
   );

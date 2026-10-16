@@ -10,6 +10,8 @@ import {
   ScreenTimeLimitRow,
   SleepHoursRow,
 } from "@/components/settings/rows/AccountRows";
+import { AddEmailRow } from "@/components/settings/rows/AddEmailModal";
+import { PasswordRow } from "@/components/settings/rows/PasswordModal";
 import {
   Accessory,
   ROW_CLASS,
@@ -276,6 +278,10 @@ function Row({ row, account }: { row: SettingsRow; account: AccountSettings }) {
       return <ScreenTimeLimitRow row={row} account={account} />;
     case "sleep-hours":
       return <SleepHoursRow row={row} account={account} />;
+    case "add-email":
+      return <AddEmailRow row={row} />;
+    case "password":
+      return <PasswordRow row={row} />;
   }
 
   return (

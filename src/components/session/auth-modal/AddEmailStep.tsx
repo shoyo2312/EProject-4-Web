@@ -20,19 +20,22 @@ import { ModalTitle, PillButton, TextField } from "./ModalFields";
  * every social login asks again until the account has one.
  *
  * TikTok has no such screen to measure, so it borrows the reset step's layout,
- * the other place an address is asked for on its own.
+ * the other place an address is asked for on its own. Settings reuses it with
+ * its own copy and no skip.
  */
 export function AddEmailStep({
+  description = "You’re logged in, but this account has no email address. Add one so you can still get in if you lose the account you just used.",
   onSubmit,
   onSkip,
 }: {
+  description?: string;
   /** Stores the address and mails a code to it; a taken one is set on the field. */
   onSubmit: (
     email: string,
     turnstileToken: string,
     setFieldError: SubmitHelpers["setFieldError"],
   ) => Promise<void>;
-  onSkip: () => void;
+  onSkip?: () => void;
 }) {
   const turnstile = useTurnstileToken();
   const form = useForm({
@@ -53,8 +56,7 @@ export function AddEmailStep({
       <ModalTitle className="mb-4">Add your email</ModalTitle>
 
       <p className="text-center text-[14px] leading-5 text-[var(--tt-text-muted)]">
-        You&rsquo;re logged in, but this account has no email address. Add one
-        so you can still get in if you lose the account you just used.
+        {description}
       </p>
 
       <form onSubmit={form.handleSubmit} noValidate className="pt-6 pb-5">
@@ -81,13 +83,15 @@ export function AddEmailStep({
           {form.submitting ? "Sending…" : "Send code"}
         </PillButton>
 
-        <button
-          type="button"
-          onClick={onSkip}
-          className="mx-auto block text-[14px] leading-[18.2px] font-semibold text-[var(--tt-text-muted)] hover:underline"
-        >
-          Skip for now
-        </button>
+        {onSkip && (
+          <button
+            type="button"
+            onClick={onSkip}
+            className="mx-auto block text-[14px] leading-[18.2px] font-semibold text-[var(--tt-text-muted)] hover:underline"
+          >
+            Skip for now
+          </button>
+        )}
       </form>
     </>
   );

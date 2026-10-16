@@ -184,7 +184,22 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     groups: [
       {
         heading: "Account control",
-        rows: [{ kind: "link", title: "Deactivate or delete account" }],
+        rows: [
+          {
+            kind: "link",
+            title: "Add email address",
+            description:
+              "Needed to set a password, and to get back in if you lose your Google or Facebook account.",
+            action: "add-email",
+          },
+          {
+            kind: "link",
+            title: "Change password",
+            description: "Choose a new password for logging in with your email or username.",
+            action: "password",
+          },
+          { kind: "link", title: "Deactivate or delete account" },
+        ],
       },
       {
         heading: "Account information",

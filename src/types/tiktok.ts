@@ -286,6 +286,7 @@ export type SettingsIconName =
  * not a new shape for the whole panel.
  */
 export type SettingsAction =
+  | "add-email"
   | "blocked-accounts"
   | "muted-accounts"
   | "browser-notifications"
@@ -295,6 +296,7 @@ export type SettingsAction =
   | "dm-audience"
   | "screen-time-limit"
   | "sleep-hours"
+  | "password"
   | "weekly-screen-time";
 
 /**
