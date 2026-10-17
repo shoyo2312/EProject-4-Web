@@ -48,10 +48,28 @@ COPY . .
 
 ENV NODE_ENV=production
 
-# Next.js collects completely anonymous telemetry data about general usage.
-# Learn more here: https://nextjs.org/telemetry
-# Uncomment the following line in case you want to disable telemetry during the build.
-# ENV NEXT_TELEMETRY_DISABLED=1
+# Everything below is fixed by `next build`, not read at runtime: NEXT_PUBLIC_* is
+# inlined into the client bundle, and next.config.ts is evaluated here, so the
+# /api rewrite destination and the next/image hosts are baked into the build
+# manifests. Setting any of them only on the running container changes nothing.
+# The defaults are the ones the code falls back to, so a bare `docker build`
+# still produces the local-development image.
+ARG API_GATEWAY_URL=http://localhost:8080
+ARG MEDIA_CDN_HOST=cdn.tiktok-clone.local
+ARG MEDIA_ORIGIN=http://localhost:9000
+ARG NEXT_PUBLIC_WS_GATEWAY_URL=http://localhost:8080
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=
+ARG NEXT_PUBLIC_FACEBOOK_APP_ID=
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+ENV API_GATEWAY_URL=${API_GATEWAY_URL} \
+  MEDIA_CDN_HOST=${MEDIA_CDN_HOST} \
+  MEDIA_ORIGIN=${MEDIA_ORIGIN} \
+  NEXT_PUBLIC_WS_GATEWAY_URL=${NEXT_PUBLIC_WS_GATEWAY_URL} \
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID} \
+  NEXT_PUBLIC_FACEBOOK_APP_ID=${NEXT_PUBLIC_FACEBOOK_APP_ID} \
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY=${NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build Next.js application
 # If you want to speed up Docker rebuilds, you can cache the build artifacts
