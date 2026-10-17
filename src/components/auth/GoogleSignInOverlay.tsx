@@ -3,10 +3,11 @@
 import { useEffect, useRef } from "react";
 
 /**
- * Google's own "Continue with Google" button, rendered transparent and laid
- * over the styled row it sits on. The row underneath is what the viewer sees;
- * the click lands on Google's element, which is the only thing allowed to open
- * the account-chooser popup. `mount` returns its own cleanup.
+ * Google's own "Continue with Google" button, laid over the row it replaces.
+ * It has to be visible: Google drops clicks on a transparent button (its
+ * clickjacking guard), so an `opacity-0` overlay opened nothing. Google's
+ * element is the only thing allowed to open the account-chooser popup.
+ * `mount` returns its own cleanup.
  */
 export function GoogleSignInOverlay({
   mount,
@@ -23,8 +24,7 @@ export function GoogleSignInOverlay({
   return (
     <div
       ref={ref}
-      aria-hidden="true"
-      className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden opacity-0"
+      className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden"
     />
   );
 }
