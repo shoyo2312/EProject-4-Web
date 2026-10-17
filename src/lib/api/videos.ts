@@ -153,6 +153,9 @@ export function createUploadUrl(
   });
 }
 
+/** How long an upload may go without sending a byte before it is abandoned. */
+export const UPLOAD_STALL_MS = 60_000;
+
 /**
  * POSTs the file to object storage as a multipart form: the presigned policy fields
  * first, then the file **last** (S3 requires that order). XHR rather than `fetch` so
@@ -173,7 +176,20 @@ export function uploadToStorage(
     const xhr = new XMLHttpRequest();
     xhr.open("POST", uploadUrl);
 
+    // XHR has no idle timeout: bytes that stop moving leave the request pending and
+    // the bar frozen for as long as the page is open. Any progress resets the clock.
+    let stall: ReturnType<typeof setTimeout> | undefined;
+    const armStall = () => {
+      clearTimeout(stall);
+      stall = setTimeout(() => {
+        reject(new ApiError(0, "UPLOAD_STALLED", "Upload stalled"));
+        xhr.abort();
+      }, UPLOAD_STALL_MS);
+    };
+    xhr.onloadend = () => clearTimeout(stall);
+
     xhr.upload.onprogress = (event) => {
+      armStall();
       if (event.lengthComputable) onProgress?.(event.loaded / event.total);
     };
     xhr.onload = () => {
@@ -196,6 +212,7 @@ export function uploadToStorage(
     }
     signal?.addEventListener("abort", () => xhr.abort(), { once: true });
     xhr.send(body);
+    armStall();
   });
 }
 

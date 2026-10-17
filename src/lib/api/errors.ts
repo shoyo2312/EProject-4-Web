@@ -140,6 +140,7 @@ const MESSAGES: Record<string, string> = {
   FOREIGN_UPLOAD: "That upload belongs to another account.",
   RAW_FILE_ALREADY_PUBLISHED: "This file was already posted.",
   UPLOAD_FAILED: "The file couldn’t be uploaded. Try again.",
+  UPLOAD_STALLED: "The upload stopped making progress. Check your connection and try again.",
   VIDEO_NOT_FOUND: "This video is unavailable.",
   // A caption refused at publish, one code per field. The upload form shows
   // each under its own box; tags only ever come from the description's hashtags.
