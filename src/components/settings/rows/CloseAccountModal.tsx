@@ -340,22 +340,30 @@ function ProviderProof({
     await onSubmit({ provider, token });
   };
 
+  const googleButton = provider === "google" && !busy;
+
   return (
     <>
       <p className="mb-8 text-center text-[14px] leading-5 text-[var(--tt-text-muted)]">
         Log in with {name} again to continue. You&rsquo;ll be logged out on every device.
       </p>
       <div className="relative">
+        {/* Hidden, not removed, under Google's button: it keeps the row's height. */}
         <button
           type="button"
           disabled={busy}
           onClick={provider === "facebook" ? continueWithFacebook : undefined}
-          className="flex h-[46px] w-full items-center justify-center gap-2 rounded-full border border-white/[0.12] text-[16px] leading-[22px] font-semibold text-[var(--tt-text)] hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-50"
+          aria-hidden={googleButton ? true : undefined}
+          tabIndex={googleButton ? -1 : undefined}
+          className={cn(
+            "flex h-[46px] w-full items-center justify-center gap-2 rounded-full border border-white/[0.12] text-[16px] leading-[22px] font-semibold text-[var(--tt-text)] hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-50",
+            googleButton && "invisible",
+          )}
         >
           <Icon className="h-5 w-5" />
           {busy ? "Confirming…" : `Continue with ${name}`}
         </button>
-        {provider === "google" && !busy && <GoogleSignInOverlay mount={mountGoogle} />}
+        {googleButton && <GoogleSignInOverlay mount={mountGoogle} />}
       </div>
     </>
   );
