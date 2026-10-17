@@ -40,6 +40,17 @@ export function isPrivateAccount(error: unknown): boolean {
   return isApiError(error) && error.code === "PRIVATE_ACCOUNT";
 }
 
+/**
+ * A sign-in whose credential was right, to an account its owner closed. Not a
+ * failure to show: the modal offers to reopen it with the same credential.
+ */
+export function closedAccountKind(error: unknown): "deactivated" | "deletion-pending" | null {
+  if (!isApiError(error)) return null;
+  if (error.code === "ACCOUNT_DEACTIVATED") return "deactivated";
+  if (error.code === "ACCOUNT_DELETION_PENDING") return "deletion-pending";
+  return null;
+}
+
 /** `Retry-After` in whole seconds — the header is either a delay or an HTTP date. */
 export function parseRetryAfter(header: string | null, now = Date.now()): number | null {
   if (!header) return null;
@@ -100,6 +111,11 @@ const MESSAGES: Record<string, string> = {
     "Enter the code we emailed to confirm this address is yours.",
   /** Admin accounts: the console's second factor has no social equivalent. */
   SOCIAL_SIGN_IN_NOT_ALLOWED: "This account signs in with its password.",
+  // The reactivate step shows instead of these; they read sensibly if it doesn't.
+  ACCOUNT_DEACTIVATED: "This account is deactivated. Log in again to reactivate it.",
+  ACCOUNT_DELETION_PENDING:
+    "This account is scheduled for deletion. Log in again to reactivate it and cancel the deletion.",
+  ACCOUNT_CLOSURE_NOT_ALLOWED: "Admin accounts can’t be deactivated or deleted.",
 
   // user-service
   CANNOT_FOLLOW_SELF: "You cannot follow yourself.",

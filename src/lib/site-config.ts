@@ -198,7 +198,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             description: "Choose a new password for logging in with your email or username.",
             action: "password",
           },
-          { kind: "link", title: "Deactivate or delete account" },
+          { kind: "link", title: "Deactivate or delete account", action: "close-account" },
         ],
       },
       {

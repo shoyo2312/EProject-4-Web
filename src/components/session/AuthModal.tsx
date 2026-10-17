@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useSocialSignIn } from "@/components/auth/use-social-sign-in";
+import {
+  type ClosedAccountSignIn,
+  type SocialLinkChallenge,
+  useSocialSignIn,
+} from "@/components/auth/use-social-sign-in";
 import { ChevronLeftIcon, CloseIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { modalCardMotion, modalOverlayMotion } from "@/components/ui/modal";
@@ -19,7 +23,7 @@ import {
   verifyPasswordReset,
   verifySignup,
 } from "@/lib/api/auth";
-import { isApiError, messageFor } from "@/lib/api/errors";
+import { closedAccountKind, isApiError, messageFor } from "@/lib/api/errors";
 import type { OtpSentResponse } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import type { LoginOption } from "@/types/tiktok";
@@ -33,6 +37,7 @@ import {
   ResetEmailStep,
 } from "./auth-modal/LoginSteps";
 import { Agreement, OptionsStep } from "./auth-modal/OptionsStep";
+import { ReactivateStep } from "./auth-modal/ReactivateStep";
 import {
   EMPTY_DRAFT,
   SignupDetailsStep,
@@ -72,7 +77,18 @@ type AuthStep =
    * They start a fresh stack: the login before them is finished.
    */
   | { name: "add-email" }
-  | ({ name: "add-email-code" } & CodeSent);
+  | ({ name: "add-email-code" } & CodeSent)
+  /**
+   * The credential was right and the account is one its owner closed. It is
+   * held so reopening sends the same one back with `reactivate`.
+   */
+  | {
+      name: "reactivate";
+      deletionPending: boolean;
+      credential:
+        | { kind: "password"; identifier: string; password: string }
+        | ({ kind: "social" } & SocialLinkChallenge);
+    };
 
 type SetFieldError = (name: string, message: string) => void;
 
@@ -137,6 +153,11 @@ export function AuthModal({
       [go, flow],
     ),
     onEmailMissing: useCallback(() => setStack([{ name: "add-email" }]), []),
+    onAccountClosed: useCallback(
+      ({ deletionPending, ...signIn }: ClosedAccountSignIn) =>
+        go({ name: "reactivate", deletionPending, credential: { kind: "social", ...signIn } }),
+      [go],
+    ),
   });
 
   useEffect(() => {
@@ -186,6 +207,15 @@ export function AuthModal({
       if (isApiError(cause) && cause.is("EMAIL_NOT_VERIFIED")) {
         toast.error(messageFor(cause));
         go({ name: "verify", email: identifier, password });
+        return;
+      }
+      const closed = closedAccountKind(cause);
+      if (closed) {
+        go({
+          name: "reactivate",
+          deletionPending: closed === "deletion-pending",
+          credential: { kind: "password", identifier, password },
+        });
         return;
       }
       throw cause;
@@ -423,6 +453,21 @@ export function AuthModal({
             onResend={(proof) => resendVerification(step.email, proof)}
           />
         );
+
+      case "reactivate": {
+        const { credential } = step;
+        return (
+          <ReactivateStep
+            deletionPending={step.deletionPending}
+            onReactivate={() =>
+              credential.kind === "password"
+                ? signIn(credential.identifier, credential.password, { reactivate: true })
+                : social.reactivate(credential)
+            }
+            onCancel={() => restart(flow)}
+          />
+        );
+      }
     }
   })();
 

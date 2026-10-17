@@ -289,6 +289,7 @@ export type SettingsIconName =
  */
 export type SettingsAction =
   | "add-email"
+  | "close-account"
   | "blocked-accounts"
   | "muted-accounts"
   | "browser-notifications"

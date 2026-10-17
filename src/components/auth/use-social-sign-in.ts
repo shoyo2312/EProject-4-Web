@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
-import { isApiError, messageFor } from "@/lib/api/errors";
+import { closedAccountKind, isApiError, messageFor } from "@/lib/api/errors";
 import {
   getProviderToken,
   isSocialAuthError,
@@ -30,6 +30,15 @@ export interface SocialLinkChallenge {
 }
 
 /**
+ * A provider sign-in that vouched for an account its owner closed. The token
+ * is kept, like a link challenge's, so reopening sends it back rather than
+ * opening the provider's dialog a second time.
+ */
+export interface ClosedAccountSignIn extends SocialLinkChallenge {
+  deletionPending: boolean;
+}
+
+/**
  * What a row of the modal's option list does when clicked, kept apart from the
  * list itself: the login and signup lists behave identically, and the
  * behaviour is the fiddly part.
@@ -40,6 +49,7 @@ export interface SocialLinkChallenge {
 export function useSocialSignIn({
   onFallback,
   onEmailMissing,
+  onAccountClosed,
 }: {
   /** Rows with no provider behind them — QR, phone/email, LINE, Kakao, Apple. */
   onFallback: (option: LoginOption) => void;
@@ -48,6 +58,8 @@ export function useSocialSignIn({
    * session leaves the modal open for this, so it can ask for one.
    */
   onEmailMissing: () => void;
+  /** The account is one its owner closed; `reactivate` reopens it. */
+  onAccountClosed: (signIn: ClosedAccountSignIn) => void;
 }) {
   const { signInWithProvider, confirmSocialLink } = useSession();
   const [pending, setPending] = useState<SocialProvider | null>(null);
@@ -75,6 +87,27 @@ export function useSocialSignIn({
           setChallenge({ provider, token });
           return;
         }
+        const closed = closedAccountKind(cause);
+        if (closed) {
+          onAccountClosed({ provider, token, deletionPending: closed === "deletion-pending" });
+          return;
+        }
+        toast.error(messageFor(cause));
+      } finally {
+        setPending(null);
+      }
+    },
+    [onAccountClosed, onEmailMissing, signInWithProvider],
+  );
+
+  /** Signs in with the kept token again, this time reopening the account. */
+  const reactivate = useCallback(
+    async ({ provider, token }: SocialLinkChallenge) => {
+      setPending(provider);
+      try {
+        const { requiresEmail } = await signInWithProvider(provider, token, { reactivate: true });
+        if (requiresEmail) onEmailMissing();
+      } catch (cause) {
         toast.error(messageFor(cause));
       } finally {
         setPending(null);
@@ -146,17 +179,24 @@ export function useSocialSignIn({
         setChallenge(null);
         if (requiresEmail) onEmailMissing();
       } catch (cause) {
+        // The link is confirmed by now; it is the account that is closed.
+        const closed = closedAccountKind(cause);
+        if (closed) {
+          setChallenge(null);
+          onAccountClosed({ ...challenge, deletionPending: closed === "deletion-pending" });
+          return;
+        }
         toast.error(messageFor(cause));
       } finally {
         setPending(null);
       }
     },
-    [challenge, confirmSocialLink, onEmailMissing],
+    [challenge, confirmSocialLink, onAccountClosed, onEmailMissing],
   );
 
   const cancel = useCallback(() => {
     setChallenge(null);
   }, []);
 
-  return { select, mountGoogle, confirm, cancel, challenge, pending };
+  return { select, mountGoogle, confirm, cancel, reactivate, challenge, pending };
 }
