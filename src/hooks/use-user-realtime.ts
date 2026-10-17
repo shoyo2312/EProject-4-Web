@@ -10,10 +10,8 @@ export type UserStatsFrame = {
 
 /**
  * Subscribes to one profile's `/topic/users.{userId}` — followers, following,
- * total likes. Backend contract, not yet emitted: see the note left in
- * `BackendProfilePage.tsx` for what user-service (follow/unfollow) and the
- * likes aggregator need to publish. Until then this subscribes to nothing
- * useful and the frame simply never arrives — no FE change needed once it does.
+ * total likes. chat-service's `UserStatsFanout` sends one after a follow edge
+ * touching the account (either side) or a like on its videos.
  *
  * Single id, unlike `useVideoRealtime`: a profile page only ever watches the
  * one account it is showing.
