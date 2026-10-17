@@ -8,6 +8,7 @@ import {
   QrCodeIcon,
 } from "@/components/icons";
 import type { SocialProvider } from "@/lib/auth/social";
+import { LEGAL_LINKS } from "@/lib/legal";
 import type { LoginOption } from "@/types/tiktok";
 
 /**
@@ -84,20 +85,34 @@ export function Agreement({ flow }: { flow: "login" | "signup" }) {
               Vietnam
             </span>
             , you agree to our{" "}
-            <span className="text-[var(--tt-text)]">Terms of Service</span> and
+            <LegalLink href={LEGAL_LINKS.terms}>Terms of Service</LegalLink> and
             acknowledge that you have read our{" "}
-            <span className="text-[var(--tt-text)]">Privacy Policy</span>.
+            <LegalLink href={LEGAL_LINKS.privacy}>Privacy Policy</LegalLink>.
           </>
         ) : (
           <>
             By continuing, you agree to Nowa&rsquo;s{" "}
-            <span className="text-[var(--tt-text)]">Terms of Service</span> and
+            <LegalLink href={LEGAL_LINKS.terms}>Terms of Service</LegalLink> and
             confirm that you have read Nowa&rsquo;s{" "}
-            <span className="text-[var(--tt-text)]">Privacy Policy</span>.
+            <LegalLink href={LEGAL_LINKS.privacy}>Privacy Policy</LegalLink>.
           </>
         )}
       </p>
     </div>
+  );
+}
+
+/** Opens in a new tab, so reading the terms does not throw away the sign-in in progress. */
+function LegalLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener"
+      className="text-[var(--tt-text)] hover:underline"
+    >
+      {children}
+    </a>
   );
 }
 
