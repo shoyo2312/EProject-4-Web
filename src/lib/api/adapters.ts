@@ -200,7 +200,12 @@ export function profileToUserProfile(
   profile: UserProfileResponse,
   author: Author,
   videos: ProfileVideo[],
-  options: { isFollowing?: boolean; followRequested?: boolean; totalLikes?: number } = {},
+  options: {
+    isFollowing?: boolean;
+    followRequested?: boolean;
+    postsLocked?: boolean;
+    totalLikes?: number;
+  } = {},
 ): UserProfile {
   return {
     author,
@@ -215,6 +220,7 @@ export function profileToUserProfile(
     },
     isFollowing: options.isFollowing ?? false,
     followRequested: options.followRequested ?? false,
+    postsLocked: options.postsLocked ?? false,
     posts: {
       videos,
       reposts: [],

@@ -14,7 +14,7 @@ import {
 } from "@/lib/api/adapters";
 import * as authApi from "@/lib/api/auth";
 import { forgetAuthor } from "@/lib/api/authors";
-import { isApiError, messageFor } from "@/lib/api/errors";
+import { isApiError, isPrivateAccount, messageFor } from "@/lib/api/errors";
 import { listLikedVideos, listRepostedVideos, listSavedVideos } from "@/lib/api/interactions";
 import { isLastPage, type AccountResponse } from "@/lib/api/types";
 import * as usersApi from "@/lib/api/users";
@@ -92,7 +92,12 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
        * PRIVATE videos too, so the owner's grid is genuinely "my videos"
        * rather than only what the public sees.
        */
-      const videosLoading = getUserVideos(raw.userId, 0, VIDEO_PAGE);
+      const videosLoading = getUserVideos(raw.userId, 0, VIDEO_PAGE).catch((cause) => {
+        // The profile is public, only the grid is closed — null says so without
+        // taking the whole page down with it.
+        if (isPrivateAccount(cause)) return null;
+        throw cause;
+      });
 
       const [friendship, stats] = await Promise.all([
         viewerId !== undefined && !isOwnPage
@@ -104,10 +109,11 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
         getUserVideoStats(raw.userId).catch(() => null),
       ]);
 
-      const withVideos = (videos: ProfileVideo[]) =>
+      const withVideos = (videos: ProfileVideo[], postsLocked = false) =>
         profileToUserProfile(raw, author, videos, {
           isFollowing: friendship?.following ?? false,
           followRequested: friendship?.requested ?? false,
+          postsLocked,
           totalLikes: stats?.totalLikes,
         });
 
@@ -127,6 +133,14 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       });
 
       const videos = await videosLoading;
+
+      if (videos === null) {
+        setProfile(withVideos([], true));
+        videoPage.current = 0;
+        setMoreVideos(false);
+        setPending(null);
+        return;
+      }
 
       setProfile(withVideos(videos.content.map(videoToProfileVideo)));
       videoPage.current = 0;

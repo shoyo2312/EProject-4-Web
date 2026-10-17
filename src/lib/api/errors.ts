@@ -32,6 +32,14 @@ export function isApiError(error: unknown): error is ApiError {
   return error instanceof ApiError;
 }
 
+/**
+ * A private account's grid (or Reposts tab) asked for by someone who neither
+ * owns nor follows it — a closed door, not a failure.
+ */
+export function isPrivateAccount(error: unknown): boolean {
+  return isApiError(error) && error.code === "PRIVATE_ACCOUNT";
+}
+
 /** `Retry-After` in whole seconds — the header is either a delay or an HTTP date. */
 export function parseRetryAfter(header: string | null, now = Date.now()): number | null {
   if (!header) return null;
@@ -106,6 +114,7 @@ const MESSAGES: Record<string, string> = {
   ALREADY_MUTED: "You already muted this account.",
   NOT_MUTED: "This account is not muted.",
   INVALID_AVATAR: "That photo must be a JPEG, PNG, or WebP under 5 MB.",
+  PRIVATE_ACCOUNT: "This account is private. Follow it to see its videos.",
   DISPLAY_NAME_CHANGE_TOO_SOON: "Your nickname can only be changed once every 7 days.",
 
   // video-service

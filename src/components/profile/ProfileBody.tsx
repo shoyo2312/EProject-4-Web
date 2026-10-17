@@ -199,6 +199,8 @@ export function ProfileBody({
     return () => observer.disconnect();
   }, [loadMore, posts.length]);
 
+  if (profile.postsLocked) return <LockedState />;
+
   return (
     <>
       <div className="relative flex items-center justify-between">
@@ -453,6 +455,24 @@ function ProfileTile({
         {formatCount(post.views)}
       </div>
     </Link>
+  );
+}
+
+/** A private account's body for a viewer who does not follow it: no tabs, no grid. */
+function LockedState() {
+  return (
+    <div className="flex flex-col items-center pt-30 text-center">
+      <div className="flex h-23 w-23 items-center justify-center rounded-full bg-[#2d2d2d]">
+        <PrivacyLockIcon className="h-11 w-11 text-[var(--tt-icon)]" />
+      </div>
+
+      <p className="mt-6 text-[24px] leading-[30px] font-bold text-[var(--tt-text)]">
+        This account is private
+      </p>
+      <p className="mt-2 text-[16px] leading-[21px] text-[var(--tt-text-secondary)]">
+        Follow this account to see their videos.
+      </p>
+    </div>
   );
 }
 
