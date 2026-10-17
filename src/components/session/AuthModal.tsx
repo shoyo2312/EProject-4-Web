@@ -310,7 +310,6 @@ export function AuthModal({
             title={flow === "login" ? "Log in to Nowa" : "Sign up for Nowa"}
             options={flow === "login" ? loginOptions : signupOptions}
             onSelect={social.select}
-            mountGoogle={social.mountGoogle}
             pending={social.pending}
           />
         );

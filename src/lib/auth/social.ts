@@ -12,7 +12,7 @@
  * only supported distribution — there is no npm package to install here.
  *
  * Which token each side yields is fixed by the backend contract:
- *   Google   an **ID token** (`credential` from Google Identity Services)
+ *   Google   an **access token** (Google Identity Services' token client)
  *   Facebook an **access token** (`authResponse.accessToken` from FB.login)
  */
 
@@ -76,112 +76,85 @@ export function preloadSocialSdks(): void {
 
 /** Resolves with the provider token to post to auth-service. */
 export function getProviderToken(provider: SocialProvider): Promise<string> {
-  // Google no longer comes through here — its account chooser is opened by the
-  // Google-rendered button (`renderGoogleButton`), not a click we control.
-  if (provider === "google") {
-    return Promise.reject(
-      new SocialAuthError(
-        "unavailable",
-        "Use the Google button to choose an account.",
-      ),
-    );
-  }
-  if (!isProviderConfigured("facebook")) {
+  if (!isProviderConfigured(provider)) {
     return Promise.reject(
       new SocialAuthError(
         "unconfigured",
-        "Facebook sign-in isn’t configured on this deployment.",
+        provider === "google"
+          ? "Google sign-in isn’t configured on this deployment."
+          : "Facebook sign-in isn’t configured on this deployment.",
       ),
     );
   }
-  return facebookAccessToken();
+  return provider === "google" ? googleAccessToken() : facebookAccessToken();
 }
 
 /* --- Google Identity Services -------------------------------------------- */
 
 const GOOGLE_SDK_SRC = "https://accounts.google.com/gsi/client";
 
-interface GoogleCredentialResponse {
-  credential?: string;
+interface GoogleTokenResponse {
+  access_token?: string;
+  error?: string;
 }
 
-interface GoogleAccountsId {
-  initialize: (config: {
+interface GoogleTokenClient {
+  requestAccessToken: () => void;
+}
+
+interface GoogleOAuth2 {
+  initTokenClient: (config: {
     client_id: string;
-    callback: (response: GoogleCredentialResponse) => void;
-    auto_select?: boolean;
-    cancel_on_tap_outside?: boolean;
-  }) => void;
-  renderButton: (
-    parent: HTMLElement,
-    options: {
-      type?: "standard" | "icon";
-      theme?: "outline" | "filled_blue" | "filled_black";
-      text?: "signin_with" | "signup_with" | "continue_with" | "signin";
-      shape?: "rectangular" | "pill" | "circle" | "square";
-      size?: "large" | "medium" | "small";
-      width?: number;
-    },
-  ) => void;
-  cancel: () => void;
+    scope: string;
+    prompt?: "" | "none" | "consent" | "select_account";
+    callback: (response: GoogleTokenResponse) => void;
+    error_callback?: (error: { type?: string }) => void;
+  }) => GoogleTokenClient;
 }
 
 /**
- * Renders Google's own "Continue with Google" button into `el`, and calls
- * `onCredential` with the ID token once the viewer picks an account.
+ * Google's account chooser in a popup, via the OAuth token client.
  *
- * ponytail: this is `renderButton`, not One Tap (`prompt()`). The button is the
- * only Google flow that opens the real account-chooser popup, is not
- * suppressed after repeated dismissals, and still yields the `credential` ID
- * token auth-service verifies. The caller overlays it transparently on the
- * styled row, so the row stays the thing the viewer sees.
- *
- * Returns a cleanup that cancels any open prompt and empties `el`.
+ * This is the one Google flow that opens from a button we draw: the ID-token
+ * flows either need Google's own rendered button (which ignores clicks unless
+ * it is visibly on top) or the One Tap prompt (which Google suppresses after a
+ * few dismissals and then never calls back). The token client is a plain
+ * popup, settled by `callback` or `error_callback` like Facebook's.
+ * auth-service checks the access token's `aud` against our client id.
  */
-export function renderGoogleButton(
-  el: HTMLElement,
-  onCredential: (idToken: string) => void,
-): () => void {
-  let cancelled = false;
-
-  if (!isProviderConfigured("google")) {
-    return () => undefined;
+async function googleAccessToken(): Promise<string> {
+  await loadScript(GOOGLE_SDK_SRC);
+  const oauth2 = window.google?.accounts?.oauth2;
+  if (!oauth2) {
+    throw new SocialAuthError("unavailable", "Google sign-in failed to load.");
   }
 
-  void loadScript(GOOGLE_SDK_SRC)
-    .then(() => {
-      if (cancelled) return;
-      const id = window.google?.accounts?.id;
-      if (!id) return;
-      id.initialize({
+  return new Promise<string>((resolve, reject) => {
+    oauth2
+      .initTokenClient({
         client_id: GOOGLE_CLIENT_ID,
-        auto_select: false,
-        cancel_on_tap_outside: true,
+        scope: "openid email profile",
+        // Lets a viewer who signed out pick a different account next time.
+        prompt: "select_account",
         callback: (response) => {
-          if (response.credential) onCredential(response.credential);
+          if (response.access_token) resolve(response.access_token);
+          else {
+            reject(new SocialAuthError("cancelled", "Google sign-in cancelled."));
+          }
         },
-      });
-      id.renderButton(el, {
-        type: "standard",
-        theme: "filled_black",
-        text: "continue_with",
-        shape: "pill",
-        size: "large",
-        // Google clamps width to 200–400; the row sits inside that range.
-        width: Math.min(400, Math.max(200, Math.round(el.offsetWidth) || 320)),
-      });
-    })
-    .catch(() => undefined);
-
-  return () => {
-    cancelled = true;
-    try {
-      window.google?.accounts?.id?.cancel();
-    } catch {
-      // SDK never finished loading — nothing to cancel.
-    }
-    el.replaceChildren();
-  };
+        error_callback: (error) => {
+          reject(
+            error.type === "popup_failed_to_open"
+              ? new SocialAuthError(
+                  "unavailable",
+                  "Google’s sign-in window was blocked. Allow pop-ups for this site and try again.",
+                )
+              : new SocialAuthError("cancelled", "Google sign-in cancelled."),
+          );
+        },
+      })
+      .requestAccessToken();
+  });
 }
 
 /* --- Facebook JS SDK ------------------------------------------------------ */
@@ -287,7 +260,7 @@ function loadScript(src: string): Promise<void> {
 
 declare global {
   interface Window {
-    google?: { accounts?: { id?: GoogleAccountsId } };
+    google?: { accounts?: { oauth2?: GoogleOAuth2 } };
     FB?: FacebookSdk;
   }
 }

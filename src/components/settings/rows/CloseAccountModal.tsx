@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { GoogleSignInOverlay } from "@/components/auth/GoogleSignInOverlay";
 import { FacebookBrandIcon, GoogleBrandIcon } from "@/components/icons";
 import { CodeBoxes } from "@/components/session/auth-modal/CodeBoxes";
 import { ModalTitle, PasswordField, PillButton } from "@/components/session/auth-modal/ModalFields";
@@ -23,7 +22,6 @@ import {
   getProviderToken,
   isSocialAuthError,
   isSocialCancellation,
-  renderGoogleButton,
   type SocialProvider,
 } from "@/lib/auth/social";
 import { CODE_LENGTH, emptyCode } from "@/lib/forms/code-digits";
@@ -300,9 +298,8 @@ function CodeProof({
 }
 
 /**
- * A fresh sign-in with the provider the account is linked to. Google's popup
- * has to come from Google's own button, laid over ours as the login modal
- * does; Facebook's dialog opens from the click.
+ * A fresh sign-in with the provider the account is linked to; either
+ * provider's popup opens from the click.
  */
 function ProviderProof({
   provider,
@@ -316,18 +313,7 @@ function ProviderProof({
   const name = provider === "google" ? "Google" : "Facebook";
   const Icon = provider === "google" ? GoogleBrandIcon : FacebookBrandIcon;
 
-  // Through a ref, so a new `onSubmit` each render does not remount Google's button.
-  const submitRef = useRef(onSubmit);
-  useEffect(() => {
-    submitRef.current = onSubmit;
-  }, [onSubmit]);
-  const mountGoogle = useCallback(
-    (el: HTMLElement) =>
-      renderGoogleButton(el, (token) => void submitRef.current({ provider, token })),
-    [provider],
-  );
-
-  const continueWithFacebook = async () => {
+  const continueWithProvider = async () => {
     let token: string;
     try {
       token = await getProviderToken(provider);
@@ -340,31 +326,20 @@ function ProviderProof({
     await onSubmit({ provider, token });
   };
 
-  const googleButton = provider === "google" && !busy;
-
   return (
     <>
       <p className="mb-8 text-center text-[14px] leading-5 text-[var(--tt-text-muted)]">
         Log in with {name} again to continue. You&rsquo;ll be logged out on every device.
       </p>
-      <div className="relative">
-        {/* Hidden, not removed, under Google's button: it keeps the row's height. */}
-        <button
-          type="button"
-          disabled={busy}
-          onClick={provider === "facebook" ? continueWithFacebook : undefined}
-          aria-hidden={googleButton ? true : undefined}
-          tabIndex={googleButton ? -1 : undefined}
-          className={cn(
-            "flex h-[46px] w-full items-center justify-center gap-2 rounded-full border border-white/[0.12] text-[16px] leading-[22px] font-semibold text-[var(--tt-text)] hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-50",
-            googleButton && "invisible",
-          )}
-        >
-          <Icon className="h-5 w-5" />
-          {busy ? "Confirming…" : `Continue with ${name}`}
-        </button>
-        {googleButton && <GoogleSignInOverlay mount={mountGoogle} />}
-      </div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={continueWithProvider}
+        className="flex h-[46px] w-full items-center justify-center gap-2 rounded-full border border-white/[0.12] text-[16px] leading-[22px] font-semibold text-[var(--tt-text)] hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <Icon className="h-5 w-5" />
+        {busy ? "Confirming…" : `Continue with ${name}`}
+      </button>
     </>
   );
 }

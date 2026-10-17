@@ -1,6 +1,5 @@
 "use client";
 
-import { GoogleSignInOverlay } from "@/components/auth/GoogleSignInOverlay";
 import {
   FacebookBrandIcon,
   GoogleBrandIcon,
@@ -25,13 +24,11 @@ export function OptionsStep({
   title,
   options,
   onSelect,
-  mountGoogle,
   pending,
 }: {
   title: string;
   options: LoginOption[];
   onSelect: (option: LoginOption) => void;
-  mountGoogle: ((el: HTMLElement) => () => void) | undefined;
   /** The provider whose dialog is open, if any — the list freezes meanwhile. */
   pending: SocialProvider | null;
 }) {
@@ -44,35 +41,24 @@ export function OptionsStep({
       {/* The list scrolls inside the card — live, the sixth row is clipped,
           which is how the scroll is signalled. */}
       <div className="no-scrollbar h-[296px] flex flex-col justify-center overflow-y-auto pt-2 pr-8 pl-10">
-        {options.map((option) => {
-          const googleButton = option.provider === "google" && mountGoogle;
-          return (
-            <div
-              key={option.label}
-              className="relative mb-2 w-[300px] max-w-full"
-            >
-              {/* Hidden, not removed, under Google's button: it keeps the row's height. */}
-              <button
-                type="button"
-                onClick={() => onSelect(option)}
-                disabled={pending !== null}
-                aria-hidden={googleButton ? true : undefined}
-                tabIndex={googleButton ? -1 : undefined}
-                className={`${googleButton ? "invisible " : ""}relative flex h-12 w-full items-center justify-center rounded-[24px] bg-[var(--tt-field)] pr-3.5 pl-2.5 text-[16px] leading-5 font-semibold text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-shape-neutral-3)] disabled:opacity-50`}
-              >
-                <span className="absolute left-3 flex">
-                  <OptionIcon option={option} />
-                </span>
-                <span className="truncate px-6">
-                  {pending && pending === option.provider
-                    ? "Connecting…"
-                    : option.label}
-                </span>
-              </button>
-              {googleButton && <GoogleSignInOverlay mount={mountGoogle} />}
-            </div>
-          );
-        })}
+        {options.map((option) => (
+          <button
+            key={option.label}
+            type="button"
+            onClick={() => onSelect(option)}
+            disabled={pending !== null}
+            className="relative mb-2 flex h-12 w-[300px] flex-none max-w-full items-center justify-center rounded-[24px] bg-[var(--tt-field)] pr-3.5 pl-2.5 text-[16px] leading-5 font-semibold text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-shape-neutral-3)] disabled:opacity-50"
+          >
+            <span className="absolute left-3 flex">
+              <OptionIcon option={option} />
+            </span>
+            <span className="truncate px-6">
+              {pending && pending === option.provider
+                ? "Connecting…"
+                : option.label}
+            </span>
+          </button>
+        ))}
       </div>
     </div>
   );
