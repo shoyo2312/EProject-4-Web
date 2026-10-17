@@ -14,14 +14,15 @@ import {
 } from "@/lib/api/adapters";
 import * as authApi from "@/lib/api/auth";
 import { forgetAuthor } from "@/lib/api/authors";
-import { isApiError, messageFor } from "@/lib/api/errors";
+import { isApiError, isPrivateAccount, messageFor } from "@/lib/api/errors";
 import { listLikedVideos, listRepostedVideos, listSavedVideos } from "@/lib/api/interactions";
-import { isLastPage, type AccountResponse } from "@/lib/api/types";
+import { isLastPage, type AccountResponse, type FriendshipResponse } from "@/lib/api/types";
 import * as usersApi from "@/lib/api/users";
 import { getUserVideoStats, getUserVideos, getVideosByIds } from "@/lib/api/videos";
 import { clearCommentCache } from "@/lib/comment-cache";
 import { appendUnique } from "@/lib/paging";
 import { changedProfileFields } from "@/lib/profile/changed-fields";
+import { gridAccessChanged } from "@/lib/profile/grid-access";
 import { toast } from "@/components/ui/toast";
 import { useUserRealtime } from "@/hooks/use-user-realtime";
 import type { FollowStatus, ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
@@ -64,6 +65,9 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
   const [moreVideos, setMoreVideos] = useState(false);
   const loadingMoreVideos = useRef(false);
 
+  /** What `/friendship` last said, to tell whether a fresh answer changes the grid. */
+  const relationship = useRef<FriendshipResponse | null>(null);
+
   const viewerId = session.user?.userId;
   const sessionSettled = !session.isLoading;
   const targetId = userId ?? viewerId;
@@ -92,7 +96,12 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
        * PRIVATE videos too, so the owner's grid is genuinely "my videos"
        * rather than only what the public sees.
        */
-      const videosLoading = getUserVideos(raw.userId, 0, VIDEO_PAGE);
+      const videosLoading = getUserVideos(raw.userId, 0, VIDEO_PAGE).catch((cause) => {
+        // The profile is public, only the grid is closed — null says so without
+        // taking the whole page down with it.
+        if (isPrivateAccount(cause)) return null;
+        throw cause;
+      });
 
       const [friendship, stats] = await Promise.all([
         viewerId !== undefined && !isOwnPage
@@ -103,11 +112,13 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
         // becoming an error over one number.
         getUserVideoStats(raw.userId).catch(() => null),
       ]);
+      relationship.current = friendship;
 
-      const withVideos = (videos: ProfileVideo[]) =>
+      const withVideos = (videos: ProfileVideo[], postsLocked = false) =>
         profileToUserProfile(raw, author, videos, {
           isFollowing: friendship?.following ?? false,
           followRequested: friendship?.requested ?? false,
+          postsLocked,
           totalLikes: stats?.totalLikes,
         });
 
@@ -127,6 +138,14 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       });
 
       const videos = await videosLoading;
+
+      if (videos === null) {
+        setProfile(withVideos([], true));
+        videoPage.current = 0;
+        setMoreVideos(false);
+        setPending(null);
+        return;
+      }
 
       setProfile(withVideos(videos.content.map(videoToProfileVideo)));
       videoPage.current = 0;
@@ -261,18 +280,43 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
     [userId, viewerId, targetId],
   );
 
+  /**
+   * The other side of a follow happens on someone else's screen — a request
+   * approved or turned down, a follow back — and nothing on this page is told
+   * directly. Re-asked whenever there is a hint it may have moved: the account's
+   * counters ticked, the viewer came back to the tab, or tapped Follow here.
+   *
+   * Only a change that alters what video-service will serve reloads the grid;
+   * anything else just moves the button, so a declined request reads "Follow"
+   * again without thirty videos being fetched for it.
+   */
+  const recheckRelationship = useCallback(async () => {
+    if (targetId === undefined || viewerId === undefined || targetId === viewerId) return;
+    const next = await usersApi.getFriendship(targetId).catch(() => null);
+    if (!next) return;
+    const before = relationship.current;
+    relationship.current = next;
+    if (before && gridAccessChanged(before, next)) {
+      // Reposts follow the same door as the grid, so a cached answer is stale too.
+      loadedTabs.current.delete("reposts");
+      load();
+      return;
+    }
+    setProfile((current) =>
+      current
+        ? { ...current, isFollowing: next.following, followRequested: next.requested }
+        : current,
+    );
+  }, [targetId, viewerId, load]);
+
   useEffect(() => {
     load();
   }, [load]);
 
   /**
-   * Live follower/following/total-likes. `/topic/users.{id}` is not emitted by
-   * the backend yet — user-service needs to publish a frame on every
-   * follow/unfollow, and whatever aggregates likes needs to publish on every
-   * like/unlike of this user's videos, both shaped like `UserStatsFrame`. Once
-   * that ships this needs no FE change; until then no frame ever arrives and
-   * the focus/visibility listener below is the only thing that updates the
-   * numbers.
+   * Live follower/following/total-likes. chat-service sends a snapshot on
+   * `/topic/users.{id}` after any follow edge touching this account, or a
+   * like on one of its videos.
    */
   useUserRealtime(targetId ?? null, (frame) => {
     setProfile((current) =>
@@ -288,19 +332,24 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
           }
         : current,
     );
+    // An approval and a follow back both move this account's counters.
+    recheckRelationship();
   });
 
   /**
-   * Fallback for as long as the WS frame above isn't real: catches a follow
-   * made elsewhere, or from another tab, when the viewer actually leaves and
-   * returns to this one. Safe to keep once the WS lands too — a frame that
-   * already arrived just makes this a no-op refetch.
+   * Covers what the frame above cannot: a socket that dropped while the tab
+   * was in the background, and a declined follow request, which moves no
+   * counter. A frame that already arrived makes this a no-op refetch.
    */
   useEffect(() => {
     if (targetId === undefined) return;
-    const onFocus = () => refreshStats();
+    // A declined request sends nothing anywhere, so coming back is the only cue.
+    const onFocus = () => {
+      refreshStats();
+      recheckRelationship();
+    };
     const onVisible = () => {
-      if (document.visibilityState === "visible") refreshStats();
+      if (document.visibilityState === "visible") onFocus();
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
@@ -308,7 +357,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [targetId, refreshStats]);
+  }, [targetId, refreshStats, recheckRelationship]);
 
   if (error) {
     return (
@@ -443,6 +492,9 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
        * twenty a second for every viewer sharing the Next proxy's IP.
        */
       refreshStats();
+      // Keeps the page's own record in step with the button, so a later
+      // decline is seen as a change from "Requested" rather than no change.
+      recheckRelationship();
     }
   };
 

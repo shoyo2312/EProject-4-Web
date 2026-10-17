@@ -12,6 +12,7 @@ import {
   SleepHoursRow,
 } from "@/components/settings/rows/AccountRows";
 import { AddEmailRow } from "@/components/settings/rows/AddEmailModal";
+import { CloseAccountRow } from "@/components/settings/rows/CloseAccountModal";
 import { PasswordRow } from "@/components/settings/rows/PasswordModal";
 import {
   Accessory,
@@ -285,6 +286,8 @@ function Row({ row, account }: { row: SettingsRow; account: AccountSettings }) {
       return <AddEmailRow row={row} />;
     case "password":
       return <PasswordRow row={row} />;
+    case "close-account":
+      return <CloseAccountRow row={row} />;
   }
 
   return (

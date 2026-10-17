@@ -223,6 +223,18 @@ export interface MeResponse {
    * gateway older than the field, which reads as true: nothing is offered.
    */
   hasPassword?: boolean;
+  /**
+   * Whether `email` is proven, and the providers linked to the account
+   * (`GOOGLE`, `FACEBOOK`): together with `hasPassword`, how the owner
+   * reconfirms before closing the account. Left out by an older gateway.
+   */
+  emailVerified?: boolean;
+  providers?: string[];
+}
+
+/** `POST /auth/account/delete`: the account is deleted then, unless its owner logs in first. */
+export interface DeletionScheduledResponse {
+  deletionScheduledAt: string;
 }
 
 /* --- video-service ------------------------------------------------------- */

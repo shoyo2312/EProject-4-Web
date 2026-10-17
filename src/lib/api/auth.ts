@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api/client";
 import { clearTokens, getRefreshToken, storeTokens } from "@/lib/api/tokens";
 import type {
   AccountResponse,
+  DeletionScheduledResponse,
   MeResponse,
   OtpSentResponse,
   PasswordResetTicketResponse,
@@ -86,11 +87,15 @@ export async function completeSignup(input: {
  *
  * Throws `EMAIL_NOT_VERIFIED` (403) when the password was right but the email
  * has not been confirmed; that is a different screen, not a different error
- * message, so callers branch on the code rather than showing it.
+ * message, so callers branch on the code rather than showing it. The same goes
+ * for `ACCOUNT_DEACTIVATED` / `ACCOUNT_DELETION_PENDING`: the account was
+ * closed by its owner, and sending the same credential with `reactivate`
+ * reopens it.
  */
 export async function login(input: {
   usernameOrEmail: string;
   password: string;
+  reactivate?: boolean;
 }): Promise<TokenResponse> {
   const tokens = await apiFetch<TokenResponse>("/auth/login", {
     method: "POST",
@@ -119,10 +124,11 @@ export async function login(input: {
 export async function socialLogin(
   provider: SocialProvider,
   token: string,
+  options?: { reactivate?: boolean },
 ): Promise<SocialLoginResponse> {
   const result = await apiFetch<SocialLoginResponse>(
     `/auth/oauth/${provider}`,
-    { method: "POST", body: { token }, auth: "none" },
+    { method: "POST", body: { token, reactivate: options?.reactivate }, auth: "none" },
   );
 
   storeTokens({
@@ -275,6 +281,58 @@ export async function logout(): Promise<void> {
   } finally {
     clearTokens({ notify: false });
   }
+}
+
+/**
+ * What proves the owner is closing the account: exactly one of the password,
+ * the code `sendClosureCode` mailed, or a fresh token from a linked provider.
+ */
+export type ClosureCredential =
+  | { password: string }
+  | { otp: string }
+  | { provider: SocialProvider; token: string };
+
+function closureBody(credential: ClosureCredential) {
+  return "provider" in credential
+    ? { provider: credential.provider.toUpperCase(), token: credential.token }
+    : credential;
+}
+
+/**
+ * `POST /api/v1/auth/account/closure-code` — mails the code an account with
+ * no password closes itself with. 403 `EMAIL_NOT_VERIFIED` without a proven
+ * address, 429 `TOO_MANY_OTP_REQUESTS`.
+ */
+export function sendClosureCode(): Promise<void> {
+  return apiFetch<void>("/auth/account/closure-code", { method: "POST", auth: "required" });
+}
+
+/**
+ * `POST /api/v1/auth/account/deactivate` — hides the account until its owner
+ * logs in again. Every session ends, this one included, so the local tokens go
+ * too. 401 `INVALID_CREDENTIALS` / `INVALID_OTP` / `INVALID_SOCIAL_TOKEN`.
+ */
+export async function deactivateAccount(credential: ClosureCredential): Promise<void> {
+  await apiFetch<void>("/auth/account/deactivate", {
+    method: "POST",
+    body: closureBody(credential),
+    auth: "required",
+  });
+  clearTokens({ notify: false });
+}
+
+/**
+ * `POST /api/v1/auth/account/delete` — `deactivateAccount`, and the account
+ * is deleted at `deletionScheduledAt` unless its owner logs in before then.
+ */
+export async function deleteAccount(credential: ClosureCredential): Promise<DeletionScheduledResponse> {
+  const scheduled = await apiFetch<DeletionScheduledResponse>("/auth/account/delete", {
+    method: "POST",
+    body: closureBody(credential),
+    auth: "required",
+  });
+  clearTokens({ notify: false });
+  return scheduled;
 }
 
 /**

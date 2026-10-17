@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { apiFetch } from "@/lib/api/client";
-import { ApiError, isApiError, messageFor, parseRetryAfter, retryAt } from "@/lib/api/errors";
+import {
+  ApiError,
+  closedAccountKind,
+  isApiError,
+  isPrivateAccount,
+  messageFor,
+  parseRetryAfter,
+  retryAt,
+} from "@/lib/api/errors";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -66,6 +74,10 @@ describe("messageFor", () => {
 
   it.each([
     [403, "COMMENTING_RESTRICTED"],
+    [403, "PRIVATE_ACCOUNT"],
+    [403, "ACCOUNT_DEACTIVATED"],
+    [403, "ACCOUNT_DELETION_PENDING"],
+    [403, "ACCOUNT_CLOSURE_NOT_ALLOWED"],
     [429, "UPLOAD_RATE_LIMITED"],
   ])("has copy of its own for a %i %s", (status, code) => {
     const generic = messageFor(new ApiError(status, "SOMETHING_ELSE", "x"));
@@ -76,5 +88,28 @@ describe("messageFor", () => {
     const error = new ApiError(422, "COMMENT_REJECTED", "guidelines");
     expect(messageFor(error, fallback)).not.toBe(fallback);
     expect(messageFor(error, fallback)).not.toBe(messageFor(new Error("bug")));
+  });
+});
+
+describe("isPrivateAccount", () => {
+  it("recognises the closed grid of a private account", () => {
+    expect(isPrivateAccount(new ApiError(403, "PRIVATE_ACCOUNT", "x"))).toBe(true);
+  });
+
+  it("is not fooled by another 403 or a plain error", () => {
+    expect(isPrivateAccount(new ApiError(403, "NOT_VIDEO_OWNER", "x"))).toBe(false);
+    expect(isPrivateAccount(new Error("PRIVATE_ACCOUNT"))).toBe(false);
+  });
+});
+
+describe("closedAccountKind", () => {
+  it("tells a paused account from one waiting to be deleted", () => {
+    expect(closedAccountKind(new ApiError(403, "ACCOUNT_DEACTIVATED", "x"))).toBe("deactivated");
+    expect(closedAccountKind(new ApiError(403, "ACCOUNT_DELETION_PENDING", "x"))).toBe("deletion-pending");
+  });
+
+  it("is null for every other refusal", () => {
+    expect(closedAccountKind(new ApiError(401, "INVALID_CREDENTIALS", "x"))).toBeNull();
+    expect(closedAccountKind(new Error("ACCOUNT_DEACTIVATED"))).toBeNull();
   });
 });

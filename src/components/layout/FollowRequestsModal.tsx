@@ -25,10 +25,13 @@ const REQUEST_LIMIT = 50;
  * `onSettled` whenever one is answered.
  */
 export function FollowRequestsModal({
+  latestRequestId,
   onClose,
   onLeave,
   onSettled,
 }: {
+  /** Changes when a new request notification arrives, so an open list picks it up. */
+  latestRequestId?: string;
   onClose: () => void;
   /** A requester's profile is opening: close this and the panel under it. */
   onLeave: () => void;
@@ -51,7 +54,7 @@ export function FollowRequestsModal({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [latestRequestId]);
 
   /** Off the list at once; back on it, with the error, if the call fails. */
   const settle = (requester: UserProfileResponse, approve: boolean) => {

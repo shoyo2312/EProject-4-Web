@@ -24,6 +24,7 @@ import { resetRealtime } from "@/lib/realtime/stompClient";
 import * as authApi from "@/lib/api/auth";
 import { isApiError } from "@/lib/api/errors";
 import { getAccessToken, getRefreshToken, onSessionEnded } from "@/lib/api/tokens";
+import { linkedProviders } from "@/lib/account/closure";
 import { awaitProfile } from "@/lib/auth/await-profile";
 import type { SocialProvider } from "@/lib/auth/social";
 import * as usersApi from "@/lib/api/users";
@@ -51,6 +52,9 @@ export interface SessionUser extends Author {
   nicknameChangeableAt: string | null;
   /** False for a social account that has never set a password. */
   hasPassword: boolean;
+  /** With `hasPassword` and `providers`, how the owner reconfirms before closing the account. */
+  emailVerified: boolean;
+  providers: SocialProvider[];
 }
 
 interface SessionValue {
@@ -70,12 +74,13 @@ interface SessionValue {
   /**
    * Real login. Throws `ApiError` so the form can branch on `code`. `quiet`
    * skips the "logged in" toast, for a caller signing back in after a change
-   * of its own that it announces itself.
+   * of its own that it announces itself. `reactivate` reopens an account its
+   * owner closed, after a sign-in without it was refused for that.
    */
   signIn: (
     usernameOrEmail: string,
     password: string,
-    options?: { quiet?: boolean },
+    options?: { quiet?: boolean; reactivate?: boolean },
   ) => Promise<void>;
   /**
    * Last step of the email-first signup: creates the account for the address
@@ -100,13 +105,15 @@ interface SessionValue {
   signInWithProvider: (
     provider: SocialProvider,
     providerToken: string,
+    options?: { reactivate?: boolean },
   ) => Promise<{ requiresEmail: boolean }>;
   /** Second half of that 409: the same provider token, plus the mailed code. */
   confirmSocialLink: (
     provider: SocialProvider,
     input: { token: string; otp: string },
   ) => Promise<{ requiresEmail: boolean }>;
-  signOut: () => Promise<void>;
+  /** `quiet` skips the "logged out" toast, for a caller that says why itself. */
+  signOut: (options?: { quiet?: boolean }) => Promise<void>;
   /** Asks "Are you sure you want to log out?" first, as the live menu does. */
   confirmSignOut: () => void;
   /** Re-reads `/me`; call after anything that changes the profile server-side. */
@@ -144,6 +151,8 @@ function toSessionUser(me: MeResponse): SessionUser {
     usernameChangeableAt: me.usernameChangeableAt ?? null,
     nicknameChangeableAt: me.displayNameChangeableAt ?? null,
     hasPassword: me.hasPassword ?? true,
+    emailVerified: me.emailVerified ?? me.email !== null,
+    providers: linkedProviders(me.providers),
   };
 }
 
@@ -293,10 +302,14 @@ export function SessionProvider({
   }, [loadMe]);
 
   const signIn = useCallback(
-    async (usernameOrEmail: string, password: string, options?: { quiet?: boolean }) => {
-      await authApi.login({ usernameOrEmail, password });
+    async (
+      usernameOrEmail: string,
+      password: string,
+      options?: { quiet?: boolean; reactivate?: boolean },
+    ) => {
+      await authApi.login({ usernameOrEmail, password, reactivate: options?.reactivate });
       await settleSignIn();
-      if (!options?.quiet) toast.success("You’re logged in.");
+      if (!options?.quiet) toast.success(options?.reactivate ? "Welcome back!" : "You’re logged in.");
     },
     [settleSignIn],
   );
@@ -314,13 +327,15 @@ export function SessionProvider({
   );
 
   const signInWithProvider = useCallback(
-    async (provider: SocialProvider, providerToken: string) => {
-      const result = await authApi.socialLogin(provider, providerToken);
+    async (provider: SocialProvider, providerToken: string, options?: { reactivate?: boolean }) => {
+      const result = await authApi.socialLogin(provider, providerToken, options);
       // A first sign-in with Google or Facebook creates the account too; for a
       // returning one the profile is already there and this answers at once.
       await awaitProfile();
       await settleSignIn(!result.requiresEmail);
-      if (!result.requiresEmail) toast.success("You’re logged in.");
+      if (!result.requiresEmail) {
+        toast.success(options?.reactivate ? "Welcome back!" : "You’re logged in.");
+      }
       return { requiresEmail: result.requiresEmail };
     },
     [settleSignIn],
@@ -344,7 +359,7 @@ export function SessionProvider({
    * an unhandled rejection from a caller that fires and forgets: this device
    * is signed out, and the server-side tokens run out on their own.
    */
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (options?: { quiet?: boolean }) => {
     try {
       await authApi.logout();
     } catch {
@@ -353,7 +368,7 @@ export function SessionProvider({
       resetViewerState();
       setUser(null);
       router.push("/");
-      toast.success("You’re logged out.");
+      if (!options?.quiet) toast.success("You’re logged out.");
     }
   }, [router]);
 

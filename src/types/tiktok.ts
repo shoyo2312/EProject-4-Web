@@ -212,6 +212,8 @@ export interface UserProfile {
   isFollowing: boolean;
   /** A follow request from the viewer is waiting on this private account. */
   followRequested?: boolean;
+  /** Private account the viewer does not follow: its tabs are not served at all. */
+  postsLocked?: boolean;
   /**
    * Tiles per tab. Each list is in **Latest** order — the sort control derives
    * its other two options from it (Oldest reverses, Popular sorts by views),
@@ -287,6 +289,7 @@ export type SettingsIconName =
  */
 export type SettingsAction =
   | "add-email"
+  | "close-account"
   | "blocked-accounts"
   | "muted-accounts"
   | "browser-notifications"

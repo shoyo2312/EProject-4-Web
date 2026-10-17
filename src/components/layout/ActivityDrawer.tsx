@@ -74,10 +74,21 @@ export function ActivityDrawer({
     );
   }, []);
 
-  // On every open: requests arrive while the panel is shut.
+  /**
+   * The newest request notification. A request that lands while the panel is
+   * open arrives as one of these over the socket, and that is the cue to count
+   * again — otherwise the entry only appeared after closing and reopening.
+   */
+  const latestRequestId = useMemo(
+    () => inbox.items.find((item) => item.type === "FOLLOW_REQUEST")?.id,
+    [inbox.items],
+  );
+
+  // On every open, since requests arrive while the panel is shut, and on every
+  // new one while it is open.
   useEffect(() => {
     if (open && signedIn) countRequests();
-  }, [open, signedIn, countRequests]);
+  }, [open, signedIn, countRequests, latestRequestId]);
 
   const groups = useMemo(() => {
     const selected = NOTIFICATION_FILTERS.find((chip) => chip.label === filter);
@@ -241,6 +252,7 @@ export function ActivityDrawer({
             )}
             {requestsOpen && (
               <FollowRequestsModal
+                latestRequestId={latestRequestId}
                 onClose={() => setRequestsOpen(false)}
                 onLeave={() => {
                   setRequestsOpen(false);
