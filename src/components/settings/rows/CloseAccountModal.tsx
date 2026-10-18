@@ -7,9 +7,15 @@ import { CodeBoxes } from "@/components/session/auth-modal/CodeBoxes";
 import { ModalTitle, PasswordField, PillButton } from "@/components/session/auth-modal/ModalFields";
 import { useSession, type SessionUser } from "@/components/session/SessionProvider";
 import { AuthCardModal } from "@/components/settings/rows/AuthCardModal";
+import {
+  ChoosePage,
+  ClosureHeader,
+  InfoPage,
+  type Closure,
+} from "@/components/settings/rows/close-account/ClosurePages";
 import { Accessory, ROW_CLASS, RowBody } from "@/components/settings/rows/parts";
 import { toast } from "@/components/ui/toast";
-import { closureProofFor, DELETION_GRACE_DAYS, type ClosureProof } from "@/lib/account/closure";
+import { closureProofFor, type ClosureProof } from "@/lib/account/closure";
 import {
   deactivateAccount,
   deleteAccount,
@@ -28,58 +34,77 @@ import { CODE_LENGTH, emptyCode } from "@/lib/forms/code-digits";
 import { cn } from "@/lib/utils";
 import type { SettingsRow } from "@/types/tiktok";
 
-type Closure = "deactivate" | "delete";
-
-const CHOICES: { value: Closure; title: string; description: string }[] = [
-  {
-    value: "deactivate",
-    title: "Deactivate account",
-    description:
-      "Your profile, videos and comments are hidden from everyone until you log in again. Nothing is deleted.",
-  },
-  {
-    value: "delete",
-    title: "Delete account",
-    description: `Your account is deactivated now and deleted for good after ${DELETION_GRACE_DAYS} days. Log in before then to cancel.`,
-  },
-];
-
-/** Manage account → Deactivate or delete account. Signed out, it asks to log in first. */
-export function CloseAccountRow({ row }: { row: SettingsRow }) {
-  const { user, requireSignIn } = useSession();
-  const [open, setOpen] = useState(false);
+/**
+ * Manage account → Deactivate or delete account. Signed out, it asks to log in
+ * first; signed in, the Settings page swaps its panel for `CloseAccountPanel`.
+ */
+export function CloseAccountRow({ row, onOpen }: { row: SettingsRow; onOpen: () => void }) {
+  const { requireSignIn } = useSession();
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => {
-          if (requireSignIn()) setOpen(true);
-        }}
-        className={cn(ROW_CLASS, "hover:bg-white/[0.03]")}
-      >
-        <RowBody row={row} />
-        <Accessory row={row} />
-      </button>
-      {open && user && <CloseAccountModal user={user} onClose={() => setOpen(false)} />}
-    </>
+    <button
+      type="button"
+      onClick={() => {
+        if (requireSignIn()) onOpen();
+      }}
+      className={cn(ROW_CLASS, "hover:bg-white/[0.03]")}
+    >
+      <RowBody row={row} />
+      <Accessory row={row} />
+    </button>
   );
 }
 
 /**
- * Choose, then prove it is you: the password, a code to the account's address,
- * or a fresh sign-in with the linked provider — whichever the account has, so a
- * session left open on someone else's screen cannot close it. On success every
- * session has ended, this one too, and the viewer lands signed out on the feed.
+ * "Delete or deactivate?", then that choice's page, both in the panel as they
+ * are live. Its button opens the modal that proves it is you. Once the account
+ * is closed the session is gone, and with it this panel.
  */
-function CloseAccountModal({ user, onClose }: { user: SessionUser; onClose: () => void }) {
-  const { signOut } = useSession();
+export function CloseAccountPanel({ onBack }: { onBack: () => void }) {
+  const { user } = useSession();
   const [closure, setClosure] = useState<Closure | null>(null);
   const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => {
+    if (!user) onBack();
+  }, [user, onBack]);
+
+  if (!user) return null;
+
+  return (
+    <div className="flex min-h-full flex-col">
+      <ClosureHeader onBack={closure ? () => setClosure(null) : onBack} />
+      {closure ? (
+        <InfoPage closure={closure} username={user.username} onConfirm={() => setConfirming(true)} />
+      ) : (
+        <ChoosePage onChoose={setClosure} />
+      )}
+      {confirming && closure && (
+        <CloseAccountModal user={user} closure={closure} onClose={() => setConfirming(false)} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Prove it is you: the password, a code to the account's address, or a fresh
+ * sign-in with the linked provider — whichever the account has, so a session
+ * left open on someone else's screen cannot close it. On success every session
+ * has ended, this one too, and the viewer lands signed out on the feed.
+ */
+function CloseAccountModal({
+  user,
+  closure,
+  onClose,
+}: {
+  user: SessionUser;
+  closure: Closure;
+  onClose: () => void;
+}) {
+  const { signOut } = useSession();
   const proof = closureProofFor(user);
 
   const close = async (credential: ClosureCredential) => {
-    if (!closure) return;
     if (closure === "delete") {
       const { deletionScheduledAt } = await deleteAccount(credential);
       const on = new Date(deletionScheduledAt).toLocaleDateString(undefined, { dateStyle: "long" });
@@ -93,60 +118,9 @@ function CloseAccountModal({ user, onClose }: { user: SessionUser; onClose: () =
   };
 
   return (
-    <AuthCardModal
-      stepKey={confirming ? "confirm" : "choose"}
-      onBack={confirming ? () => setConfirming(false) : undefined}
-      onClose={onClose}
-    >
-      {confirming && closure ? (
-        <ConfirmStep closure={closure} proof={proof} onClose={close} />
-      ) : (
-        <ChooseStep selected={closure} onSelect={setClosure} onNext={() => setConfirming(true)} />
-      )}
+    <AuthCardModal stepKey="confirm" onClose={onClose}>
+      <ConfirmStep closure={closure} proof={proof} onClose={close} />
     </AuthCardModal>
-  );
-}
-
-function ChooseStep({
-  selected,
-  onSelect,
-  onNext,
-}: {
-  selected: Closure | null;
-  onSelect: (closure: Closure) => void;
-  onNext: () => void;
-}) {
-  return (
-    <>
-      <ModalTitle className="mb-8">Deactivate or delete account</ModalTitle>
-      <div role="radiogroup" aria-label="What to do with your account" className="flex flex-col gap-3">
-        {CHOICES.map((choice) => (
-          <button
-            key={choice.value}
-            type="button"
-            role="radio"
-            aria-checked={selected === choice.value}
-            onClick={() => onSelect(choice.value)}
-            className={cn(
-              "rounded-xl border px-4 py-3 text-left transition-colors",
-              selected === choice.value
-                ? "border-[var(--tt-red-active)] bg-white/[0.06]"
-                : "border-white/[0.12] hover:bg-white/[0.03]",
-            )}
-          >
-            <span className="block text-[16px] leading-[22px] font-semibold text-[var(--tt-text)]">
-              {choice.title}
-            </span>
-            <span className="mt-1 block text-[13px] leading-[17px] text-[var(--tt-text-muted)]">
-              {choice.description}
-            </span>
-          </button>
-        ))}
-      </div>
-      <PillButton type="button" onClick={onNext} disabled={!selected} className="mt-8 mb-4">
-        Continue
-      </PillButton>
-    </>
   );
 }
 
