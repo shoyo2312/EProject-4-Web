@@ -274,6 +274,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             kind: "link",
             title: "Download your data",
             description: "Get a copy of your Nowa data",
+            action: "download-data",
           },
         ],
       },

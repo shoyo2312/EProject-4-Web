@@ -132,6 +132,12 @@ const MESSAGES: Record<string, string> = {
   INVALID_AVATAR: "That photo must be a JPEG, PNG, or WebP under 5 MB.",
   PRIVATE_ACCOUNT: "This account is private. Follow it to see its videos.",
   DISPLAY_NAME_CHANGE_TOO_SOON: "Your nickname can only be changed once every 7 days.",
+  // Download your data. The panel re-reads the list after these, so the card
+  // underneath already shows what happened instead.
+  DATA_EXPORT_IN_PROGRESS: "You already have a request being processed.",
+  DATA_EXPORT_NOT_CANCELABLE: "This request has already finished and can’t be canceled.",
+  DATA_EXPORT_UNAVAILABLE: "This file is no longer available. Request a new one.",
+  DATA_EXPORT_NOT_FOUND: "This request is no longer available.",
 
   // video-service
   NOT_VIDEO_OWNER: "You can only delete your own videos.",

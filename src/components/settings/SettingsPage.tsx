@@ -24,6 +24,10 @@ import {
 } from "@/components/settings/rows/CloseAccountModal";
 import { PasswordRow } from "@/components/settings/rows/PasswordModal";
 import {
+  DownloadDataPanel,
+  DownloadDataRow,
+} from "@/components/settings/rows/download-data/DownloadDataPanel";
+import {
   Accessory,
   ROW_CLASS,
   RowBody,
@@ -58,6 +62,9 @@ import type {
 /** A switch row, narrowed — the three below each own one. */
 type SwitchSettingsRow = Extract<SettingsRow, { kind: "switch" }>;
 
+/** The pages that take over the panel in place of the sections. */
+type Subpage = "close-account" | "download-data";
+
 const ICONS: Record<SettingsIconName, typeof ManageAccountIcon> = {
   "manage-account": ManageAccountIcon,
   privacy: PrivacyLockIcon,
@@ -84,9 +91,9 @@ const ICONS: Record<SettingsIconName, typeof ManageAccountIcon> = {
  * The nav is not a set of links: clicking scrolls the panel, and scrolling the
  * panel moves the highlight, so the two stay in step from either end.
  *
- * "Deactivate or delete account" swaps the sections for its own pages, as it
- * does live. The sections stay mounted underneath, and the panel comes back to
- * where it was scrolled.
+ * "Deactivate or delete account" and "Download your data" swap the sections
+ * for their own pages, as they do live. The sections stay mounted underneath,
+ * and the panel comes back to where it was scrolled.
  */
 export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
   const router = useRouter();
@@ -94,8 +101,8 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const [active, setActive] = useState(sections[0]?.id ?? "");
-  const [closingAccount, setClosingAccount] = useState(false);
-  const closingRef = useRef(false);
+  const [subpage, setSubpage] = useState<Subpage | null>(null);
+  const subpageRef = useRef(false);
   const savedScroll = useRef(0);
   const pendingSection = useRef<string | null>(null);
 
@@ -108,7 +115,7 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
 
   const onScroll = useCallback(() => {
     const panel = panelRef.current;
-    if (!panel || scrollLock.current || closingRef.current) return;
+    if (!panel || scrollLock.current || subpageRef.current) return;
 
     // The last section whose top has passed the panel's top edge. Measured
     // from the rects rather than `offsetTop`, which would be relative to
@@ -160,34 +167,35 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
     }, 600);
   };
 
-  const openCloseAccount = () => {
-    savedScroll.current = panelRef.current?.scrollTop ?? 0;
-    closingRef.current = true;
-    setClosingAccount(true);
+  const openSubpage = (page: Subpage) => {
+    // From one page straight to another, the sections' scroll is already saved.
+    if (!subpageRef.current) savedScroll.current = panelRef.current?.scrollTop ?? 0;
+    subpageRef.current = true;
+    setSubpage(page);
   };
 
-  const leaveCloseAccount = useCallback(() => setClosingAccount(false), []);
+  const leaveSubpage = useCallback(() => setSubpage(null), []);
 
   // Before paint, so the sections never flash at the top of the panel.
   useLayoutEffect(() => {
     const panel = panelRef.current;
     if (!panel) return;
-    if (closingAccount) {
+    if (subpage) {
       panel.scrollTop = 0;
       return;
     }
-    if (!closingRef.current) return;
-    closingRef.current = false;
+    if (!subpageRef.current) return;
+    subpageRef.current = false;
     panel.scrollTop = savedScroll.current;
     const section = pendingSection.current;
     pendingSection.current = null;
     if (section) goTo(section);
-  }, [closingAccount]);
+  }, [subpage]);
 
   const onNav = (id: string) => {
-    if (!closingAccount) return goTo(id);
+    if (!subpage) return goTo(id);
     pendingSection.current = id;
-    setClosingAccount(false);
+    setSubpage(null);
   };
 
   return (
@@ -232,8 +240,15 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
           ref={panelRef}
           className="no-scrollbar min-w-0 flex-1 overflow-y-auto rounded-t-[8px] bg-[#252525] px-6 pt-4 pb-6"
         >
-          {closingAccount && <CloseAccountPanel onBack={leaveCloseAccount} />}
-          <div className={cn(closingAccount && "hidden")}>
+          {subpage === "close-account" && (
+            <CloseAccountPanel
+              onBack={leaveSubpage}
+              onGoToSection={onNav}
+              onRequestDownload={() => openSubpage("download-data")}
+            />
+          )}
+          {subpage === "download-data" && <DownloadDataPanel onLeave={leaveSubpage} />}
+          <div className={cn(subpage && "hidden")}>
             {sections.map((section, index) => (
               <section
                 key={section.id}
@@ -252,7 +267,7 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
                     key={group.heading ?? groupIndex}
                     group={group}
                     account={account}
-                    onCloseAccount={openCloseAccount}
+                    onOpen={openSubpage}
                   />
                 ))}
               </section>
@@ -267,11 +282,11 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
 function Group({
   group,
   account,
-  onCloseAccount,
+  onOpen,
 }: {
   group: SettingsGroup;
   account: AccountSettings;
-  onCloseAccount: () => void;
+  onOpen: (page: Subpage) => void;
 }) {
   return (
     <div className="mb-4">
@@ -292,7 +307,7 @@ function Group({
             key={row.title}
             row={row}
             account={account}
-            onCloseAccount={onCloseAccount}
+            onOpen={onOpen}
           />
         ))}
       </div>
@@ -312,11 +327,11 @@ function Group({
 function Row({
   row,
   account,
-  onCloseAccount,
+  onOpen,
 }: {
   row: SettingsRow;
   account: AccountSettings;
-  onCloseAccount: () => void;
+  onOpen: (page: Subpage) => void;
 }) {
   if (row.kind === "switch") {
     switch (row.action) {
@@ -367,7 +382,9 @@ function Row({
     case "password":
       return <PasswordRow row={row} />;
     case "close-account":
-      return <CloseAccountRow row={row} onOpen={onCloseAccount} />;
+      return <CloseAccountRow row={row} onOpen={() => onOpen("close-account")} />;
+    case "download-data":
+      return <DownloadDataRow row={row} onOpen={() => onOpen("download-data")} />;
   }
 
   return (
