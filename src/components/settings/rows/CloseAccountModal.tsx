@@ -10,9 +10,11 @@ import { AuthCardModal } from "@/components/settings/rows/AuthCardModal";
 import {
   ChoosePage,
   ClosureHeader,
-  InfoPage,
+  DeactivatePage,
   type Closure,
 } from "@/components/settings/rows/close-account/ClosurePages";
+import { DownloadDataPage } from "@/components/settings/rows/close-account/DownloadDataPage";
+import { LeavingSurvey } from "@/components/settings/rows/close-account/LeavingSurvey";
 import { Accessory, ROW_CLASS, RowBody } from "@/components/settings/rows/parts";
 import { toast } from "@/components/ui/toast";
 import { closureProofFor, type ClosureProof } from "@/lib/account/closure";
@@ -55,15 +57,34 @@ export function CloseAccountRow({ row, onOpen }: { row: SettingsRow; onOpen: () 
   );
 }
 
+type Page = "choose" | "deactivate" | "survey" | "download";
+
+const PREVIOUS: Record<Exclude<Page, "choose">, Page> = {
+  deactivate: "choose",
+  survey: "choose",
+  download: "survey",
+};
+
 /**
- * "Delete or deactivate?", then that choice's page, both in the panel as they
- * are live. Its button opens the modal that proves it is you. Once the account
- * is closed the session is gone, and with it this panel.
+ * "Delete or deactivate?" and the pages after it, in the panel as they are
+ * live: deactivate is one page, delete is the leaving survey and then the
+ * download-your-data page. The last page's button opens the modal that proves
+ * it is you. Once the account is closed the session is gone, and with it this
+ * panel.
  */
-export function CloseAccountPanel({ onBack }: { onBack: () => void }) {
+export function CloseAccountPanel({
+  onBack,
+  onGoToSection,
+  onRequestDownload,
+}: {
+  onBack: () => void;
+  onGoToSection: (id: string) => void;
+  onRequestDownload: () => void;
+}) {
   const { user } = useSession();
-  const [closure, setClosure] = useState<Closure | null>(null);
+  const [page, setPage] = useState<Page>("choose");
   const [confirming, setConfirming] = useState(false);
+  const closure: Closure = page === "deactivate" ? "deactivate" : "delete";
 
   useEffect(() => {
     if (!user) onBack();
@@ -73,13 +94,35 @@ export function CloseAccountPanel({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex min-h-full flex-col">
-      <ClosureHeader onBack={closure ? () => setClosure(null) : onBack} />
-      {closure ? (
-        <InfoPage closure={closure} username={user.username} onConfirm={() => setConfirming(true)} />
-      ) : (
-        <ChoosePage onChoose={setClosure} />
+      {/* Keyed so each page focuses its back button, which also brings the
+          panel back to the top. */}
+      <ClosureHeader
+        key={page}
+        onBack={page === "choose" ? onBack : () => setPage(PREVIOUS[page])}
+      />
+      {page === "choose" && (
+        <ChoosePage
+          onChoose={(choice) => setPage(choice === "deactivate" ? "deactivate" : "survey")}
+        />
       )}
-      {confirming && closure && (
+      {page === "deactivate" && (
+        <DeactivatePage username={user.username} onConfirm={() => setConfirming(true)} />
+      )}
+      {page === "survey" && (
+        <LeavingSurvey
+          username={user.username}
+          onDeactivate={() => setPage("deactivate")}
+          onGoToSection={onGoToSection}
+          onNext={() => setPage("download")}
+        />
+      )}
+      {page === "download" && (
+        <DownloadDataPage
+          onRequestDownload={onRequestDownload}
+          onConfirm={() => setConfirming(true)}
+        />
+      )}
+      {confirming && (
         <CloseAccountModal user={user} closure={closure} onClose={() => setConfirming(false)} />
       )}
     </div>

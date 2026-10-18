@@ -290,6 +290,7 @@ export type SettingsIconName =
 export type SettingsAction =
   | "add-email"
   | "close-account"
+  | "download-data"
   | "blocked-accounts"
   | "muted-accounts"
   | "browser-notifications"

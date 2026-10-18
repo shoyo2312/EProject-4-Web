@@ -15,10 +15,12 @@ export type Closure = "deactivate" | "delete";
  *   choose    `padding: 16px 32px`; title 24/36/700 #F6F6F6 + 20, intro
  *             16/24 `.88` + 24; cards #3A3A3A, radius 12, `padding: 16px`,
  *             8 apart, title 16/24/600 + 4, text 14/21 `.88`, 16px chevron
- *   info      `padding: 24px 32px`; title 20/25/700 `.9` + 16, body 14/18.2
- *             `.88`, disc list indented 16 with 8 under each item; the
- *             616 × 48 button, radius 8, 16/20.8/500 on #FE2C55, sits 24 off
- *             the bottom
+ *   deactivate `padding: 24px 32px`; title 20/25/700 `.9` + 16, body
+ *             14/18.2 `.88`, disc list indented 16 with 8 under each item;
+ *             the 616 × 48 button, radius 8, 16/20.8/500 on #FE2C55, sits 24
+ *             off the bottom
+ *
+ * Delete goes through `LeavingSurvey` and `DownloadDataPage` first, as live.
  */
 export function ClosureHeader({ onBack }: { onBack: () => void }) {
   return (
@@ -92,60 +94,30 @@ export function ChoosePage({
   );
 }
 
-/**
- * Deactivate's copy is the live page's. Delete's live path is a leaving survey
- * and a data-download page, neither of which this app has anything behind, so
- * it gets the same page with what auth-service actually does on a delete.
- */
-const INFO: Record<
-  Closure,
-  { question: string; lead: string; points: string[]; action: string }
-> = {
-  deactivate: {
-    question: "Deactivate this account?",
-    lead: "If you deactivate your account:",
-    points: [
-      "No one will see your account and content.",
-      "Information that isn’t stored in your account, such as direct messages, may still be visible to others.",
-      "Nowa will continue to keep your data so that you can recover it when you reactivate your account.",
-      "You can reactivate your account and recover all content anytime by using the same login details.",
-    ],
-    action: "Deactivate",
-  },
-  delete: {
-    question: "Delete this account?",
-    lead: "If you delete your account:",
-    points: [
-      "Your account is deactivated right away, and no one will see your account and content.",
-      `Your account and content will be deleted permanently after ${DELETION_GRACE_DAYS} days.`,
-      `You can cancel the deletion request by logging in again within ${DELETION_GRACE_DAYS} days.`,
-      "You’ll be logged out on every device.",
-    ],
-    action: "Delete account",
-  },
-};
+const DEACTIVATE_POINTS = [
+  "No one will see your account and content.",
+  "Information that isn’t stored in your account, such as direct messages, may still be visible to others.",
+  "Nowa will continue to keep your data so that you can recover it when you reactivate your account.",
+  "You can reactivate your account and recover all content anytime by using the same login details.",
+];
 
-export function InfoPage({
-  closure,
+export function DeactivatePage({
   username,
   onConfirm,
 }: {
-  closure: Closure;
   username: string;
   onConfirm: () => void;
 }) {
-  const info = INFO[closure];
-
   return (
     <>
       <div className="flex-1 px-8 py-6">
         <h1 className="mb-4 text-[20px] leading-[25px] font-bold tracking-[0.3px] text-[rgb(255_255_255/0.9)]">
-          {username}: {info.question}
+          {username}: Deactivate this account?
         </h1>
         <div className="text-[14px] leading-[18.2px] text-[rgb(255_255_255/0.88)]">
-          <p className="pb-2">{info.lead}</p>
+          <p className="pb-2">If you deactivate your account:</p>
           <ul className="mt-2 list-disc pl-4">
-            {info.points.map((point) => (
+            {DEACTIVATE_POINTS.map((point) => (
               <li key={point} className="mb-2">
                 {point}
               </li>
@@ -159,7 +131,7 @@ export function InfoPage({
           onClick={onConfirm}
           className="h-12 w-full rounded-[8px] bg-[var(--tt-red)] px-6 text-[16px] leading-[20.8px] font-medium text-white transition-colors hover:bg-[var(--tt-red-hover)]"
         >
-          {info.action}
+          Deactivate
         </button>
       </div>
     </>
