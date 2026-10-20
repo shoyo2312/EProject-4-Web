@@ -11,6 +11,7 @@ import {
   VerifiedBadgeIcon,
 } from "@/components/icons";
 import { ProfileMoreMenu } from "@/components/profile/ProfileMoreMenu";
+import { ProfileStoryAvatar } from "@/components/stories/ProfileStoryAvatar";
 import { displayHandle } from "@/lib/api/adapters";
 import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -107,12 +108,10 @@ export function ProfileHeader({
 
   return (
     <header className="mt-3 mb-5 flex items-start gap-7 tt-840:gap-4">
-      {/* eslint-disable-next-line @next/next/no-img-element -- local static asset, no optimisation needed */}
-      <img
-        src={profile.author.avatarUrl}
-        alt=""
-        referrerPolicy="no-referrer"
-        className="h-[172px] w-[172px] flex-none rounded-full object-cover tt-840:h-24 tt-840:w-24"
+      <ProfileStoryAvatar
+        userId={profile.author.userId}
+        avatarUrl={profile.author.avatarUrl}
+        className="h-[172px] w-[172px] flex-none tt-840:h-24 tt-840:w-24"
       />
 
       <div className="flex min-w-0 flex-col">
