@@ -543,3 +543,42 @@ export interface VideoSearchResponse {
   shareCount: number;
   createdAt: string;
 }
+
+/** Where a story is in moderation — see `tiktok-backend/docs/story-service-api.md` §1. */
+export type StoryStatus = "PENDING_MODERATION" | "ACTIVE" | "HELD" | "REJECTED";
+
+export type StoryMediaType = "IMAGE" | "VIDEO";
+
+/** The same three audiences, with the same meaning, as a video's. */
+export type StoryVisibility = VideoVisibility;
+
+export interface StoryResponse {
+  id: string;
+  userId: string;
+  /** A presigned GET that lives one hour — fetch the story again for a fresh one. */
+  mediaUrl: string | null;
+  mediaType: StoryMediaType;
+  caption: string | null;
+  visibility: StoryVisibility;
+  /** The owner's own view only; null for everyone else, who only ever sees ACTIVE stories. */
+  status: StoryStatus | null;
+  durationSeconds: number | null;
+  /** The owner's own view only. */
+  viewCount: number | null;
+  viewedByMe: boolean;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** One bubble in the tray: an owner's live stories, oldest first — the order they play in. */
+export interface StoryGroup {
+  userId: string;
+  stories: StoryResponse[];
+  /** Always false for the viewer's own group. */
+  hasUnseen: boolean;
+}
+
+export interface StoryViewer {
+  viewerId: string;
+  viewedAt: string;
+}

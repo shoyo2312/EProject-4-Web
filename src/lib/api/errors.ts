@@ -150,6 +150,9 @@ const MESSAGES: Record<string, string> = {
   VIDEO_NOT_FOUND: "This video is unavailable.",
   // A caption refused at publish, one code per field. The upload form shows
   // each under its own box; tags only ever come from the description's hashtags.
+  STORY_CAPTION_REJECTED: "This caption goes against our Community Guidelines. Edit it and post again.",
+  UPLOAD_NOT_FOUND: "The upload didn’t finish. Choose the file again.",
+  STORY_NOT_FOUND: "This story isn’t available.",
   VIDEO_TITLE_REJECTED: "This title goes against our Community Guidelines. Edit it and post again.",
   VIDEO_DESCRIPTION_REJECTED:
     "This description goes against our Community Guidelines. Edit it and post again.",
