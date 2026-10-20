@@ -3,6 +3,7 @@
 import { Feed } from "@/components/feed/Feed";
 import { FeedSkeleton } from "@/components/feed/LiveFeed";
 import { SuggestedCreators } from "@/components/following/SuggestedCreators";
+import { StoryBar } from "@/components/stories/StoryTray";
 import { useSession } from "@/components/session/SessionProvider";
 import { useFollowFeed, type FollowFeedSource } from "@/hooks/use-follow-feed";
 
@@ -43,6 +44,10 @@ function ViewerFollowFeed({ source }: { source: FollowFeedSource }) {
   // Nobody suggests you follow yourself, or somebody you already follow.
   const exclude = user ? [user.userId, ...followedIds] : followedIds;
 
+  // Stories ride on Following only: Friends is the same people narrowed, and one tray is enough.
+  const stories =
+    source === "following" ? <StoryBar followedIds={isLoading ? null : followedIds} /> : null;
+
   if (isLoading) {
     return <FeedSkeleton />;
   }
@@ -59,8 +64,24 @@ function ViewerFollowFeed({ source }: { source: FollowFeedSource }) {
   }
 
   if (videos.length === 0) {
-    return <SuggestedCreators exclude={exclude} />;
+    return (
+      <div className="flex flex-1 flex-col">
+        {stories}
+        <SuggestedCreators exclude={exclude} />
+      </div>
+    );
   }
 
-  return <Feed videos={videos} onReachEnd={loadMore} />;
+  return (
+    <div className="relative flex flex-1">
+      {/* Over the feed rather than above it: the feed is a full-height snap list. Kept clear of
+          the top bar's buttons on the right. */}
+      {stories && (
+        <div className="absolute top-0 left-0 z-20 max-w-[calc(100%-320px)] tt-1024:max-w-[calc(100%-200px)]">
+          {stories}
+        </div>
+      )}
+      <Feed videos={videos} onReachEnd={loadMore} />
+    </div>
+  );
 }

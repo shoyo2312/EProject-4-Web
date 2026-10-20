@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { StoryGroup, StoryResponse } from "@/lib/api/types";
 
-import { displayMs, firstUnseen, next, previous } from "../navigation";
+import { displayMs, firstUnseen, markStorySeen, next, previous } from "../navigation";
 
 function story(id: string, overrides: Partial<StoryResponse> = {}): StoryResponse {
   return {
@@ -86,5 +86,21 @@ describe("firstUnseen", () => {
       hasUnseen: false,
     };
     expect(firstUnseen(group)).toBe(0);
+  });
+});
+
+describe("markStorySeen", () => {
+  it("marks the story and clears the ring once its owner has nothing unseen", () => {
+    const tray: StoryGroup[] = [{ userId: "2", stories: [story("c")], hasUnseen: true }];
+
+    const after = markStorySeen(tray, "c");
+
+    expect(after[0].stories[0].viewedByMe).toBe(true);
+    expect(after[0].hasUnseen).toBe(false);
+    expect(tray[0].stories[0].viewedByMe).toBe(false);
+  });
+
+  it("keeps the ring while the owner still has an unseen story", () => {
+    expect(markStorySeen(groups, "a")[0].hasUnseen).toBe(true);
   });
 });

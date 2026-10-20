@@ -38,3 +38,16 @@ export function firstUnseen(group: StoryGroup): number {
   const index = group.stories.findIndex((story) => !story.viewedByMe);
   return index === -1 ? 0 : index;
 }
+
+/** The tray after the viewer opened `storyId`: that story marked, its owner's ring recomputed. */
+export function markStorySeen(groups: readonly StoryGroup[], storyId: string): StoryGroup[] {
+  return groups.map((group) => {
+    if (!group.stories.some((story) => story.id === storyId)) {
+      return group;
+    }
+    const stories = group.stories.map((story) =>
+      story.id === storyId ? { ...story, viewedByMe: true } : story,
+    );
+    return { ...group, stories, hasUnseen: group.hasUnseen && stories.some((story) => !story.viewedByMe) };
+  });
+}
