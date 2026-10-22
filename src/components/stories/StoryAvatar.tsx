@@ -22,16 +22,31 @@ export function StoryAvatar({
   author,
   className,
   thin,
+  decorative,
   children,
 }: {
   author: Author;
   className?: string;
   thin?: boolean;
+  /**
+   * Draws the ring around `children` and nothing more, for a row whose own click already plays the
+   * stories (a story entry in the activity list): a button of its own would take the tap, and the
+   * row would never mark itself read or close its drawer. `children` must fill the ring's box.
+   */
+  decorative?: boolean;
   children: ReactNode;
 }) {
   const state = useStoryRing(author.userId);
 
   if (state === "none") return <>{children}</>;
+
+  if (decorative) {
+    return (
+      <StoryRing state={state} thin={thin} fill className={className}>
+        {children}
+      </StoryRing>
+    );
+  }
 
   return <RingedAvatar author={author} state={state} className={className} thin={thin} />;
 }

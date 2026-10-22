@@ -424,7 +424,7 @@ function NotificationItem({
       referrerPolicy="no-referrer"
       width={48}
       height={48}
-      className="h-12 w-12 rounded-3xl object-cover"
+      className="h-full w-full rounded-3xl object-cover"
     />
   );
 
@@ -448,7 +448,11 @@ function NotificationItem({
       <div className="flex h-12 w-12 min-w-12 items-center justify-center rounded-3xl bg-[rgb(50,54,75)]">
         {item.actorId ? (
           actor ? (
-            <StoryAvatar author={authorFromProfile(actor)} className="h-12 w-12">
+            <StoryAvatar
+              author={authorFromProfile(actor)}
+              className="h-12 w-12"
+              decorative={item.type === "STORY"}
+            >
               {avatar}
             </StoryAvatar>
           ) : (
