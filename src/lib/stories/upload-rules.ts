@@ -28,3 +28,15 @@ export function storyFileProblem(file: { type: string; size: number }): string |
   }
   return null;
 }
+
+export const STORY_MAX_VIDEO_SECONDS = 60;
+
+/**
+ * media-worker rejects a longer video only after it has been uploaded and screened, so it is caught
+ * here first. Rounded the way media-worker rounds its probe, so a 60.4 s clip passes both.
+ */
+export function storyDurationProblem(seconds: number): string | null {
+  return Math.round(seconds) > STORY_MAX_VIDEO_SECONDS
+    ? `That video is too long. Stories can be up to ${STORY_MAX_VIDEO_SECONDS} seconds.`
+    : null;
+}

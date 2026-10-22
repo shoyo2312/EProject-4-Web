@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Modal } from "@/components/ui/modal";
 import { FIELD } from "@/components/upload/page/Fields";
@@ -8,7 +8,7 @@ import { isApiError, messageFor } from "@/lib/api/errors";
 import { createStory, createStoryUploadUrl } from "@/lib/api/stories";
 import type { StoryResponse, StoryVisibility } from "@/lib/api/types";
 import { uploadToStorage } from "@/lib/api/videos";
-import { STORY_UPLOAD_TYPES, storyFileProblem } from "@/lib/stories/upload-rules";
+import { STORY_UPLOAD_TYPES, storyDurationProblem, storyFileProblem } from "@/lib/stories/upload-rules";
 
 const CAPTION_MAX = 300;
 
@@ -32,6 +32,11 @@ export function StoryComposer({
   const [captionError, setCaptionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // A video is only postable once its length has been read from the preview.
+  const [checked, setChecked] = useState(false);
+  // A refused caption saves nothing, so the same upload can back the next attempt.
+  const uploaded = useRef<{ file: File; fileUrl: string } | null>(null);
+
   const preview = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
   useEffect(() => () => {
     if (preview) URL.revokeObjectURL(preview);
@@ -45,18 +50,39 @@ export function StoryComposer({
     const problem = storyFileProblem(picked);
     setFileError(problem);
     setFile(problem ? null : picked);
+    setChecked(picked.type.startsWith("image/"));
+  }
+
+  function refuse(problem: string) {
+    setFileError(problem);
+    setFile(null);
+  }
+
+  function measured(seconds: number) {
+    // A recording with no length in its header (a browser-recorded WebM) reads as Infinity here,
+    // and media-worker cannot probe it either: posted, it would only ever be held.
+    const problem = Number.isFinite(seconds)
+      ? storyDurationProblem(seconds)
+      : "This video’s length can’t be read. Choose another file.";
+    if (problem) refuse(problem);
+    else setChecked(true);
   }
 
   async function post() {
-    if (!file || posting) return;
+    if (!file || !checked || posting) return;
     setError(null);
     setCaptionError(null);
     setProgress(0);
     try {
-      const upload = await createStoryUploadUrl(file.type);
-      await uploadToStorage(upload.uploadUrl, file, upload.formFields, setProgress);
+      let fileUrl = uploaded.current?.file === file ? uploaded.current.fileUrl : null;
+      if (!fileUrl) {
+        const upload = await createStoryUploadUrl(file.type);
+        await uploadToStorage(upload.uploadUrl, file, upload.formFields, setProgress);
+        uploaded.current = { file, fileUrl: upload.fileUrl };
+        fileUrl = upload.fileUrl;
+      }
       const story = await createStory({
-        mediaUrl: upload.fileUrl,
+        mediaUrl: fileUrl,
         caption: caption.trim() || null,
         visibility,
       });
@@ -81,7 +107,18 @@ export function StoryComposer({
           <img src={preview} alt="" className="h-full w-full object-contain" />
         )}
         {preview && file?.type.startsWith("video/") && (
-          <video src={preview} muted autoPlay loop playsInline className="h-full w-full object-contain" />
+          <video
+            src={preview}
+            muted
+            autoPlay
+            loop
+            playsInline
+            onLoadedMetadata={(event) => measured(event.currentTarget.duration)}
+            // Stories play the upload as it is, never transcoded: what this browser cannot play
+            // would be a broken story for everyone else too.
+            onError={() => refuse("This video can’t be played here. Choose an MP4 or WebM video.")}
+            className="h-full w-full object-contain"
+          />
         )}
         {!preview && (
           <span className="px-6 text-center text-[15px] text-[var(--tt-text-secondary)]">
@@ -92,7 +129,11 @@ export function StoryComposer({
           type="file"
           accept={STORY_UPLOAD_TYPES.join(",")}
           disabled={posting}
-          onChange={(event) => choose(event.target.files?.[0])}
+          onChange={(event) => {
+            choose(event.target.files?.[0]);
+            // Choosing the same file again after it was refused still has to fire `change`.
+            event.target.value = "";
+          }}
           className="absolute inset-0 cursor-pointer opacity-0"
         />
       </label>
@@ -152,7 +193,7 @@ export function StoryComposer({
         <button
           type="button"
           onClick={post}
-          disabled={!file || posting}
+          disabled={!file || !checked || posting}
           className="h-10 rounded-[4px] bg-[var(--tt-red)] px-5 text-[15px] font-semibold text-white hover:bg-[var(--tt-red-hover)] disabled:opacity-50"
         >
           {posting ? "Posting…" : "Post"}
