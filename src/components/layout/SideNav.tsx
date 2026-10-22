@@ -100,6 +100,18 @@ export function SideNav({
   // The highlighted row follows the URL, so every new route lights itself up
   // without touching the nav data.
   const pathname = usePathname();
+  // A drawer's own rows close it on the way out, but a row that navigates by another route does
+  // not: a story ring whose stories are gone falls back to the profile with the row's click
+  // stopped, and the drawer, with a mask that swallows the next click, would stay over the page.
+  // Adjusted during render, not in an effect, so no frame paints the new page under an open drawer.
+  const [drawersPath, setDrawersPath] = useState(pathname);
+  if (drawersPath !== pathname) {
+    setDrawersPath(pathname);
+    setActivityOpen(false);
+    setSearchOpen(false);
+    setMoreOpen(false);
+    setFollowingOpen(false);
+  }
   const { user, isLoading, openLogin } = useSession();
   // Until `/me` settles the viewer is unknown, not signed out. Rendering the
   // guest sidebar first and then swapping it made the nav jump twice on every
