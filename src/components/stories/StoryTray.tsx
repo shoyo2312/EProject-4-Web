@@ -1,16 +1,16 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import { useStoryFeed } from "@/hooks/use-story-feed";
 import { authorFromProfile, unknownAuthor } from "@/lib/api/adapters";
-import type { StoryGroup, UserProfileResponse } from "@/lib/api/types";
+import type { StoryGroup } from "@/lib/api/types";
 import { firstUnseen, type StoryPosition } from "@/lib/stories/navigation";
+import type { Author } from "@/types/tiktok";
 
 import { StoryComposer } from "./StoryComposer";
-import { StoryOwnerPanel } from "./StoryOwnerPanel";
 import { StoryRing } from "./StoryRing";
 import { StoryViewer } from "./StoryViewer";
 
@@ -23,20 +23,23 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
   const { groups, profiles, refresh, markSeen } = useStoryFeed(followedIds);
   const [open, setOpen] = useState<StoryPosition | null>(null);
   const [composing, setComposing] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const authors = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(profiles).map(([userId, profile]) => [userId, authorFromProfile(profile)]),
+      ),
+    [profiles],
+  );
 
   if (!user) return null;
 
-  const close = () => {
-    setOpen(null);
-    setBusy(false);
-  };
+  const close = () => setOpen(null);
 
   return (
     <>
       <StoryTray
         groups={groups}
-        profiles={profiles}
+        authors={authors}
         onOpen={(index) => setOpen({ group: index, story: firstUnseen(groups[index]) })}
         onCreate={() => setComposing(true)}
       />
@@ -44,24 +47,15 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
         <StoryViewer
           key={`${open.group}:${open.story}`}
           groups={groups}
-          profiles={profiles}
+          authors={authors}
           start={open}
-          viewerId={user.userId}
           onClose={close}
           onSeen={markSeen}
-          paused={busy}
-          ownerFooter={(story) => (
-            <StoryOwnerPanel
-              key={story.id}
-              story={story}
-              onBusy={setBusy}
-              onChanged={refresh}
-              onDeleted={() => {
-                close();
-                refresh();
-              }}
-            />
-          )}
+          onOwnStoryChanged={refresh}
+          onOwnStoryDeleted={() => {
+            close();
+            refresh();
+          }}
         />
       )}
       {composing && (
@@ -84,12 +78,12 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
  */
 export function StoryTray({
   groups,
-  profiles,
+  authors,
   onOpen,
   onCreate,
 }: {
   groups: readonly StoryGroup[];
-  profiles: Record<string, UserProfileResponse>;
+  authors: Readonly<Record<string, Author>>;
   onOpen: (groupIndex: number) => void;
   onCreate: () => void;
 }) {
@@ -129,8 +123,7 @@ export function StoryTray({
 
       {groups.map((group, index) => {
         if (index === ownIndex) return null;
-        const profile = profiles[group.userId];
-        const author = profile ? authorFromProfile(profile) : unknownAuthor(group.userId);
+        const author = authors[group.userId] ?? unknownAuthor(group.userId);
         return (
           <button
             key={group.userId}

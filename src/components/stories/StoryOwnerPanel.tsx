@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { authorFromProfile, unknownAuthor } from "@/lib/api/adapters";
 import { messageFor } from "@/lib/api/errors";
@@ -21,7 +21,8 @@ const VIEWERS_PAGE = 20;
 
 const STATUS_LABEL: Partial<Record<StoryStatus, string>> = {
   PENDING_MODERATION: "Pending review",
-  HELD: "Not shown — it didn’t pass review",
+  // The model was unsure, or could not score it at all: hidden either way, and nobody reviews it.
+  HELD: "Only you can see this — it couldn’t be cleared in review",
   REJECTED: "Removed — it goes against our Community Guidelines",
 };
 
@@ -45,41 +46,53 @@ export function StoryOwnerPanel({
   const [more, setMore] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Shown at once; the tray's copy of the story catches up when `onChanged` reloads it.
+  const [visibility, setVisibility] = useState(story.visibility);
 
   const label = story.status ? STATUS_LABEL[story.status] : undefined;
 
+  const open = viewers !== null || confirming;
+  const onBusyRef = useRef(onBusy);
+  useEffect(() => {
+    onBusyRef.current = onBusy;
+  });
+  useEffect(() => {
+    onBusyRef.current(open);
+  }, [open]);
+
   async function loadViewers(before?: string) {
+    let page: StoryViewer[];
     try {
-      const page = await getStoryViewers(story.id, before);
-      setViewers((current) => [...(before ? (current ?? []) : []), ...page]);
-      setMore(page.length === VIEWERS_PAGE);
-      if (page.length > 0) {
-        const found = await getProfiles(page.map((viewer) => viewer.viewerId));
-        setProfiles((current) => ({
-          ...current,
-          ...Object.fromEntries(found.map((profile) => [profile.userId, profile])),
-        }));
-      }
+      page = await getStoryViewers(story.id, before);
     } catch (caught) {
       setError(messageFor(caught, "Couldn’t load who viewed this story."));
+      return;
     }
+    setViewers((current) => [...(before ? (current ?? []) : []), ...page]);
+    setMore(page.length === VIEWERS_PAGE);
+    if (page.length === 0) return;
+    // Without profiles the rows still list who watched and when, under placeholder names.
+    const found = await getProfiles(page.map((viewer) => viewer.viewerId)).catch(() => []);
+    setProfiles((current) => ({
+      ...current,
+      ...Object.fromEntries(found.map((profile) => [profile.userId, profile])),
+    }));
   }
 
   function toggleViewers() {
-    if (viewers) {
-      setViewers(null);
-      onBusy(false);
-    } else {
-      onBusy(true);
-      void loadViewers();
-    }
+    if (viewers) setViewers(null);
+    else void loadViewers();
   }
 
-  async function changeVisibility(visibility: StoryVisibility) {
+  async function changeVisibility(next: StoryVisibility) {
+    const before = visibility;
+    setVisibility(next);
+    setError(null);
     try {
-      await updateStoryVisibility(story.id, visibility);
+      await updateStoryVisibility(story.id, next);
       onChanged();
     } catch (caught) {
+      setVisibility(before);
       setError(messageFor(caught, "Couldn’t change who can see this story."));
     }
   }
@@ -107,7 +120,7 @@ export function StoryOwnerPanel({
         </button>
 
         <select
-          value={story.visibility}
+          value={visibility}
           onChange={(event) => void changeVisibility(event.target.value as StoryVisibility)}
           aria-label="Who can see this story"
           className="ml-auto h-8 rounded-[4px] bg-white/[0.12] px-2 text-[13px] text-white outline-none"
@@ -123,12 +136,12 @@ export function StoryOwnerPanel({
             <button type="button" onClick={() => void remove()} className="font-semibold text-[var(--tt-red)]">
               Delete
             </button>
-            <button type="button" onClick={() => { setConfirming(false); onBusy(false); }} className="font-semibold">
+            <button type="button" onClick={() => setConfirming(false)} className="font-semibold">
               Cancel
             </button>
           </span>
         ) : (
-          <button type="button" aria-label="Delete story" onClick={() => { setConfirming(true); onBusy(true); }}
+          <button type="button" aria-label="Delete story" onClick={() => setConfirming(true)}
             className="rounded-full p-1.5 hover:bg-white/10">
             <Trash2 className="h-4 w-4" />
           </button>

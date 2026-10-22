@@ -109,8 +109,7 @@ export function ProfileHeader({
   return (
     <header className="mt-3 mb-5 flex items-start gap-7 tt-840:gap-4">
       <ProfileStoryAvatar
-        userId={profile.author.userId}
-        avatarUrl={profile.author.avatarUrl}
+        author={profile.author}
         className="h-[172px] w-[172px] flex-none tt-840:h-24 tt-840:w-24"
       />
 
