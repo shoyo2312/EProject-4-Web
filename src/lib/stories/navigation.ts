@@ -51,3 +51,11 @@ export function markStorySeen(groups: readonly StoryGroup[], storyId: string): S
     return { ...group, stories, hasUnseen: group.hasUnseen && stories.some((story) => !story.viewedByMe) };
   });
 }
+
+/** Whether `ownerId` has a story still waiting for its moderation verdict. */
+export function awaitingReview(groups: readonly StoryGroup[], ownerId: string): boolean {
+  return groups.some(
+    (group) =>
+      group.userId === ownerId && group.stories.some((story) => story.status === "PENDING_MODERATION"),
+  );
+}

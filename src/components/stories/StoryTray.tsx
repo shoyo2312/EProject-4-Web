@@ -20,9 +20,12 @@ import { StoryViewer } from "./StoryViewer";
  */
 export function StoryBar({ followedIds }: { followedIds: readonly string[] | null }) {
   const { user } = useSession();
-  const { groups, profiles, refresh, markSeen } = useStoryFeed(followedIds);
   const [open, setOpen] = useState<StoryPosition | null>(null);
   const [composing, setComposing] = useState(false);
+  const { groups, profiles, refresh, markSeen } = useStoryFeed(
+    followedIds,
+    open !== null || composing,
+  );
   const authors = useMemo(
     () =>
       Object.fromEntries(
@@ -33,7 +36,12 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
 
   if (!user) return null;
 
-  const close = () => setOpen(null);
+  // Read again on the way out: the order puts owners with nothing left unseen last, and a verdict
+  // may have come in for the viewer's own story meanwhile.
+  const close = () => {
+    setOpen(null);
+    refresh();
+  };
 
   return (
     <>
@@ -52,10 +60,7 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
           onClose={close}
           onSeen={markSeen}
           onOwnStoryChanged={refresh}
-          onOwnStoryDeleted={() => {
-            close();
-            refresh();
-          }}
+          onOwnStoryDeleted={close}
         />
       )}
       {composing && (

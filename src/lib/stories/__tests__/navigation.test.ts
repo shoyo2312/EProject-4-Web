@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { StoryGroup, StoryResponse } from "@/lib/api/types";
 
-import { displayMs, firstUnseen, markStorySeen, next, previous } from "../navigation";
+import { awaitingReview, displayMs, firstUnseen, markStorySeen, next, previous } from "../navigation";
 
 function story(id: string, overrides: Partial<StoryResponse> = {}): StoryResponse {
   return {
@@ -102,5 +102,27 @@ describe("markStorySeen", () => {
 
   it("keeps the ring while the owner still has an unseen story", () => {
     expect(markStorySeen(groups, "a")[0].hasUnseen).toBe(true);
+  });
+});
+
+describe("awaitingReview", () => {
+  const tray: StoryGroup[] = [
+    { userId: "1", stories: [story("a", { status: "ACTIVE" }), story("b", { status: "PENDING_MODERATION" })], hasUnseen: false },
+    { userId: "2", stories: [story("c")], hasUnseen: true },
+  ];
+
+  it("is true while one of the owner's stories waits for its verdict", () => {
+    expect(awaitingReview(tray, "1")).toBe(true);
+  });
+
+  it("ignores other owners' groups", () => {
+    expect(awaitingReview(tray, "2")).toBe(false);
+  });
+
+  it("is false once every story has a verdict", () => {
+    const decided: StoryGroup[] = [
+      { userId: "1", stories: [story("a", { status: "ACTIVE" }), story("b", { status: "HELD" })], hasUnseen: false },
+    ];
+    expect(awaitingReview(decided, "1")).toBe(false);
   });
 });
