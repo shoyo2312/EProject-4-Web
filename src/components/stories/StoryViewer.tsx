@@ -15,6 +15,7 @@ import { formatRelativeTime } from "@/lib/format";
 import { displayMs, next, previous, type StoryPosition } from "@/lib/stories/navigation";
 import type { Author } from "@/types/tiktok";
 
+import { useStories } from "./StoriesProvider";
 import { StoryOwnerPanel } from "./StoryOwnerPanel";
 
 /** Where an arrow key moves the caret or the choice, not the story. */
@@ -46,6 +47,7 @@ export function StoryViewer({
   onOwnStoryDeleted: () => void;
 }) {
   const { user } = useSession();
+  const { syncRings } = useStories();
   const mounted = useMounted();
   const dialogRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -73,6 +75,14 @@ export function StoryViewer({
   useEffect(() => {
     onCloseRef.current = onClose;
   });
+
+  // The tray, a profile header and the provider each close this player by unmounting it, so this is
+  // the one place that sees every way out: the owners just watched then turn grey everywhere.
+  const groupsRef = useRef(groups);
+  useEffect(() => {
+    groupsRef.current = groups;
+  });
+  useEffect(() => () => syncRings(groupsRef.current), [syncRings]);
 
   const forward = useCallback(() => {
     const following = next(groups, pos);

@@ -6,6 +6,7 @@ import { useSession } from "@/components/session/SessionProvider";
 import { getUserStories } from "@/lib/api/stories";
 import type { StoryGroup, StoryResponse } from "@/lib/api/types";
 import { firstUnseen, markStorySeen } from "@/lib/stories/navigation";
+import { ringStateOf } from "@/lib/stories/ring-store";
 import { cn } from "@/lib/utils";
 import type { Author } from "@/types/tiktok";
 
@@ -57,10 +58,10 @@ export function ProfileStoryAvatar({ author, className }: { author: Author; clas
 
   // One array per change, not per render: the player's step callbacks, and with them its clock,
   // are rebuilt whenever `groups` changes identity.
-  const own = userId === viewerId;
+  const state = ringStateOf(stories, userId === viewerId);
   const groups = useMemo<StoryGroup[]>(
-    () => [{ userId, stories, hasUnseen: !own && stories.some((story) => !story.viewedByMe) }],
-    [userId, stories, own],
+    () => [{ userId, stories, hasUnseen: state === "unseen" }],
+    [userId, stories, state],
   );
   const group = groups[0];
 
@@ -69,13 +70,13 @@ export function ProfileStoryAvatar({ author, className }: { author: Author; clas
     <img src={author.avatarUrl} alt="" referrerPolicy="no-referrer" className={cn("rounded-full object-cover", className)} />
   );
 
-  if (stories.length === 0) return image;
+  if (state === "none") return image;
 
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} aria-label={`Watch ${author.nickname}'s stories`}
         className="flex-none rounded-full">
-        <StoryRing state={group.hasUnseen ? "unseen" : "seen"}>{image}</StoryRing>
+        <StoryRing state={state}>{image}</StoryRing>
       </button>
       {open && (
         <StoryViewer

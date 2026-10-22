@@ -10,6 +10,8 @@ import type { StoryResponse, StoryVisibility } from "@/lib/api/types";
 import { uploadToStorage } from "@/lib/api/videos";
 import { STORY_UPLOAD_TYPES, storyDurationProblem, storyFileProblem } from "@/lib/stories/upload-rules";
 
+import { useStories } from "./StoriesProvider";
+
 const CAPTION_MAX = 300;
 
 /**
@@ -24,6 +26,7 @@ export function StoryComposer({
   onClose: () => void;
   onPosted: (story: StoryResponse) => void;
 }) {
+  const { invalidateOwnRing } = useStories();
   const [file, setFile] = useState<File | null>(null);
   const [caption, setCaption] = useState("");
   const [visibility, setVisibility] = useState<StoryVisibility>("PUBLIC");
@@ -86,6 +89,7 @@ export function StoryComposer({
         caption: caption.trim() || null,
         visibility,
       });
+      invalidateOwnRing();
       onPosted(story);
     } catch (caught) {
       if (isApiError(caught) && caught.is("STORY_CAPTION_REJECTED")) {

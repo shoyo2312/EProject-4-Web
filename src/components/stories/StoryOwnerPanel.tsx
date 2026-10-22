@@ -16,6 +16,8 @@ import type {
 import { getProfiles } from "@/lib/api/users";
 import { formatRelativeTime } from "@/lib/format";
 
+import { useStories } from "./StoriesProvider";
+
 /** The server's page size for viewers — a shorter page is the last. */
 const VIEWERS_PAGE = 20;
 
@@ -41,6 +43,7 @@ export function StoryOwnerPanel({
   onDeleted: () => void;
   onBusy: (busy: boolean) => void;
 }) {
+  const { invalidateOwnRing } = useStories();
   const [viewers, setViewers] = useState<StoryViewer[] | null>(null);
   const [profiles, setProfiles] = useState<Record<string, UserProfileResponse>>({});
   const [more, setMore] = useState(false);
@@ -100,6 +103,7 @@ export function StoryOwnerPanel({
   async function remove() {
     try {
       await deleteStory(story.id);
+      invalidateOwnRing();
       onDeleted();
     } catch (caught) {
       setError(messageFor(caught, "Couldn’t delete this story."));

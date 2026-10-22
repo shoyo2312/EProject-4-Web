@@ -6,6 +6,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { PlayerSettingsProvider } from "@/components/player/PlayerSettingsProvider";
 import { SessionProvider } from "@/components/session/SessionProvider";
 import { HighContrastSync } from "@/components/settings/HighContrastSync";
+import { StoriesProvider } from "@/components/stories/StoriesProvider";
 import { Toaster } from "@/components/ui/toast";
 import { LOGIN_OPTIONS, SIGNUP_OPTIONS } from "@/lib/site-config";
 
@@ -56,13 +57,17 @@ export default function RootLayout({
           {/* Sound is a viewer preference shared by the feed and /video/[id],
               so it lives above the route that happens to be mounted. */}
           <PlayerSettingsProvider>
-            <div className="flex min-h-screen flex-col">
-              <div className="flex h-screen justify-between bg-[var(--tt-page)]">
-                {children}
-              </div>
+            {/* Story rings, and the player a ring opens. Avatars on /video/[id] and on every
+                shell page ask it, so it sits above the routes. */}
+            <StoriesProvider>
+              <div className="flex min-h-screen flex-col">
+                <div className="flex h-screen justify-between bg-[var(--tt-page)]">
+                  {children}
+                </div>
 
-              <TopBar />
-            </div>
+                <TopBar />
+              </div>
+            </StoriesProvider>
           </PlayerSettingsProvider>
           <Toaster />
         </SessionProvider>
