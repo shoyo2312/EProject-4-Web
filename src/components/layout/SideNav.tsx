@@ -7,14 +7,17 @@ import { useEffect, useState } from "react";
 
 import { LoginIcon } from "@/components/icons";
 import { ActivityDrawer } from "@/components/layout/ActivityDrawer";
+import { FollowingDrawer } from "@/components/layout/FollowingDrawer";
 import { MoreDrawer } from "@/components/layout/MoreDrawer";
 import { SearchDrawer } from "@/components/layout/SearchDrawer";
 import { NowaWordmark } from "@/components/layout/NowaWordmark";
+import { FollowingAccounts } from "@/components/layout/side-nav/FollowingAccounts";
 import { NavRow } from "@/components/layout/side-nav/NavRow";
 import { SearchField } from "@/components/layout/side-nav/SearchField";
 import { SidebarFooter } from "@/components/layout/side-nav/SidebarFooter";
 import { useSession } from "@/components/session/SessionProvider";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { useFollowingAccounts } from "@/hooks/use-following-accounts";
 import { useLocalSettings } from "@/hooks/use-local-settings";
 import { useNotifications } from "@/hooks/use-notifications";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
@@ -59,12 +62,16 @@ export function SideNav({
   // One inbox for both readers: the rail's badge and the drawer's list are the
   // same unread set, and fetching it twice would let the two disagree.
   const inbox = useNotifications();
+  // Likewise the following list: the rows under the nav and the drawer behind
+  // View all are one list.
+  const following = useFollowingAccounts();
   const [activityOpen, setActivityOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [followingOpen, setFollowingOpen] = useState(false);
   // The drawers sit in the same slot beside the rail, so opening one closes
   // the others, and any one collapses the rail the same way.
-  const collapsed = activityOpen || searchOpen || moreOpen;
+  const collapsed = activityOpen || searchOpen || moreOpen || followingOpen;
   // The reader's own collapse, from the toggle beside the logo. The rows and
   // the header read it exactly as they read an open drawer — icons only — but
   // unlike a drawer it keeps the rows on screen, so the rail gets the 1024px
@@ -245,6 +252,7 @@ export function SideNav({
             onOpen={() => {
               setActivityOpen(false);
               setMoreOpen(false);
+              setFollowingOpen(false);
               setSearchOpen(true);
             }}
           />
@@ -295,12 +303,14 @@ export function SideNav({
                   ? () => {
                       setSearchOpen(false);
                       setMoreOpen(false);
+                      setFollowingOpen(false);
                       setActivityOpen((v) => !v);
                     }
                   : item.label === "More"
                     ? () => {
                         setSearchOpen(false);
                         setActivityOpen(false);
+                        setFollowingOpen(false);
                         setMoreOpen((v) => !v);
                       }
                     : item.label === "Profile" && showGuest
@@ -310,6 +320,17 @@ export function SideNav({
             />
           ))}
         </nav>
+
+        <FollowingAccounts
+          accounts={following.accounts}
+          narrow={narrow}
+          onViewAll={() => {
+            setSearchOpen(false);
+            setActivityOpen(false);
+            setMoreOpen(false);
+            setFollowingOpen(true);
+          }}
+        />
 
         {/* `.SubMainNavContentContainer > .DivPrimaryButtonContainer` — present
             only for a signed-out viewer. Measured 200 × 40, `#FE2C55`,
@@ -365,6 +386,12 @@ export function SideNav({
       <SearchDrawer open={searchOpen} onClose={() => setSearchOpen(false)} />
 
       <MoreDrawer open={moreOpen} onClose={() => setMoreOpen(false)} />
+
+      <FollowingDrawer
+        open={followingOpen}
+        following={following}
+        onClose={() => setFollowingOpen(false)}
+      />
     </div>
   );
 }

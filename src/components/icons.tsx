@@ -98,6 +98,15 @@ export function MoreIcon(props: IconProps) {
   );
 }
 
+/** The sidebar's "View all" under Following accounts, drawn at 16px. */
+export function ListIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6 10a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H6Zm0 12a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H6ZM5 35a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-2Zm11-25a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h26a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H16Zm0 12a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h26a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H16Zm-1 13a1 1 0 0 1 1-1h26a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H16a1 1 0 0 1-1-1v-2Z" />
+    </Icon>
+  );
+}
+
 /**
  * The collapsed rail's stand-in for the guest Log in button — a person in a
  * ring, read off `.SquareTUXButton` with the live sidebar collapsed. TikTok
