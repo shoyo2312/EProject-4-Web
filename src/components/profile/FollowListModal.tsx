@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useEscapeKey } from "@/hooks/use-escape-key";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { CloseIcon } from "@/components/icons";
+import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import { useFollow } from "@/hooks/use-follow";
 import { useSuggestedCreators } from "@/hooks/use-suggested-creators";
 import {
@@ -353,13 +354,15 @@ export function UserRow({
       href={`/@${author.username}`}
       className="flex items-center gap-3 px-4 py-2 hover:bg-white/[0.03]"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- may be a local static asset */}
-      <img
-        src={author.avatarUrl || DEFAULT_AVATAR}
-        alt=""
-        referrerPolicy="no-referrer"
-        className="h-11 w-11 flex-none rounded-full object-cover"
-      />
+      <StoryAvatar author={author} className="h-11 w-11">
+        {/* eslint-disable-next-line @next/next/no-img-element -- may be a local static asset */}
+        <img
+          src={author.avatarUrl || DEFAULT_AVATAR}
+          alt=""
+          referrerPolicy="no-referrer"
+          className="h-11 w-11 flex-none rounded-full object-cover"
+        />
+      </StoryAvatar>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[15px] font-semibold text-[var(--tt-text)]">
           {author.nickname}

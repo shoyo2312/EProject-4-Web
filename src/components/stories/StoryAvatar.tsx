@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { MouseEvent, ReactNode } from "react";
 
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
+import type { RingState } from "@/lib/stories/ring-store";
 import { cn } from "@/lib/utils";
 import type { Author } from "@/types/tiktok";
 
@@ -28,11 +29,30 @@ export function StoryAvatar({
   thin?: boolean;
   children: ReactNode;
 }) {
-  const router = useRouter();
   const state = useStoryRing(author.userId);
-  const { openStories } = useStories();
 
   if (state === "none") return <>{children}</>;
+
+  return <RingedAvatar author={author} state={state} className={className} thin={thin} />;
+}
+
+/**
+ * Apart from `StoryAvatar` because `useRouter` throws outside an app router: an avatar with no
+ * ring, which is every one in a test that renders a row on its own, must not need one.
+ */
+function RingedAvatar({
+  author,
+  state,
+  className,
+  thin,
+}: {
+  author: Author;
+  state: RingState;
+  className?: string;
+  thin?: boolean;
+}) {
+  const router = useRouter();
+  const { openStories } = useStories();
 
   async function watch(event: MouseEvent) {
     // The avatar often sits in a row that is itself a link, or opens something on click.

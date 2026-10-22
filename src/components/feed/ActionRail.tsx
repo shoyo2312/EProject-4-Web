@@ -13,6 +13,7 @@ import {
   ShareIcon,
 } from "@/components/icons";
 import { ShareSheet } from "@/components/feed/ShareSheet";
+import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import { useFollow } from "@/hooks/use-follow";
 import { shareVideo } from "@/lib/api/interactions";
 import { cn } from "@/lib/utils";
@@ -102,18 +103,24 @@ export function ActionRail({
       {/* Avatar + follow badge — 48×48 with a 24×24 badge overlapping the base
           (32×32 with a 16×16 badge in the compact rail). */}
       <div className={cn("relative", compact ? "mb-2.5 h-8 w-8" : "mb-3 h-12 w-12")}>
-        <Link href={`/@${video.author.username}`} aria-label={video.author.nickname}>
-          <Image
-            src={video.author.avatarUrl}
-            alt={video.author.nickname}
-            width={48}
-            height={48}
-            className={cn(
-              "rounded-full object-cover",
-              compact ? "h-8 w-8" : "h-12 w-12",
-            )}
-          />
-        </Link>
+        <StoryAvatar
+          author={video.author}
+          className={compact ? "h-8 w-8" : "h-12 w-12"}
+          thin={compact}
+        >
+          <Link href={`/@${video.author.username}`} aria-label={video.author.nickname}>
+            <Image
+              src={video.author.avatarUrl}
+              alt={video.author.nickname}
+              width={48}
+              height={48}
+              className={cn(
+                "rounded-full object-cover",
+                compact ? "h-8 w-8" : "h-12 w-12",
+              )}
+            />
+          </Link>
+        </StoryAvatar>
         {/* Hidden on your own video: following yourself is not a thing the
             backend allows, and the badge would only ever error. */}
         {!isSelf && (

@@ -12,6 +12,7 @@ import type { ReplyTarget } from "@/components/feed/comments/types";
 import { HeartIcon, ReportIcon } from "@/components/icons";
 import { ReportDialog } from "@/components/report/ReportDialog";
 import { useSession } from "@/components/session/SessionProvider";
+import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import { toast } from "@/components/ui/toast";
 import { useDismiss } from "@/hooks/use-dismiss";
 import { likeComment, unlikeComment } from "@/lib/api/interactions";
@@ -167,25 +168,31 @@ import type { Comment } from "@/types/tiktok";
       )}
     >
       <div className="flex flex-row items-center gap-2">
-        <Link
-          href={`/@${comment.author.username}`}
-          aria-label={comment.author.nickname}
-          className={cn(
-            "flex-none self-start",
-            isReply ? "h-6 w-6" : "h-8 w-8",
-          )}
+        <StoryAvatar
+          author={comment.author}
+          className={cn("self-start", isReply ? "h-6 w-6" : "h-8 w-8")}
+          thin
         >
-          <Image
-            src={comment.author.avatarUrl}
-            alt={comment.author.nickname}
-            width={avatarSize}
-            height={avatarSize}
+          <Link
+            href={`/@${comment.author.username}`}
+            aria-label={comment.author.nickname}
             className={cn(
-              "rounded-full object-cover",
+              "flex-none self-start",
               isReply ? "h-6 w-6" : "h-8 w-8",
             )}
-          />
-        </Link>
+          >
+            <Image
+              src={comment.author.avatarUrl}
+              alt={comment.author.nickname}
+              width={avatarSize}
+              height={avatarSize}
+              className={cn(
+                "rounded-full object-cover",
+                isReply ? "h-6 w-6" : "h-8 w-8",
+              )}
+            />
+          </Link>
+        </StoryAvatar>
 
         <div className="flex flex-1 flex-col items-start gap-1.5 [overflow-wrap:break-word] [word-break:break-word]">
           {/* `.DivCommentHeaderWrapper` — username left, "⋯" right */}

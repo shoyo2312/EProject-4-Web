@@ -7,12 +7,13 @@ import { useEscapeKey } from "@/hooks/use-escape-key";
 import { AddFriendIcon, ChevronRightIcon, CloseIcon } from "@/components/icons";
 import { FollowRequestsModal } from "@/components/layout/FollowRequestsModal";
 import { useSession } from "@/components/session/SessionProvider";
+import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import {
   NOTIFICATION_FILTERS,
   groupByDay,
   type NotificationInbox,
 } from "@/hooks/use-notifications";
-import { DEFAULT_AVATAR } from "@/lib/api/adapters";
+import { authorFromProfile, DEFAULT_AVATAR } from "@/lib/api/adapters";
 import { referencesUser, type NotificationResponse } from "@/lib/api/notifications";
 import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
 import { getFollowRequests } from "@/lib/api/users";
@@ -396,6 +397,17 @@ function NotificationItem({
     onOpen();
     if (expandable) setExpanded((value) => !value);
   };
+  const avatar = (
+    // eslint-disable-next-line @next/next/no-img-element -- the avatar can be any CDN URL the account set; next/image would need each host allow-listed
+    <img
+      src={actor?.avatarUrl ?? DEFAULT_AVATAR}
+      alt=""
+      referrerPolicy="no-referrer"
+      width={48}
+      height={48}
+      className="h-12 w-12 rounded-3xl object-cover"
+    />
+  );
 
   return (
     <div
@@ -416,15 +428,13 @@ function NotificationItem({
     >
       <div className="flex h-12 w-12 min-w-12 items-center justify-center rounded-3xl bg-[rgb(50,54,75)]">
         {item.actorId ? (
-          // eslint-disable-next-line @next/next/no-img-element -- the avatar can be any CDN URL the account set; next/image would need each host allow-listed
-          <img
-            src={actor?.avatarUrl ?? DEFAULT_AVATAR}
-            alt=""
-            referrerPolicy="no-referrer"
-            width={48}
-            height={48}
-            className="h-12 w-12 rounded-3xl object-cover"
-          />
+          actor ? (
+            <StoryAvatar author={authorFromProfile(actor)} className="h-12 w-12">
+              {avatar}
+            </StoryAvatar>
+          ) : (
+            avatar
+          )
         ) : (
           <BellGlyph />
         )}

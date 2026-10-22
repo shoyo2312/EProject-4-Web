@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { HeartIcon, MutedIcon, VolumeIcon } from "@/components/icons";
+import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useExploreFeed } from "@/hooks/use-explore-feed";
 import { useHoverCapable } from "@/hooks/use-hover-capable";
@@ -302,13 +303,15 @@ function ExploreTile({
         href={`/@${item.author.username}`}
         className="flex items-center gap-2 text-[14px] text-[var(--tt-text-secondary)] hover:underline"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- local static asset, no optimisation needed */}
-        <img
-          src={item.author.avatarUrl}
-          alt=""
-          referrerPolicy="no-referrer"
-          className="h-6 w-6 flex-none rounded-full"
-        />
+        <StoryAvatar author={item.author} className="h-6 w-6" thin>
+          {/* eslint-disable-next-line @next/next/no-img-element -- local static asset, no optimisation needed */}
+          <img
+            src={item.author.avatarUrl}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="h-6 w-6 flex-none rounded-full"
+          />
+        </StoryAvatar>
         <span className="truncate">{item.author.nickname}</span>
       </Link>
     </div>

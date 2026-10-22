@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { ListIcon } from "@/components/icons";
+import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import { authorFromProfile, displayHandle } from "@/lib/api/adapters";
 import type { UserProfileResponse } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
@@ -129,16 +130,18 @@ export function AccountRow({
       )}
     >
       <span className="ml-1 flex min-w-0 flex-1 items-center gap-3">
-        {/* eslint-disable-next-line @next/next/no-img-element -- the avatar can be any CDN URL the account set; next/image would need each host allow-listed */}
-        <img
-          src={author.avatarUrl}
-          alt=""
-          referrerPolicy="no-referrer"
-          className={cn(
-            "ml-0.5 flex-none rounded-full object-cover p-1",
-            drawer ? "h-14 w-14" : "h-9 w-9",
-          )}
-        />
+        <StoryAvatar author={author} className={cn("ml-0.5", drawer ? "h-14 w-14" : "h-9 w-9")}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- the avatar can be any CDN URL the account set; next/image would need each host allow-listed */}
+          <img
+            src={author.avatarUrl}
+            alt=""
+            referrerPolicy="no-referrer"
+            className={cn(
+              "ml-0.5 flex-none rounded-full object-cover p-1",
+              drawer ? "h-14 w-14" : "h-9 w-9",
+            )}
+          />
+        </StoryAvatar>
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-[14px] font-medium leading-[18.2px] text-[var(--tt-text)]">
             {author.nickname}
