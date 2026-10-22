@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { ProfileStoryAvatar } from "@/components/stories/ProfileStoryAvatar";
 import { StoriesProvider, useStories, useStoryRing } from "@/components/stories/StoriesProvider";
 import type { StoryResponse } from "@/lib/api/types";
+import { RING_TTL_MS } from "@/lib/stories/ring-store";
 import type { Author } from "@/types/tiktok";
 
 const session: { user: { userId: string } | null; loading: boolean } = { user: { userId: "1" }, loading: false };
@@ -74,6 +75,12 @@ const ring = (id: string) => screen.getByTestId(`ring-${id}`).textContent;
 /** The classes of the ring a `StoryRing` button draws: its colour is the state. */
 const ringClasses = (button: HTMLElement) => button.firstElementChild?.className ?? "";
 
+/** The tab going to the background or coming back, as the browser reports it. */
+function setPageHidden(hidden: boolean) {
+  Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
+  document.dispatchEvent(new Event("visibilitychange"));
+}
+
 beforeEach(() => {
   session.user = { userId: "1" };
   session.loading = false;
@@ -84,6 +91,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.resetAllMocks();
+  Reflect.deleteProperty(document, "hidden");
 });
 
 describe("StoriesProvider", () => {
@@ -158,6 +166,84 @@ describe("StoriesProvider", () => {
 
     expect(getStoryRings).toHaveBeenCalledTimes(1);
     expect(ring("2")).toBe("unseen");
+  });
+
+  it("asks again about an avatar that stays on screen once its answer is stale", async () => {
+    vi.useFakeTimers();
+    getStoryRings.mockResolvedValueOnce([{ userId: "2", hasUnseen: true }]);
+    render(
+      <StoriesProvider>
+        <Ring id="2" />
+      </StoriesProvider>,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(ring("2")).toBe("unseen");
+
+    // Their story expired meanwhile, and nothing remounted the avatar to make it ask. The first
+    // tick finds the answer a few milliseconds short of stale; the second one asks.
+    getStoryRings.mockResolvedValueOnce([]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2 * RING_TTL_MS);
+    });
+
+    expect(getStoryRings).toHaveBeenCalledTimes(2);
+    expect(ring("2")).toBe("none");
+  });
+
+  it("does not renew rings while the page is hidden, and does as soon as it is shown again", async () => {
+    vi.useFakeTimers();
+    getStoryRings.mockResolvedValueOnce([{ userId: "2", hasUnseen: true }]);
+    render(
+      <StoriesProvider>
+        <Ring id="2" />
+      </StoriesProvider>,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(getStoryRings).toHaveBeenCalledTimes(1);
+
+    setPageHidden(true);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3 * RING_TTL_MS);
+    });
+    expect(getStoryRings).toHaveBeenCalledTimes(1);
+
+    getStoryRings.mockResolvedValueOnce([]);
+    setPageHidden(false);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+
+    expect(getStoryRings).toHaveBeenCalledTimes(2);
+    expect(ring("2")).toBe("none");
+  });
+
+  it("stops renewing rings when the viewer changes or the provider goes away", async () => {
+    vi.useFakeTimers();
+    const page = () => (
+      <StoriesProvider>
+        <Ring id="2" />
+      </StoriesProvider>
+    );
+    const { rerender, unmount } = render(page());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(vi.getTimerCount()).toBe(1);
+
+    // The new viewer's store has a timer of its own; the last one's is gone, not left running beside it.
+    session.user = null;
+    rerender(page());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(vi.getTimerCount()).toBe(1);
+
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("a player closed after the session ended never writes into the next viewer's store", async () => {

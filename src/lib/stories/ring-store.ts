@@ -5,6 +5,9 @@ export type RingState = "unseen" | "seen" | "none";
 /** story-service answers 400 to more ids than this in one call. */
 export const MAX_RING_BATCH = 100;
 
+/** How long an answer is reused before an avatar that still shows it is asked about again. */
+export const RING_TTL_MS = 60_000;
+
 export function ringStateOf(stories: readonly StoryResponse[], own: boolean): RingState {
   if (stories.length === 0) return "none";
   const unseen = own
@@ -21,18 +24,22 @@ export interface RingStore {
   set(userId: string, state: RingState): void;
   /** Forgets the id, and asks again if an avatar still shows it. */
   invalidate(userId: string): void;
+  /** Asks again for every id an avatar still shows whose answer is stale. */
+  refresh(): void;
 }
 
 /**
  * A comment thread or an explore grid puts dozens of avatars on screen, each wanting its owner's
  * ring. Each one subscribes with that id; the ids that arrive within one tick leave as a single
- * request (in chunks of the server's cap), and an answer is reused until it is `ttlMs` old. Nothing
- * is evicted: like `resolveAuthors`' cache, the store lives as long as the viewer's session.
+ * request (in chunks of the server's cap), and an answer is reused until it is `ttlMs` old. An
+ * avatar that stays mounted subscribes only once, so whoever owns the store calls `refresh` now and
+ * then to renew the answers it holds. Nothing is evicted: like `resolveAuthors`' cache, the store
+ * lives as long as the viewer's session.
  */
 export function createRingStore({
   fetchRings,
   tickMs = 50,
-  ttlMs = 60_000,
+  ttlMs = RING_TTL_MS,
   now = () => Date.now(),
   schedule = (run, ms) => {
     setTimeout(run, ms);
@@ -63,6 +70,11 @@ export function createRingStore({
       flushScheduled = true;
       schedule(flush, tickMs);
     }
+  }
+
+  function askIfStale(userId: string) {
+    const entry = entries.get(userId);
+    if (!pending.has(userId) && (!entry || now() - entry.at > ttlMs)) enqueue(userId);
   }
 
   function flush() {
@@ -109,13 +121,17 @@ export function createRingStore({
       const subscribers = listeners.get(userId) ?? new Set<() => void>();
       listeners.set(userId, subscribers);
       subscribers.add(listener);
-
-      const entry = entries.get(userId);
-      if (!pending.has(userId) && (!entry || now() - entry.at > ttlMs)) enqueue(userId);
+      askIfStale(userId);
 
       return () => {
         subscribers.delete(listener);
       };
+    },
+
+    refresh() {
+      listeners.forEach((subscribers, userId) => {
+        if (subscribers.size) askIfStale(userId);
+      });
     },
 
     set(userId, state) {

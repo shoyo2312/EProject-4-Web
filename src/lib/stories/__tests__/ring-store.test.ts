@@ -319,6 +319,91 @@ describe("createRingStore", () => {
   });
 });
 
+describe("createRingStore, refresh", () => {
+  it("asks again, in one request, for the ids still shown whose answer is stale", async () => {
+    const { store, fetchRings, tick, advance } = setup(async () => [
+      { userId: "1", hasUnseen: true },
+    ]);
+    store.subscribe("1", vi.fn());
+    store.subscribe("2", vi.fn());
+    await tick();
+
+    // Answers count until they are older than the lifetime, as they do for a new subscriber.
+    advance(1000);
+    store.refresh();
+    await tick();
+    expect(fetchRings).toHaveBeenCalledTimes(1);
+
+    advance(1);
+    store.refresh();
+    await tick();
+    expect(fetchRings.mock.calls).toEqual([[["1", "2"]], [["1", "2"]]]);
+  });
+
+  it("leaves alone an id that is fresh, one nobody shows any more, and one already on its way", async () => {
+    const { store, fetchRings, tick, advance } = setup();
+    store.subscribe("1", vi.fn());
+    const leave = store.subscribe("2", vi.fn());
+    store.subscribe("3", vi.fn());
+    await tick();
+    advance(1001);
+
+    store.set("1", "seen");
+    leave();
+    const onTheWay = deferred<StoryRing[]>();
+    fetchRings.mockReturnValueOnce(onTheWay.promise);
+    store.subscribe("4", vi.fn());
+    await tick();
+
+    store.refresh();
+    await tick();
+
+    // Only "3": its answer is stale and an avatar still shows it.
+    expect(fetchRings.mock.calls).toEqual([[["1", "2", "3"]], [["4"]], [["3"]]]);
+    onTheWay.resolve([]);
+  });
+
+  it("asks again for an id whose request failed, once that answer is stale", async () => {
+    const { store, fetchRings, tick, advance } = setup(async () => {
+      throw new Error("gateway down");
+    });
+    store.subscribe("1", vi.fn());
+    await tick();
+    expect(store.get("1")).toBe("none");
+
+    store.refresh();
+    await tick();
+    expect(fetchRings).toHaveBeenCalledTimes(1);
+
+    advance(1001);
+    fetchRings.mockResolvedValueOnce([{ userId: "1", hasUnseen: true }]);
+    store.refresh();
+    await tick();
+
+    expect(fetchRings).toHaveBeenCalledTimes(2);
+    expect(store.get("1")).toBe("unseen");
+  });
+
+  it("keeps what set said when the answer to a refresh arrives late", async () => {
+    const { store, fetchRings, tick, advance } = setup(async () => [
+      { userId: "9", hasUnseen: true },
+    ]);
+    store.subscribe("9", vi.fn());
+    await tick();
+    advance(1001);
+    const late = deferred<StoryRing[]>();
+    fetchRings.mockReturnValueOnce(late.promise);
+    store.refresh();
+    await tick();
+
+    store.set("9", "seen");
+    late.resolve([{ userId: "9", hasUnseen: true }]);
+    await settled();
+
+    expect(store.get("9")).toBe("seen");
+  });
+});
+
 function story(overrides: Partial<StoryResponse> = {}): StoryResponse {
   return {
     id: "s",

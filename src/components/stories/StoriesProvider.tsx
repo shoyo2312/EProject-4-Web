@@ -1,13 +1,19 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, useSyncExternalStore } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import { isBackendHandle } from "@/lib/api/adapters";
 import { getStoryRings, getUserStories } from "@/lib/api/stories";
 import type { StoryGroup, StoryResponse } from "@/lib/api/types";
 import { firstUnseen, markStorySeen } from "@/lib/stories/navigation";
-import { createRingStore, ringStateOf, type RingState, type RingStore } from "@/lib/stories/ring-store";
+import {
+  createRingStore,
+  RING_TTL_MS,
+  ringStateOf,
+  type RingState,
+  type RingStore,
+} from "@/lib/stories/ring-store";
 import type { Author } from "@/types/tiktok";
 
 import { StoryViewer } from "./StoryViewer";
@@ -87,6 +93,24 @@ export function StoriesProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the viewer is the key, not an input
     [isLoading, viewerId],
   );
+
+  // An avatar asks the store once, when it mounts, and the side-nav lists stay mounted for the
+  // whole session: without this their ring would never follow a story that expired, one posted
+  // since, or a first answer that failed. The store only re-asks what is stale, and nothing is
+  // asked of a page nobody is looking at.
+  useEffect(() => {
+    if (!store) return;
+    const renew = () => {
+      if (!document.hidden) store.refresh();
+    };
+    const timer = setInterval(renew, RING_TTL_MS);
+    document.addEventListener("visibilitychange", renew);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", renew);
+    };
+  }, [store]);
+
   const [playing, setPlaying] = useState<Playing | null>(null);
   const viewing = playing?.store === store ? playing : null;
 
