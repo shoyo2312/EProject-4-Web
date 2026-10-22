@@ -114,7 +114,7 @@ export interface NotificationInbox {
   actors: Map<string, UserProfileResponse>;
   /**
    * The referenced video, keyed by `NotificationResponse.referenceId`, for every type
-   * except the follow ones (their `referenceId` is a userId) and SYSTEM (it has none).
+   * except those that name an account (`referencesUser`) and SYSTEM (it has none).
    */
   videos: Map<string, VideoResponse>;
   markRead: (notificationId: string) => void;
@@ -231,7 +231,8 @@ export function useNotifications(): NotificationInbox {
   }, [unresolvedActorIds]);
 
   // Same batching as actors above, keyed by referenceId instead of actorId —
-  // The follow types and SYSTEM are the only ones that do not name a video.
+  // The types that name an account (`referencesUser`) and SYSTEM are the only ones that do not
+  // name a video.
   const unresolvedVideoIds = useMemo(() => {
     const ids = new Set<string>();
     for (const item of items) {

@@ -7,13 +7,14 @@ import { useEscapeKey } from "@/hooks/use-escape-key";
 import { AddFriendIcon, ChevronRightIcon, CloseIcon } from "@/components/icons";
 import { FollowRequestsModal } from "@/components/layout/FollowRequestsModal";
 import { useSession } from "@/components/session/SessionProvider";
+import { useStories } from "@/components/stories/StoriesProvider";
 import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import {
   NOTIFICATION_FILTERS,
   groupByDay,
   type NotificationInbox,
 } from "@/hooks/use-notifications";
-import { authorFromProfile, DEFAULT_AVATAR } from "@/lib/api/adapters";
+import { authorFromProfile, DEFAULT_AVATAR, unknownAuthor } from "@/lib/api/adapters";
 import { referencesUser, type NotificationResponse } from "@/lib/api/notifications";
 import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
 import { getFollowRequests } from "@/lib/api/users";
@@ -60,6 +61,7 @@ export function ActivityDrawer({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const { openStories } = useStories();
   const signedIn = useSession().user !== null;
   const [filter, setFilter] = useState<string>(NOTIFICATION_FILTERS[0].label);
   /** Follow requests waiting on this (private) account; a public one has none. */
@@ -116,9 +118,24 @@ export function ActivityDrawer({
    * Follow the notification to whatever it is about, and mark it read on the
    * way — opening it is the read, the same as the live site.
    */
-  const openNotification = (item: NotificationResponse) => {
+  const openNotification = async (
+    item: NotificationResponse,
+    actor: UserProfileResponse | undefined,
+  ) => {
     inbox.markRead(item.id);
     if (!item.referenceId) return;
+
+    // The story's owner, not a story: one entry stands for all of their stories in the last
+    // day, and by now there may be none the viewer can still see — then their profile is where
+    // the tap lands.
+    if (item.type === "STORY") {
+      const opened = await openStories(
+        actor ? authorFromProfile(actor) : unknownAuthor(item.referenceId),
+      );
+      if (opened) onClose();
+      else navigate(`/@${item.referenceId}`);
+      return;
+    }
 
     // The follow types' referenceId is an account's userId, and `/@{id}` is a
     // profile URL in its own right (see ProfileRouter) — no lookup needed to
@@ -282,7 +299,7 @@ export function ActivityDrawer({
                           item={item}
                           actor={actor}
                           video={item.referenceId ? inbox.videos.get(item.referenceId) : undefined}
-                          onOpen={() => openNotification(item)}
+                          onOpen={() => openNotification(item, actor)}
                           onOpenActor={() => openActor(item, actor)}
                         />
                       </li>
@@ -359,6 +376,8 @@ function describe(item: NotificationResponse): string {
       return "requested to follow you";
     case "FOLLOW_REQUEST_ACCEPTED":
       return "accepted your follow request";
+    case "STORY":
+      return "posted a new story";
     case "COMMENT":
       return `commented: ${item.body}`;
     case "SYSTEM":

@@ -17,14 +17,21 @@ export type NotificationType =
   | "NEW_FOLLOWER"
   | "FOLLOW_REQUEST"
   | "FOLLOW_REQUEST_ACCEPTED"
+  | "STORY"
   | "SYSTEM";
 
 /**
  * The types whose `referenceId` is an account, not a video: the new follower,
- * the requester, and the private account that approved the viewer.
+ * the requester, the private account that approved the viewer, and the owner
+ * of the story.
  */
 export function referencesUser(type: NotificationType): boolean {
-  return type === "NEW_FOLLOWER" || type === "FOLLOW_REQUEST" || type === "FOLLOW_REQUEST_ACCEPTED";
+  return (
+    type === "NEW_FOLLOWER" ||
+    type === "FOLLOW_REQUEST" ||
+    type === "FOLLOW_REQUEST_ACCEPTED" ||
+    type === "STORY"
+  );
 }
 
 export interface NotificationResponse {
@@ -36,9 +43,9 @@ export interface NotificationResponse {
   body: string;
   /**
    * What the notification points at, type-dependent: a videoId for
-   * LIKE/COMMENT/COMMENT_LIKE/SHARE, a userId for the three follow types (see
-   * `referencesUser`), null for SYSTEM. Opaque to the service, so the client
-   * decides what it means.
+   * LIKE/COMMENT/COMMENT_LIKE/SHARE, a userId for the three follow types and
+   * STORY (see `referencesUser`) — for STORY the story's owner, not a story id —
+   * null for SYSTEM. Opaque to the service, so the client decides what it means.
    */
   referenceId: string | null;
   read: boolean;
