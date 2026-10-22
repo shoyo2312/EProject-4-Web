@@ -578,6 +578,13 @@ export interface StoryGroup {
   hasUnseen: boolean;
 }
 
+/** An avatar's ring. Accounts with no story the viewer may watch are left out of the answer, not listed. */
+export interface StoryRing {
+  userId: string;
+  /** Always true for a guest. For the viewer's own account: true iff one of their stories is ACTIVE. */
+  hasUnseen: boolean;
+}
+
 export interface StoryViewer {
   viewerId: string;
   viewedAt: string;

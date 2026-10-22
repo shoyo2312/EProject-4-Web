@@ -2,6 +2,7 @@ import { apiFetch } from "./client";
 import type {
   StoryGroup,
   StoryResponse,
+  StoryRing,
   StoryViewer,
   StoryVisibility,
   UploadUrlResponse,
@@ -35,6 +36,19 @@ export function getStoryFeed(followedUserIds: readonly string[]): Promise<StoryG
     query: { followedUserIds: followedUserIds.join(",") },
     auth: "required",
   });
+}
+
+/**
+ * Which of these accounts get a ring. At most 100 ids per call — more is a 400, so `createRingStore`
+ * chunks. Ids shorter than 16 digits come back from the JSON parser as numbers, hence `String()`:
+ * a `Map` keyed by string would miss them (see `resolveAuthors`).
+ */
+export async function getStoryRings(userIds: readonly string[]): Promise<StoryRing[]> {
+  const rings = await apiFetch<StoryRing[]>("/stories/rings", {
+    query: { userIds: userIds.join(",") },
+    auth: "optional",
+  });
+  return rings.map((ring) => ({ ...ring, userId: String(ring.userId) }));
 }
 
 export function getUserStories(userId: string): Promise<StoryResponse[]> {
