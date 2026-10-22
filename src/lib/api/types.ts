@@ -574,7 +574,11 @@ export interface StoryResponse {
 export interface StoryGroup {
   userId: string;
   stories: StoryResponse[];
-  /** Always false for the viewer's own group. */
+  /**
+   * Whether the viewer has a story of this owner left to watch. For the viewer's own group the feed
+   * always sends false, while a group built with `ringStateOf` has it true as long as one of their
+   * stories is ACTIVE: take the own ring from `ringStateOf`, not from this.
+   */
   hasUnseen: boolean;
 }
 

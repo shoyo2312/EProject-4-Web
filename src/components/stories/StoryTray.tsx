@@ -1,15 +1,17 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
 import { useStoryFeed } from "@/hooks/use-story-feed";
 import { authorFromProfile, unknownAuthor } from "@/lib/api/adapters";
 import type { StoryGroup } from "@/lib/api/types";
-import { firstUnseen, type StoryPosition } from "@/lib/stories/navigation";
+import { awaitingReview, firstUnseen, type StoryPosition } from "@/lib/stories/navigation";
+import { ringStateOf } from "@/lib/stories/ring-store";
 import type { Author } from "@/types/tiktok";
 
+import { useStories } from "./StoriesProvider";
 import { StoryComposer } from "./StoryComposer";
 import { StoryRing } from "./StoryRing";
 import { StoryViewer } from "./StoryViewer";
@@ -20,6 +22,7 @@ import { StoryViewer } from "./StoryViewer";
  */
 export function StoryBar({ followedIds }: { followedIds: readonly string[] | null }) {
   const { user } = useSession();
+  const { invalidateOwnRing } = useStories();
   const [open, setOpen] = useState<StoryPosition | null>(null);
   const [composing, setComposing] = useState(false);
   const { groups, profiles, refresh, markSeen } = useStoryFeed(
@@ -33,6 +36,16 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
       ),
     [profiles],
   );
+
+  // The tray asks again while the viewer's own story waits for its verdict. When that stops, their
+  // ring elsewhere is asked about again too: it turns red once the story is live, instead of
+  // waiting out its cache until something re-subscribes.
+  const awaiting = user !== null && awaitingReview(groups, user.userId);
+  const wasAwaiting = useRef(false);
+  useEffect(() => {
+    if (wasAwaiting.current && !awaiting) invalidateOwnRing();
+    wasAwaiting.current = awaiting;
+  }, [awaiting, invalidateOwnRing]);
 
   if (!user) return null;
 
@@ -96,6 +109,8 @@ export function StoryTray({
   if (!user) return null;
 
   const ownIndex = groups.findIndex((group) => group.userId === user.userId);
+  // Red while a story of theirs is live, grey while the only ones are in review, held or rejected.
+  const ownState = ownIndex === -1 ? "none" : ringStateOf(groups[ownIndex].stories, true);
 
   return (
     <nav
@@ -109,7 +124,7 @@ export function StoryTray({
           aria-label={ownIndex === -1 ? "Create a story" : "Your story"}
           className="rounded-full"
         >
-          <StoryRing state={ownIndex === -1 ? "none" : "seen"}>
+          <StoryRing state={ownState}>
             <Avatar src={user.avatarUrl} />
           </StoryRing>
         </button>

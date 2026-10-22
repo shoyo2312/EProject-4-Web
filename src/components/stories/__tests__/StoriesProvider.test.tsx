@@ -8,9 +8,9 @@ import { StoriesProvider, useStories, useStoryRing } from "@/components/stories/
 import type { StoryResponse } from "@/lib/api/types";
 import type { Author } from "@/types/tiktok";
 
-const session: { user: { userId: string } | null } = { user: { userId: "1" } };
+const session: { user: { userId: string } | null; loading: boolean } = { user: { userId: "1" }, loading: false };
 vi.mock("@/components/session/SessionProvider", () => ({
-  useSession: () => ({ user: session.user }),
+  useSession: () => ({ user: session.user, isLoading: session.loading }),
 }));
 
 const getStoryRings = vi.fn();
@@ -76,6 +76,7 @@ const ringClasses = (button: HTMLElement) => button.firstElementChild?.className
 
 beforeEach(() => {
   session.user = { userId: "1" };
+  session.loading = false;
   getStoryRings.mockResolvedValue([]);
 });
 
@@ -103,6 +104,88 @@ describe("StoriesProvider", () => {
     rerender(page());
 
     expect(ring("2")).toBe("none");
+    await waitFor(() => expect(getStoryRings).toHaveBeenCalledTimes(2));
+    expect(ring("2")).toBe("none");
+  });
+
+  it("asks nothing while the session is still loading, then asks as the viewer it turns out to be", async () => {
+    vi.useFakeTimers();
+    session.user = null;
+    session.loading = true;
+    const page = () => (
+      <StoriesProvider>
+        <Ring id="2" />
+      </StoriesProvider>
+    );
+    const { rerender } = render(page());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(getStoryRings).not.toHaveBeenCalled();
+    expect(ring("2")).toBe("none");
+
+    session.user = { userId: "1" };
+    session.loading = false;
+    getStoryRings.mockResolvedValueOnce([{ userId: "2", hasUnseen: true }]);
+    rerender(page());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+
+    expect(getStoryRings).toHaveBeenCalledTimes(1);
+    expect(ring("2")).toBe("unseen");
+  });
+
+  it("asks as a guest once the session has resolved to nobody", async () => {
+    vi.useFakeTimers();
+    session.user = null;
+    session.loading = true;
+    const page = () => (
+      <StoriesProvider>
+        <Ring id="2" />
+      </StoriesProvider>
+    );
+    const { rerender } = render(page());
+
+    // No tokens to read, so the session settles without a viewer: the viewer id never changes.
+    session.loading = false;
+    getStoryRings.mockResolvedValueOnce([{ userId: "2", hasUnseen: true }]);
+    rerender(page());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+
+    expect(getStoryRings).toHaveBeenCalledTimes(1);
+    expect(ring("2")).toBe("unseen");
+  });
+
+  it("a player closed after the session ended never writes into the next viewer's store", async () => {
+    getStoryRings.mockResolvedValueOnce([{ userId: "2", hasUnseen: true }]);
+    getUserStories.mockResolvedValue([story("a")]);
+    const page = () => (
+      <StoriesProvider>
+        <Ring id="2" />
+        <ProfileStoryAvatar author={bob} />
+      </StoriesProvider>
+    );
+    const { rerender } = render(page());
+    await waitFor(() => expect(ring("2")).toBe("unseen"));
+    fireEvent.click(await screen.findByRole("button", { name: "Watch Bob's stories" }));
+    await screen.findByRole("dialog", { name: "Bob's story" });
+
+    // The session ends in this tab. As a guest they cannot see the story (it was for friends), so the
+    // header goes back to the bare picture and its player unmounts under the new viewer.
+    session.user = null;
+    getUserStories.mockResolvedValue([]);
+    getStoryRings.mockResolvedValueOnce([]);
+    await act(async () => {
+      rerender(page());
+    });
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(ring("2")).toBe("none");
+    // Nothing written into the guest's store, so it still asks about the owner itself.
     await waitFor(() => expect(getStoryRings).toHaveBeenCalledTimes(2));
     expect(ring("2")).toBe("none");
   });

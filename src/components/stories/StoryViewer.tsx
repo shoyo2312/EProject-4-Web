@@ -78,11 +78,14 @@ export function StoryViewer({
 
   // The tray, a profile header and the provider each close this player by unmounting it, so this is
   // the one place that sees every way out: the owners just watched then turn grey everywhere.
+  // Bound to the store this player opened under: if the session ends while it is open, the groups it
+  // holds are the old viewer's, and must not be written into the next viewer's store on the way out.
   const groupsRef = useRef(groups);
   useEffect(() => {
     groupsRef.current = groups;
   });
-  useEffect(() => () => syncRings(groupsRef.current), [syncRings]);
+  const syncOnClose = useRef(syncRings);
+  useEffect(() => () => syncOnClose.current(groupsRef.current), []);
 
   const forward = useCallback(() => {
     const following = next(groups, pos);

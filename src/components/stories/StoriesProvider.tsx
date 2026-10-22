@@ -15,7 +15,8 @@ import { StoryViewer } from "./StoryViewer";
 interface Stories {
   /**
    * Opens `author`'s stories in the player. False when there was nothing to show — the ring was
-   * stale, and the caller goes to the profile instead.
+   * stale, and the caller goes to the profile instead — and while the session is still loading,
+   * when there is no viewer yet to open them for.
    */
   openStories: (author: Author) => Promise<boolean>;
   /** What a player showed, handed over as it closes, so every avatar of those owners follows it. */
@@ -31,7 +32,7 @@ const NO_STORIES: Stories = {
   invalidateOwnRing: () => {},
 };
 
-const StoriesContext = createContext<{ store: RingStore; actions: Stories } | null>(null);
+const StoriesContext = createContext<{ store: RingStore | null; actions: Stories } | null>(null);
 
 /** The stories being played, for the store they were opened under. */
 interface Playing {
@@ -74,17 +75,24 @@ export function useStories(): Stories {
  * `syncRings` when those close.
  */
 export function StoriesProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useSession();
+  const { user, isLoading } = useSession();
   const viewerId = user?.userId ?? null;
   // An answer is about what this viewer may watch, so a viewer who signs in or out gets a store of
-  // their own rather than the last one's rings.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- the viewer is the key, not an input
-  const store = useMemo(() => createRingStore({ fetchRings: getStoryRings }), [viewerId]);
+  // their own rather than the last one's rings. None while the session is loading: every page load
+  // starts as a guest, and a store made then would ask about every avatar on screen, with the
+  // token if there is one, into a store nobody reads once `/me` has answered. `isLoading` only ever
+  // goes from true to false, so this never throws a cache away.
+  const store = useMemo(
+    () => (isLoading ? null : createRingStore({ fetchRings: getStoryRings })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the viewer is the key, not an input
+    [isLoading, viewerId],
+  );
   const [playing, setPlaying] = useState<Playing | null>(null);
   const viewing = playing?.store === store ? playing : null;
 
   const openStories = useCallback(
     async (author: Author) => {
+      if (!store) return false;
       const stories = await getUserStories(author.userId).catch(() => []);
       if (stories.length === 0) {
         store.set(author.userId, "none");
@@ -99,6 +107,7 @@ export function StoriesProvider({ children }: { children: React.ReactNode }) {
 
   const syncRings = useCallback(
     (groups: readonly StoryGroup[]) => {
+      if (!store) return;
       for (const group of groups) {
         // The viewer's own ring moves only when they post or delete, and both invalidate it. The
         // group a player was handed before that is stale by the time it closes: setting from it
@@ -112,7 +121,7 @@ export function StoriesProvider({ children }: { children: React.ReactNode }) {
   );
 
   const invalidateOwnRing = useCallback(() => {
-    if (viewerId) store.invalidate(viewerId);
+    if (store && viewerId) store.invalidate(viewerId);
   }, [store, viewerId]);
 
   const close = useCallback(() => setPlaying(null), []);
