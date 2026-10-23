@@ -97,8 +97,9 @@ export function createRingStore({
         return answers;
       })
       // A failed request, or an answer that is not a list, must not leave its ids in flight forever:
-      // they get "none" and are asked again once that answer is `ttlMs` old.
-      .catch(() => new Map<string, RingState>())
+      // an id keeps the ring it already showed ("none" if it had none yet), and is asked again once
+      // that is `ttlMs` old.
+      .catch(() => null)
       .then((answers) => {
         const at = now();
         const changed: string[] = [];
@@ -106,7 +107,9 @@ export function createRingStore({
           if (pending.get(userId) !== request) continue;
           pending.delete(userId);
           // Only accounts with a ring are listed; one missing from the answer has none.
-          const state = answers.get(userId) ?? "none";
+          const state = answers
+            ? (answers.get(userId) ?? "none")
+            : (entries.get(userId)?.state ?? "none");
           if (entries.get(userId)?.state !== state) changed.push(userId);
           entries.set(userId, { state, at });
         }

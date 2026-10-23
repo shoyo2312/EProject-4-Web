@@ -384,6 +384,33 @@ describe("createRingStore, refresh", () => {
     expect(store.get("1")).toBe("unseen");
   });
 
+  it("keeps the ring it showed when a refresh fails, and asks again once that is stale", async () => {
+    const { store, fetchRings, tick, advance } = setup(async () => [
+      { userId: "1", hasUnseen: true },
+    ]);
+    const listener = vi.fn();
+    store.subscribe("1", listener);
+    await tick();
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    advance(1001);
+    fetchRings.mockRejectedValueOnce(new Error("gateway down"));
+    store.refresh();
+    await tick();
+
+    expect(store.get("1")).toBe("unseen");
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    store.refresh();
+    await tick();
+    expect(fetchRings).toHaveBeenCalledTimes(2);
+
+    advance(1001);
+    store.refresh();
+    await tick();
+    expect(fetchRings).toHaveBeenCalledTimes(3);
+  });
+
   it("keeps what set said when the answer to a refresh arrives late", async () => {
     const { store, fetchRings, tick, advance } = setup(async () => [
       { userId: "9", hasUnseen: true },
