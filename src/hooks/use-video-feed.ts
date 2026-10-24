@@ -83,10 +83,12 @@ export function useVideoFeed(): VideoFeedState {
       if (ranked.length === 0) return { cards: [], spent: true };
 
       // Order is the ranking; the batch endpoint answers in the order asked, so
-      // it survives the round trip and nothing here needs to re-sort.
+      // it survives the round trip and nothing here needs to re-sort. "For You"
+      // leaves out what the viewer filtered from this feed in Settings.
       const rows = await getVideosByIds(
         ranked.map((item) => item.videoId),
         signal,
+        "FOR_YOU",
       );
       return { cards: await toCards(rows), spent: false };
     },
@@ -100,7 +102,7 @@ export function useVideoFeed(): VideoFeedState {
       for (let attempt = 0; attempt < MAX_EMPTY_PAGES; attempt += 1) {
         if (chronologicalExhausted.current) break;
 
-        const page = await getFeed(cursor.current, PAGE_SIZE, signal);
+        const page = await getFeed(cursor.current, PAGE_SIZE, signal, "FOR_YOU");
         cursor.current = page.nextCursor ?? undefined;
         // Null cursor is the end of the feed; that is the whole protocol. A
         // short page says nothing — the last full page still hands one back.
@@ -108,8 +110,9 @@ export function useVideoFeed(): VideoFeedState {
 
         cards.push(...(await toCards(page.items)));
         // Everything on that page was already on screen — from the ranked pass,
-        // most likely, which draws from the same library. Keep going, or the
-        // feed stalls with a scroll container that never grew.
+        // most likely, which draws from the same library — or filtered out by
+        // the viewer's keywords. Keep going, or the feed stalls with a scroll
+        // container that never grew.
         if (cards.length > 0) break;
       }
 

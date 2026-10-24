@@ -27,15 +27,21 @@ import type {
  * The distinction matters because the feed grows at the head: with offsets, a
  * video seen on page 0 slides down into page 1 and gets served twice. A cursor
  * is positioned on a video, so newer uploads cannot shift it.
+ *
+ * `feed` names the feed a page is for, and video-service then leaves out what
+ * the viewer filtered from it (Settings → Filter keywords) — so a page can come
+ * back short, even empty, with more behind it. Left out, nothing is filtered:
+ * Explore and the creator suggestions read the library as it is.
  */
 export function getFeed(
   cursor?: string,
   size = 20,
   signal?: AbortSignal,
+  feed?: "FOR_YOU",
 ): Promise<CursorPage<VideoResponse>> {
   return apiFetch<CursorPage<VideoResponse>>("/videos/feed", {
     auth: "optional",
-    query: { cursor, size },
+    query: { cursor, size, ...(feed && { feed }) },
     signal,
   });
 }
@@ -54,19 +60,23 @@ export function getFeed(
  * `TOO_MANY_FOLLOWED_USERS` rather than silently dropping creators from the
  * feed. No ids is an empty feed, never the public one, so the request is not
  * worth making.
+ *
+ * `feed` says which of the two it is, for the viewer's keyword filters (see
+ * `getFeed`).
  */
 export function getFollowingFeed(
   followedUserIds: string[],
-  cursor?: string,
-  size = 20,
-  signal?: AbortSignal,
+  cursor: string | undefined,
+  size: number,
+  signal: AbortSignal | undefined,
+  feed: "FOLLOWING" | "FRIENDS",
 ): Promise<CursorPage<VideoResponse>> {
   if (followedUserIds.length === 0) {
     return Promise.resolve({ items: [], nextCursor: null });
   }
   return apiFetch<CursorPage<VideoResponse>>("/videos/feed/following", {
     auth: "optional",
-    query: { followedUserIds: followedUserIds.join(","), cursor, size },
+    query: { followedUserIds: followedUserIds.join(","), cursor, size, feed },
     signal,
   });
 }
@@ -81,16 +91,18 @@ export function getFollowingFeed(
  *
  * Ids that resolve to nothing the viewer may see are **absent** from the reply
  * rather than failing it, so the result can be shorter than the input — a feed
- * naming a video deleted seconds ago is the normal case here.
+ * naming a video deleted seconds ago is the normal case here. So are videos the
+ * viewer filtered from `feed`, when one is named (see `getFeed`).
  */
 export function getVideosByIds(
   ids: string[],
   signal?: AbortSignal,
+  feed?: "FOR_YOU",
 ): Promise<VideoResponse[]> {
   if (ids.length === 0) return Promise.resolve([]);
   return apiFetch<VideoResponse[]>("/videos/batch", {
     auth: "optional",
-    query: { ids: ids.join(",") },
+    query: { ids: ids.join(","), ...(feed && { feed }) },
     signal,
   });
 }

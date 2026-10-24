@@ -135,6 +135,10 @@ const MESSAGES: Record<string, string> = {
   // The daily limit's passcode, locked for 15 minutes after five wrong tries.
   // A 429 without this code is the gateway's own rate limit, read below.
   TOO_MANY_PASSCODE_ATTEMPTS: "Too many incorrect passcodes. Try again in 15 minutes.",
+  // Filter keywords.
+  KEYWORD_FILTER_DUPLICATE: "You've already added this keyword",
+  TOO_MANY_KEYWORD_FILTERS: "You can filter up to 100 keywords.",
+  KEYWORD_FILTER_NOT_FOUND: "This keyword was already removed.",
   // Download your data. The panel re-reads the list after these, so the card
   // underneath already shows what happened instead.
   DATA_EXPORT_IN_PROGRESS: "You already have a request being processed.",

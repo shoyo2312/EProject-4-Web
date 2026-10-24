@@ -37,6 +37,12 @@ export interface FollowFeedState {
 }
 
 const PAGE_SIZE = 20;
+/**
+ * Pages read in one go while each comes back empty — every video on it left
+ * out by the viewer's keyword filters. Without it a first page emptied that way
+ * would leave nothing to scroll, and so nothing to ask for the next.
+ */
+const MAX_EMPTY_PAGES = 3;
 
 /**
  * The Following and Friends feeds: `GET /videos/feed/following`, cursor-paged
@@ -89,18 +95,25 @@ export function useFollowFeed(source: FollowFeedSource = "following"): FollowFee
           setResolvedIds(followedIds.current);
         }
 
-        const page = await getFollowingFeed(
-          followedIds.current,
-          cursor.current,
-          PAGE_SIZE,
-          signal,
-        );
-        cursor.current = page.nextCursor ?? undefined;
-        // Null cursor is the end of the feed, and the only stop condition there
-        // is — a short page still has successors.
-        if (page.nextCursor === null) setHasMore(false);
-
-        const cards = await toFeedCards(page.items, seenIds.current);
+        const cards: FeedVideo[] = [];
+        for (let attempt = 0; attempt < MAX_EMPTY_PAGES; attempt += 1) {
+          const page = await getFollowingFeed(
+            followedIds.current,
+            cursor.current,
+            PAGE_SIZE,
+            signal,
+            source === "friends" ? "FRIENDS" : "FOLLOWING",
+          );
+          cursor.current = page.nextCursor ?? undefined;
+          cards.push(...(await toFeedCards(page.items, seenIds.current)));
+          // Null cursor is the end of the feed, and the only stop condition there
+          // is — a short page, even an empty one, still has successors.
+          if (page.nextCursor === null) {
+            setHasMore(false);
+            break;
+          }
+          if (cards.length > 0) break;
+        }
         setVideos((current) => [...current, ...cards]);
         setError(null);
       } catch (cause) {

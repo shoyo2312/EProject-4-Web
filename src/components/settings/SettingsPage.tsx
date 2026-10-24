@@ -27,6 +27,10 @@ import {
   SleepHoursRow,
 } from "@/components/settings/rows/screen-time/SleepHoursPage";
 import {
+  KeywordFiltersPage,
+  KeywordFiltersRow,
+} from "@/components/settings/rows/keyword-filters/KeywordFiltersPage";
+import {
   CloseAccountPanel,
   CloseAccountRow,
 } from "@/components/settings/rows/CloseAccountModal";
@@ -74,7 +78,12 @@ import type {
 type SwitchSettingsRow = Extract<SettingsRow, { kind: "switch" }>;
 
 /** The pages that take over the panel in place of the sections. */
-type Subpage = "close-account" | "download-data" | "daily-screen-time" | "sleep-hours";
+type Subpage =
+  | "close-account"
+  | "download-data"
+  | "daily-screen-time"
+  | "sleep-hours"
+  | "keyword-filters";
 
 /** Screen time → Summary, which a weekly update in the inbox opens. */
 const SUMMARY_TITLE = "Summary";
@@ -291,6 +300,7 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
           {subpage === "sleep-hours" && (
             <SleepHoursPage account={account} onLeave={leaveSubpage} />
           )}
+          {subpage === "keyword-filters" && <KeywordFiltersPage onLeave={leaveSubpage} />}
           <div className={cn(subpage && "hidden")}>
             {sections.map((section, index) => (
               <section
@@ -477,6 +487,8 @@ function Row({
       return <CloseAccountRow row={row} onOpen={() => onOpen("close-account")} />;
     case "download-data":
       return <DownloadDataRow row={row} onOpen={() => onOpen("download-data")} />;
+    case "keyword-filters":
+      return <KeywordFiltersRow row={row} onOpen={() => onOpen("keyword-filters")} />;
   }
 
   return (

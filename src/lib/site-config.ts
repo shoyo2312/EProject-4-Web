@@ -362,6 +362,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             title: "Filter keywords",
             description:
               "When you filter a keyword, you won’t see posts in your selected feeds that contain that word in any titles, descriptions, or stickers. Certain keywords can’t be filtered.",
+            action: "keyword-filters",
           },
         ],
       },
