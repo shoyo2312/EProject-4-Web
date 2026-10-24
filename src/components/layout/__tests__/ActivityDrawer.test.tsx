@@ -164,6 +164,22 @@ describe("ActivityDrawer, an account-security notice", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  /** DB-IP's free licence asks web pages that show a looked-up place for a link back to DB-IP. */
+  it("credits DB-IP under the place, without collapsing the notice", () => {
+    show(alert);
+    fireEvent.click(screen.getByText("Your account logged in from a new device"));
+
+    const credit = screen.getByRole("link", { name: "IP Geolocation by DB-IP" });
+    expect(credit.getAttribute("href")).toBe("https://db-ip.com");
+    expect(credit.getAttribute("rel")).toBe("noopener noreferrer");
+
+    credit.addEventListener("click", (event) => event.preventDefault()); // jsdom cannot navigate
+    fireEvent.click(credit);
+
+    expect(screen.queryByRole("link", { name: "Secure your account" })).not.toBeNull();
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it("another system notice has no link", () => {
     show({ ...alert, id: "n10", title: "Welcome to Nowaa!", body: "Hi nora, thanks for joining us.", referenceId: null });
 

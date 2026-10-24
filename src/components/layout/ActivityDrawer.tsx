@@ -514,27 +514,40 @@ function NotificationItem({
               {new Date(item.createdAt).toLocaleString()}
             </p>
             {item.type === "SYSTEM" && item.referenceId === ACCOUNT_SECURITY_REFERENCE && (
-              // Its own target, like the actor's name: stopPropagation so the row does not also
-              // collapse. Settings opens on Manage account, where "Change password" is — and
-              // changing it signs every other device out.
-              <span
-                role="link"
-                tabIndex={0}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onSecure();
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
+              <>
+                {/* Its own target, like the actor's name: stopPropagation so the row does not also
+                    collapse. Settings opens on Manage account, where "Change password" is — and
+                    changing it signs every other device out. */}
+                <span
+                  role="link"
+                  tabIndex={0}
+                  onClick={(event) => {
                     event.stopPropagation();
                     onSecure();
-                  }
-                }}
-                className="mt-2 inline-block text-[13px] font-semibold leading-[17px] text-[var(--tt-red)] hover:underline"
-              >
-                Secure your account
-              </span>
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onSecure();
+                    }
+                  }}
+                  className="mt-2 inline-block text-[13px] font-semibold leading-[17px] text-[var(--tt-red)] hover:underline"
+                >
+                  Secure your account
+                </span>
+                {/* The place comes from DB-IP's free database, whose licence asks a web page that
+                    shows one for a link back. */}
+                <a
+                  href="https://db-ip.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                  className="mt-1 block w-fit text-[11px] leading-[14px] text-[rgb(255_255_255_/_0.5)] hover:underline"
+                >
+                  IP Geolocation by DB-IP
+                </a>
+              </>
             )}
           </>
         ) : (
