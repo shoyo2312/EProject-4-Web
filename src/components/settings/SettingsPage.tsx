@@ -223,24 +223,29 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
     setSubpage(null);
   };
 
-  // A weekly screen time update in the inbox links to `?summary=1`: open the
-  // Summary chart — during render, the way a prop change adjusts state — then
-  // scroll to it and spend the link, so the next one opens it again even when
-  // it arrives with the page already showing.
-  const summaryRequested = searchParams.get("summary") === "1";
-  const [summaryOpened, setSummaryOpened] = useState(false);
-  if (summaryRequested !== summaryOpened) {
-    setSummaryOpened(summaryRequested);
-    if (summaryRequested) setOpenExpand(SUMMARY_TITLE);
+  // A weekly screen time update in the inbox links to `?summary=<its Monday>`:
+  // open the Summary chart on that week — during render, the way a prop change
+  // adjusts state — then scroll to it and spend the link, so the next one opens
+  // it again even when it arrives with the page already showing.
+  const summaryLink = searchParams.get("summary");
+  const [summaryHandled, setSummaryHandled] = useState<string | null>(null);
+  /** The week the last link named; a Summary opened by hand starts on this week. */
+  const [summaryWeek, setSummaryWeek] = useState<string | null>(null);
+  if (summaryLink !== summaryHandled) {
+    setSummaryHandled(summaryLink);
+    if (summaryLink) {
+      setOpenExpand(SUMMARY_TITLE);
+      setSummaryWeek(summaryLink);
+    }
   }
   useEffect(() => {
-    if (!summaryRequested) return;
+    if (!summaryLink) return;
     // Next frame, once the opened chart is laid out.
     requestAnimationFrame(() => {
       goTo("screen-time");
       router.replace("/setting", { scroll: false });
     });
-  }, [summaryRequested, router]);
+  }, [summaryLink, router]);
 
   return (
     <main className="relative h-screen flex-1 overflow-hidden">
@@ -322,9 +327,11 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
                     account={account}
                     onOpen={openSubpage}
                     openExpand={openExpand}
-                    onToggleExpand={(title) =>
-                      setOpenExpand((open) => (open === title ? null : title))
-                    }
+                    summaryWeek={summaryWeek}
+                    onToggleExpand={(title) => {
+                      setOpenExpand((open) => (open === title ? null : title));
+                      if (title === SUMMARY_TITLE) setSummaryWeek(null);
+                    }}
                   />
                 ))}
               </section>
@@ -341,12 +348,14 @@ function Group({
   account,
   onOpen,
   openExpand,
+  summaryWeek,
   onToggleExpand,
 }: {
   group: SettingsGroup;
   account: AccountSettings;
   onOpen: (page: Subpage) => void;
   openExpand: string | null;
+  summaryWeek: string | null;
   onToggleExpand: (title: string) => void;
 }) {
   return (
@@ -370,6 +379,7 @@ function Group({
             account={account}
             onOpen={onOpen}
             expanded={openExpand === row.title}
+            summaryWeek={summaryWeek}
             onToggle={() => onToggleExpand(row.title)}
           />
         ))}
@@ -387,12 +397,14 @@ function Row({
   account,
   onOpen,
   expanded,
+  summaryWeek,
   onToggle,
 }: {
   row: SettingsRow;
   account: AccountSettings;
   onOpen: (page: Subpage) => void;
   expanded: boolean;
+  summaryWeek: string | null;
   onToggle: () => void;
 }) {
   if (row.kind === "expand") {
@@ -418,7 +430,14 @@ function Row({
           />
         );
       case "screen-time-summary":
-        return <ScreenTimeSummaryRow row={row} expanded={expanded} onToggle={onToggle} />;
+        return (
+          <ScreenTimeSummaryRow
+            row={row}
+            expanded={expanded}
+            onToggle={onToggle}
+            week={summaryWeek}
+          />
+        );
     }
   }
 

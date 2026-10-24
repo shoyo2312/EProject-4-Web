@@ -217,7 +217,7 @@ describe("ActivityDrawer, a repost", () => {
 });
 
 describe("ActivityDrawer, a weekly screen time update", () => {
-  it("opens the Screen time summary from a weekly update", () => {
+  it("opens the Screen time summary on the week a weekly update covers", () => {
     show({
       id: "n12",
       actorId: null,
@@ -232,7 +232,7 @@ describe("ActivityDrawer, a weekly screen time update", () => {
     fireEvent.click(screen.getByText(/Last week you spent 3h 20m/));
 
     expect(markRead).toHaveBeenCalledWith("n12");
-    expect(push).toHaveBeenCalledWith("/setting?summary=1#screen-time");
+    expect(push).toHaveBeenCalledWith("/setting?summary=2026-10-19#screen-time");
     expect(onClose).toHaveBeenCalledOnce();
   });
 });

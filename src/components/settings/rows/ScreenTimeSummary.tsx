@@ -59,10 +59,13 @@ export function ScreenTimeSummaryRow({
   row,
   expanded,
   onToggle,
+  week = null,
 }: {
   row: SettingsRow;
   expanded: boolean;
   onToggle: () => void;
+  /** The Monday a weekly update linked to, opened instead of this week when offered. */
+  week?: string | null;
 }) {
   const { requireSignIn } = useSession();
 
@@ -75,15 +78,17 @@ export function ScreenTimeSummaryRow({
         if (expanded || requireSignIn()) onToggle();
       }}
     >
-      <WeekSummary />
+      <WeekSummary key={week ?? "current"} linked={week} />
     </ExpandRow>
   );
 }
 
-function WeekSummary() {
+function WeekSummary({ linked }: { linked: string | null }) {
   // Mounted only while the row is open, so "now" is when it was opened.
   const [weeks] = useState(() => lastFourWeeks(new Date()));
-  const [selected, setSelected] = useState(() => weeks[weeks.length - 1]);
+  const [selected, setSelected] = useState(
+    () => weeks.find((offered) => offered.start === linked) ?? weeks[weeks.length - 1],
+  );
   const [week, setWeek] = useState<ScreenTimeWeekResponse | null>(null);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeAll, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { getScreenTimeWeek } from "@/lib/api/screen-time";
@@ -8,7 +8,7 @@ import { SETTINGS_SECTIONS } from "@/lib/site-config";
 
 const replace = vi.fn();
 const back = vi.fn();
-let search = "summary=1";
+let search = "summary=2026-10-12";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ back, push: vi.fn(), replace }),
   useSearchParams: () => new URLSearchParams(search),
@@ -47,13 +47,20 @@ beforeAll(() => {
   HTMLElement.prototype.scrollTo = vi.fn();
 });
 
+beforeEach(() => {
+  // Only the clock: rAF and waitFor keep running.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 9, 21, 12));
+});
+
 afterEach(() => {
   cleanup();
-  search = "summary=1";
+  vi.useRealTimers();
+  search = "summary=2026-10-12";
   back.mockReset();
 });
 
-it("opens the Screen time summary when a weekly update links to it", async () => {
+it("opens the Screen time summary on the week a weekly update links to", async () => {
   render(<SettingsPage sections={SETTINGS_SECTIONS} />);
 
   await waitFor(() =>
@@ -61,7 +68,7 @@ it("opens the Screen time summary when a weekly update links to it", async () =>
       "true",
     ),
   );
-  expect(getScreenTimeWeek).toHaveBeenCalled();
+  await waitFor(() => expect(getScreenTimeWeek).toHaveBeenCalledWith("2026-10-12"));
   // The link is spent, so the next weekly update opens it again.
   await waitFor(() => expect(replace).toHaveBeenCalledWith("/setting", { scroll: false }));
 });

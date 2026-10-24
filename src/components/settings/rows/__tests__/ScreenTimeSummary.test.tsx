@@ -74,3 +74,19 @@ it("draws seven bars from the week and refetches when another week is picked", a
 
   await waitFor(() => expect(getScreenTimeWeek).toHaveBeenCalledWith("2026-10-12"));
 });
+
+it("opens on the week a weekly update names, if it is one of the last four", async () => {
+  vi.mocked(getScreenTimeWeek).mockImplementation(async (start) => week(start, []));
+  render(<ScreenTimeSummaryRow row={row} expanded onToggle={() => {}} week="2026-10-12" />);
+
+  await waitFor(() => expect(getScreenTimeWeek).toHaveBeenCalledWith("2026-10-12"));
+  expect(getScreenTimeWeek).not.toHaveBeenCalledWith("2026-10-19");
+  expect(screen.getByRole("button", { name: /Oct 12, 2026-Oct 18, 2026/ })).toBeTruthy();
+});
+
+it("falls back to this week for a week it does not offer", async () => {
+  vi.mocked(getScreenTimeWeek).mockImplementation(async (start) => week(start, []));
+  render(<ScreenTimeSummaryRow row={row} expanded onToggle={() => {}} week="2026-01-05" />);
+
+  await waitFor(() => expect(getScreenTimeWeek).toHaveBeenCalledWith("2026-10-19"));
+});

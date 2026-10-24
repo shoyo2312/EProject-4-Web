@@ -128,10 +128,10 @@ export function ActivityDrawer({
   ) => {
     inbox.markRead(item.id);
 
-    // A weekly update names the week it covers, not a video: it opens the
-    // Summary chart on the settings page.
+    // A weekly update names the week it covers (its Monday), not a video: it
+    // opens the Summary chart on the settings page at that week.
     if (item.type === "SCREEN_TIME") {
-      navigate("/setting?summary=1#screen-time");
+      navigate(`/setting?summary=${item.referenceId ?? "1"}#screen-time`);
       return;
     }
     if (!item.referenceId) return;
