@@ -301,12 +301,17 @@ export type SettingsAction =
   | "screen-time-limit"
   | "password"
   | "sleep-hours"
-  | "weekly-screen-time";
+  | "weekly-screen-time"
+  | "push-preferences"
+  | "in-app-preferences"
+  | "screen-time-summary"
+  | "keyword-filters";
 
 /**
  * The row shapes the settings panel uses. `link` and `value` both end in a
  * chevron; `value` also shows the current choice before it. `expand` is a row
- * that opens in place (caret).
+ * that opens in place (caret); `heading` sets its title as a group heading, as
+ * the live panel does for "In-app notifications".
  */
 export type SettingsRow = {
   title: string;
@@ -316,7 +321,7 @@ export type SettingsRow = {
   | { kind: "link" }
   | { kind: "value"; value: string }
   | { kind: "switch"; on: boolean }
-  | { kind: "expand" }
+  | { kind: "expand"; heading?: boolean }
 );
 
 export interface SettingsGroup {

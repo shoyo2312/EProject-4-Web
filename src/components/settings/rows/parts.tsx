@@ -1,6 +1,6 @@
 "use client";
 
-import { CaretDownIcon, ChevronRightIcon } from "@/components/icons";
+import { ChevronRightIcon, TriangleDownIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import type { SettingsRow } from "@/types/tiktok";
 
@@ -31,7 +31,7 @@ export function RowBody({ row, note }: { row: SettingsRow; note?: string }) {
 export function Accessory({ row, value }: { row: SettingsRow; value?: string }) {
   if (row.kind === "expand") {
     return (
-      <CaretDownIcon className="h-4 w-4 flex-none text-[rgb(255_255_255/0.6)]" />
+      <TriangleDownIcon className="h-5 w-5 flex-none text-[rgb(255_255_255/0.6)]" />
     );
   }
 

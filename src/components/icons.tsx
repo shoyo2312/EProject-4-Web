@@ -617,11 +617,23 @@ export function ChevronRightIcon(props: IconProps) {
   );
 }
 
-/** The same chevron turned down, for a row that expands in place. */
+/** The same chevron turned down, for a dropdown. */
 export function CaretDownIcon(props: IconProps) {
   return (
     <Icon {...props}>
       <path d="M11.3 17.3a1.5 1.5 0 0 1 2.12 0L24 27.88l10.58-10.6a1.5 1.5 0 1 1 2.12 2.13L25.06 31.06a1.5 1.5 0 0 1-2.12 0L11.3 19.42a1.5 1.5 0 0 1 0-2.12Z" />
+    </Icon>
+  );
+}
+
+/**
+ * `ArrowTriangleDownFill` — the caret of a settings row that opens in place.
+ * It points down whether the row is open or not.
+ */
+export function TriangleDownIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M24.7125 32.0323C24.3109 32.5525 23.5252 32.5505 23.1263 32.0282L14.4015 20.6071C13.8988 19.949 14.368 19 15.1962 19H32.7385C33.569 19 34.0375 19.9537 33.53 20.6111L24.7125 32.0323Z" />
     </Icon>
   );
 }

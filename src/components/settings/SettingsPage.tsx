@@ -18,6 +18,7 @@ import {
   SleepHoursRow,
 } from "@/components/settings/rows/AccountRows";
 import { AddEmailRow } from "@/components/settings/rows/AddEmailModal";
+import { PreferenceExpandRow } from "@/components/settings/rows/NotificationPreferenceRows";
 import {
   CloseAccountPanel,
   CloseAccountRow,
@@ -40,6 +41,10 @@ import {
 import { useBrowserNotifications } from "@/hooks/use-browser-notifications";
 import { useLocalSettings } from "@/hooks/use-local-settings";
 import { setHighContrast } from "@/lib/settings/local-settings";
+import {
+  IN_APP_SWITCHES,
+  PUSH_SWITCHES,
+} from "@/lib/settings/notification-preferences";
 import { toast } from "@/components/ui/toast";
 import {
   AccessibilityIcon,
@@ -100,6 +105,8 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const [active, setActive] = useState(sections[0]?.id ?? "");
   const [subpage, setSubpage] = useState<Subpage | null>(null);
+  /** The title of the one row open in place, as on the live panel. */
+  const [openExpand, setOpenExpand] = useState<string | null>(null);
   const subpageRef = useRef(false);
   const savedScroll = useRef(0);
   const pendingSection = useRef<string | null>(null);
@@ -266,6 +273,10 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
                     group={group}
                     account={account}
                     onOpen={openSubpage}
+                    openExpand={openExpand}
+                    onToggleExpand={(title) =>
+                      setOpenExpand((open) => (open === title ? null : title))
+                    }
                   />
                 ))}
               </section>
@@ -281,10 +292,14 @@ function Group({
   group,
   account,
   onOpen,
+  openExpand,
+  onToggleExpand,
 }: {
   group: SettingsGroup;
   account: AccountSettings;
   onOpen: (page: Subpage) => void;
+  openExpand: string | null;
+  onToggleExpand: (title: string) => void;
 }) {
   return (
     <div className="mb-4">
@@ -306,6 +321,8 @@ function Group({
             row={row}
             account={account}
             onOpen={onOpen}
+            expanded={openExpand === row.title}
+            onToggle={() => onToggleExpand(row.title)}
           />
         ))}
       </div>
@@ -326,11 +343,40 @@ function Row({
   row,
   account,
   onOpen,
+  expanded,
+  onToggle,
 }: {
   row: SettingsRow;
   account: AccountSettings;
   onOpen: (page: Subpage) => void;
+  expanded: boolean;
+  onToggle: () => void;
 }) {
+  if (row.kind === "expand") {
+    switch (row.action) {
+      case "push-preferences":
+        return (
+          <PreferenceExpandRow
+            row={row}
+            account={account}
+            expanded={expanded}
+            onToggle={onToggle}
+            switches={PUSH_SWITCHES}
+          />
+        );
+      case "in-app-preferences":
+        return (
+          <PreferenceExpandRow
+            row={row}
+            account={account}
+            expanded={expanded}
+            onToggle={onToggle}
+            switches={IN_APP_SWITCHES}
+          />
+        );
+    }
+  }
+
   if (row.kind === "switch") {
     switch (row.action) {
       case "high-contrast":

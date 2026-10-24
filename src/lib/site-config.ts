@@ -295,10 +295,20 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             kind: "expand",
             title: "Interactions",
             description: "Likes, comments, new followers",
+            action: "push-preferences",
           },
         ],
       },
-      { rows: [{ kind: "expand", title: "In-app notifications" }] },
+      {
+        rows: [
+          {
+            kind: "expand",
+            title: "In-app notifications",
+            heading: true,
+            action: "in-app-preferences",
+          },
+        ],
+      },
     ],
   },
   {
