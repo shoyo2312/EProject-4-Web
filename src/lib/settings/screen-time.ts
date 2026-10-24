@@ -96,3 +96,37 @@ export function isLocked(input: {
   if (input.unlockedDate === input.today) return false;
   return input.todaySeconds >= input.limitMinutes * 60;
 }
+
+/** "HH:mm" plus whole hours, round the clock: "23:30" + 8 is "07:30". */
+export function addHours(time: string, hours: number): string {
+  const [h, m] = time.split(":").map(Number);
+  return `${pad((h + hours) % 24)}:${pad(m)}`;
+}
+
+/** "HH:mm" as the live time fields write it: "10:00 PM", "06:00 AM". */
+export function formatClockTime(time: string): string {
+  const [h, m] = time.split(":").map(Number);
+  return `${pad(h % 12 || 12)}:${pad(m)} ${h < 12 ? "AM" : "PM"}`;
+}
+
+/** How long before and after the start of sleep hours each reminder is shown. */
+const REMINDER_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * Which sleep reminder is due at `now`: "soon" in the ten minutes before the
+ * start, "started" in the ten minutes after it. `night` is the local day the
+ * start falls on, which keys "shown once per night".
+ */
+export function sleepReminderDue(
+  start: string,
+  now: Date,
+): { kind: "soon" | "started"; night: string } | null {
+  const [h, m] = start.split(":").map(Number);
+  for (const day of [-1, 0, 1]) {
+    const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + day, h, m);
+    const since = now.getTime() - at.getTime();
+    if (since >= -REMINDER_WINDOW_MS && since < 0) return { kind: "soon", night: localDate(at) };
+    if (since >= 0 && since < REMINDER_WINDOW_MS) return { kind: "started", night: localDate(at) };
+  }
+  return null;
+}

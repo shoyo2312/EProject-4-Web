@@ -14,7 +14,6 @@ import {
   AccountSwitchRow,
   AudienceRow,
   CommentFiltersRow,
-  SleepHoursRow,
 } from "@/components/settings/rows/AccountRows";
 import { AddEmailRow } from "@/components/settings/rows/AddEmailModal";
 import { PreferenceExpandRow } from "@/components/settings/rows/NotificationPreferenceRows";
@@ -23,6 +22,10 @@ import {
   DailyScreenTimePage,
   DailyScreenTimeRow,
 } from "@/components/settings/rows/screen-time/DailyScreenTimePage";
+import {
+  SleepHoursPage,
+  SleepHoursRow,
+} from "@/components/settings/rows/screen-time/SleepHoursPage";
 import {
   CloseAccountPanel,
   CloseAccountRow,
@@ -71,7 +74,7 @@ import type {
 type SwitchSettingsRow = Extract<SettingsRow, { kind: "switch" }>;
 
 /** The pages that take over the panel in place of the sections. */
-type Subpage = "close-account" | "download-data" | "daily-screen-time";
+type Subpage = "close-account" | "download-data" | "daily-screen-time" | "sleep-hours";
 
 /** Screen time → Summary, which a weekly update in the inbox opens. */
 const SUMMARY_TITLE = "Summary";
@@ -285,6 +288,9 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
           {subpage === "daily-screen-time" && (
             <DailyScreenTimePage account={account} onLeave={leaveSubpage} />
           )}
+          {subpage === "sleep-hours" && (
+            <SleepHoursPage account={account} onLeave={leaveSubpage} />
+          )}
           <div className={cn(subpage && "hidden")}>
             {sections.map((section, index) => (
               <section
@@ -460,7 +466,9 @@ function Row({
         />
       );
     case "sleep-hours":
-      return <SleepHoursRow row={row} account={account} />;
+      return (
+        <SleepHoursRow row={row} account={account} onOpen={() => onOpen("sleep-hours")} />
+      );
     case "add-email":
       return <AddEmailRow row={row} />;
     case "password":

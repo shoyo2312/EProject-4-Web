@@ -31,7 +31,7 @@ export function dailyLimitValue(settings: UserSettingsResponse | null, now: Date
   return minutes ? formatLimit(minutes) : "Off";
 }
 
-/** Either end missing is off — the server never stores just one. */
-export function formatSleepHours(start: string | null, end: string | null): string {
-  return start && end ? `${start} – ${end}` : "Off";
+/** The Sleep hours row's value. The end is always the start plus eight hours. */
+export function formatSleepHours(start: string | null): "On" | "Off" {
+  return start ? "On" : "Off";
 }

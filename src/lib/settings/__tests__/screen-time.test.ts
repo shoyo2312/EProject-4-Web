@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addHours,
   axisTicks,
   axisTop,
+  formatClockTime,
   formatDuration,
   isLocked,
   lastFourWeeks,
   localDate,
+  sleepReminderDue,
   weekStartOf,
 } from "@/lib/settings/screen-time";
 
@@ -76,5 +79,41 @@ describe("isLocked", () => {
 describe("localDate", () => {
   it("is the local calendar day", () => {
     expect(localDate(new Date(2026, 9, 24, 23, 59))).toBe("2026-10-24");
+  });
+});
+
+describe("sleep hours", () => {
+  /** 24 October 2026 at `time`, local. */
+  const at = (time: string) => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return new Date(2026, 9, 24, hours, minutes);
+  };
+
+  it("ends eight hours after the start, across midnight", () => {
+    expect(addHours("23:30", 8)).toBe("07:30");
+    expect(addHours("10:05", 8)).toBe("18:05");
+  });
+
+  it("writes a time the way the live fields do", () => {
+    expect(formatClockTime("22:00")).toBe("10:00 PM");
+    expect(formatClockTime("06:00")).toBe("06:00 AM");
+    expect(formatClockTime("00:30")).toBe("12:30 AM");
+    expect(formatClockTime("12:15")).toBe("12:15 PM");
+  });
+
+  it("is due ten minutes before the start, and at the start", () => {
+    expect(sleepReminderDue("22:00", at("21:49"))).toBeNull();
+    expect(sleepReminderDue("22:00", at("21:50"))?.kind).toBe("soon");
+    expect(sleepReminderDue("22:00", at("22:00"))?.kind).toBe("started");
+    expect(sleepReminderDue("22:00", at("22:09"))?.kind).toBe("started");
+    expect(sleepReminderDue("22:00", at("22:15"))).toBeNull();
+  });
+
+  it("names the night by the day its start falls on", () => {
+    expect(sleepReminderDue("00:05", at("23:55"))).toEqual({ kind: "soon", night: "2026-10-25" });
+    expect(sleepReminderDue("23:58", new Date(2026, 9, 25, 0, 2))).toEqual({
+      kind: "started",
+      night: "2026-10-24",
+    });
   });
 });

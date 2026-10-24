@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, expect, it, vi, type MockInstance } from "vitest";
 
 import { ScreenTimeGuard } from "@/components/screen-time/ScreenTimeGuard";
+import { toast } from "@/components/ui/toast";
 import type { UserSettingsResponse } from "@/lib/api/types";
 import {
   getScreenTimeWeek,
@@ -24,6 +25,7 @@ vi.mock("@/hooks/use-account-settings", () => ({
 }));
 let pathname = "/";
 vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
+vi.mock("@/components/ui/toast", () => ({ toast: vi.fn() }));
 
 /** Wednesday 21 October 2026, at noon. */
 const wednesdayNoon = new Date(2026, 9, 21, 12);
@@ -65,6 +67,7 @@ afterEach(() => {
   vi.mocked(sendScreenTimeHeartbeat).mockReset();
   vi.mocked(getScreenTimeWeek).mockReset();
   vi.mocked(verifyScreenTimePasscode).mockReset();
+  vi.mocked(toast).mockReset();
 });
 
 it("sends 60 seconds after four visible, focused ticks", () => {
@@ -136,4 +139,31 @@ it("reads no week for an account without a limit", async () => {
 
   await act(() => vi.advanceTimersByTimeAsync(15_000));
   expect(getScreenTimeWeek).not.toHaveBeenCalled();
+});
+
+it("reminds ten minutes before sleep hours and at their start, once each", async () => {
+  vi.setSystemTime(new Date(2026, 9, 21, 21, 49, 50));
+  settings = { ...DEFAULT_SETTINGS, sleepHoursStart: "22:00", sleepHoursEnd: "06:00" };
+  render(<ScreenTimeGuard />);
+
+  await act(() => vi.advanceTimersByTimeAsync(15_000)); // 21:50:05
+  expect(toast).toHaveBeenCalledWith("Sleep hours start in 10 minutes");
+
+  await act(() => vi.advanceTimersByTimeAsync(60_000));
+  expect(toast).toHaveBeenCalledTimes(1);
+
+  await act(() => vi.advanceTimersByTimeAsync(9 * 60_000)); // 22:00:05
+  expect(toast).toHaveBeenLastCalledWith("Your sleep hours have started");
+  expect(toast).toHaveBeenCalledTimes(2);
+  expect(localStorage.getItem("nowa:sleep-reminder:1:2026-10-21:soon")).not.toBeNull();
+});
+
+it("does not repeat a reminder this browser already showed for the night", async () => {
+  vi.setSystemTime(new Date(2026, 9, 21, 21, 55));
+  settings = { ...DEFAULT_SETTINGS, sleepHoursStart: "22:00", sleepHoursEnd: "06:00" };
+  localStorage.setItem("nowa:sleep-reminder:1:2026-10-21:soon", "1");
+  render(<ScreenTimeGuard />);
+
+  await act(() => vi.advanceTimersByTimeAsync(60_000));
+  expect(toast).not.toHaveBeenCalled();
 });

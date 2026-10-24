@@ -65,12 +65,8 @@ describe("dailyLimitValue", () => {
 });
 
 describe("formatSleepHours", () => {
-  it("reads a missing end as off", () => {
-    expect(formatSleepHours(null, null)).toBe("Off");
-    expect(formatSleepHours("22:00", null)).toBe("Off");
-  });
-
-  it("shows a window, including one across midnight", () => {
-    expect(formatSleepHours("22:30", "07:00")).toBe("22:30 – 07:00");
+  it("reads On or Off, as the live row does", () => {
+    expect(formatSleepHours(null)).toBe("Off");
+    expect(formatSleepHours("22:30")).toBe("On");
   });
 });

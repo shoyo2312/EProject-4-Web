@@ -93,22 +93,26 @@ export function Accessory({ row, value }: { row: SettingsRow; value?: string }) 
 /**
  * `.DivSwitchWrapper` — 44 × 24 track, 20px knob inset 2px, `#0BE09B` when on.
  * Green, not the brand red: `/setting` is the only page in the app using it.
- * The Daily screen time page draws the same switch with a dark knob.
+ * Two pages draw it otherwise, as live does: Daily screen time with a dark
+ * knob, and Sleep hours as a 48 × 28 cyan (#20D5EC) track with a 22px knob,
+ * on `rgba(255,255,255,.32)` when off.
  */
 export function Switch({
   on,
   label,
   onToggle,
   disabled,
-  darkKnob = false,
+  variant,
 }: {
   on: boolean;
   label: string;
   onToggle: () => void;
   /** For a control the browser will never let through. */
   disabled?: boolean;
-  darkKnob?: boolean;
+  variant?: "daily" | "sleep";
 }) {
+  const sleep = variant === "sleep";
+
   return (
     <button
       type="button"
@@ -118,15 +122,17 @@ export function Switch({
       onClick={onToggle}
       disabled={disabled}
       className={cn(
-        "flex h-6 w-11 flex-none items-center rounded-full p-0.5 transition-colors",
-        on ? "bg-[#0be09b]" : "bg-white/[0.12]",
+        "flex flex-none items-center rounded-full transition-colors",
+        sleep ? "h-7 w-12 p-[3px]" : "h-6 w-11 p-0.5",
+        on ? (sleep ? "bg-[#20d5ec]" : "bg-[#0be09b]") : sleep ? "bg-white/[0.32]" : "bg-white/[0.12]",
         disabled && "opacity-50",
       )}
     >
       <span
         className={cn(
-          "h-5 w-5 rounded-full transition-transform",
-          darkKnob ? "bg-[#121212]" : "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.15)]",
+          "rounded-full transition-transform",
+          sleep ? "h-[22px] w-[22px]" : "h-5 w-5",
+          variant === "daily" ? "bg-[#121212]" : "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.15)]",
           on && "translate-x-5",
         )}
       />

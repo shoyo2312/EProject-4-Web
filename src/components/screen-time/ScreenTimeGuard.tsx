@@ -5,10 +5,16 @@ import { useEffect, useReducer, useRef, useState } from "react";
 
 import { ScreenTimeLimitOverlay } from "@/components/screen-time/ScreenTimeLimitOverlay";
 import { useSession } from "@/components/session/SessionProvider";
+import { toast } from "@/components/ui/toast";
 import { useAccountSettings } from "@/hooks/use-account-settings";
 import { getScreenTimeWeek, sendScreenTimeHeartbeat } from "@/lib/api/screen-time";
 import { todayLimitMinutes } from "@/lib/settings/account-settings";
-import { isLocked, localDate, weekStartOf } from "@/lib/settings/screen-time";
+import {
+  isLocked,
+  localDate,
+  sleepReminderDue,
+  weekStartOf,
+} from "@/lib/settings/screen-time";
 
 /** How often the page counts, in seconds. */
 const TICK_SECONDS = 15;
@@ -36,6 +42,27 @@ function rememberUnlock(userId: string, date: string): void {
   }
 }
 
+const SLEEP_REMINDERS = {
+  soon: "Sleep hours start in 10 minutes",
+  started: "Your sleep hours have started",
+} as const;
+
+/**
+ * Marks a night's reminder as shown, in storage so another tab or a reload
+ * does not show it again. False when it already was.
+ */
+function claimReminder(key: string, shown: Set<string>): boolean {
+  if (shown.has(key)) return false;
+  shown.add(key);
+  try {
+    if (localStorage.getItem(key)) return false;
+    localStorage.setItem(key, "1");
+  } catch {
+    // Storage blocked: `shown` still keeps it to once on this page.
+  }
+  return true;
+}
+
 /**
  * Measures time on the site for Screen time, and holds the daily limit.
  *
@@ -50,6 +77,9 @@ function rememberUnlock(userId: string, date: string): void {
  * what this tab counted since — puts `ScreenTimeLimitOverlay` over every page
  * but /setting once it reaches the limit. The passcode lifts it for the rest of
  * the day on this browser.
+ *
+ * With sleep hours set, a toast says so ten minutes before they start and
+ * again when they do, once a night, while the site is in view.
  */
 export function ScreenTimeGuard() {
   const { user } = useSession();
@@ -65,19 +95,33 @@ export function ScreenTimeGuard() {
   const [, unlocked] = useReducer((count: number) => count + 1, 0);
   /** Time behind the lock screen is not time on the app. */
   const lockedRef = useRef(false);
+  /** Read by the ticks, which outlive any one render. */
+  const sleepStartRef = useRef<string | null>(null);
 
   const today = localDate(now);
   const limit = settings ? todayLimitMinutes(settings, now) : null;
   const guarded = userId !== null && limit !== null && settings?.hasScreenTimePasscode === true;
 
   useEffect(() => {
+    sleepStartRef.current = settings?.sleepHoursStart ?? null;
+  }, [settings]);
+
+  useEffect(() => {
     if (!userId) return;
     let pending = 0;
     let sending = false;
+    const reminded = new Set<string>();
 
     const timer = window.setInterval(() => {
-      if (document.visibilityState !== "visible" || !document.hasFocus()) return;
-      if (lockedRef.current) return;
+      if (document.visibilityState !== "visible") return;
+
+      const start = sleepStartRef.current;
+      const due = start ? sleepReminderDue(start, new Date()) : null;
+      if (due && claimReminder(`nowa:sleep-reminder:${userId}:${due.night}:${due.kind}`, reminded)) {
+        toast(SLEEP_REMINDERS[due.kind]);
+      }
+
+      if (!document.hasFocus() || lockedRef.current) return;
       setNow(new Date());
       setCounted((seconds) => seconds + TICK_SECONDS);
       pending = Math.min(pending + TICK_SECONDS, MAX_PENDING_SECONDS);

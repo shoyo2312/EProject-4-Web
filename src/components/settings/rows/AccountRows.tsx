@@ -15,9 +15,7 @@ import { toast } from "@/components/ui/toast";
 import type { AccountSettings } from "@/hooks/use-account-settings";
 import { messageFor } from "@/lib/api/errors";
 import type { SettingsAudience } from "@/lib/api/types";
-import { sleepHoursSchema } from "@/lib/forms/schemas";
-import { useForm } from "@/lib/forms/use-form";
-import { AUDIENCE_LABELS, formatSleepHours } from "@/lib/settings/account-settings";
+import { AUDIENCE_LABELS } from "@/lib/settings/account-settings";
 import { cn } from "@/lib/utils";
 import type { SettingsRow } from "@/types/tiktok";
 
@@ -99,35 +97,6 @@ export function CommentFiltersRow({ row, account }: AccountRowProps) {
         <CommentFiltersModal
           settings={settings}
           update={account.update}
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </>
-  );
-}
-
-/** Screen time → Sleep hours. Wall-clock "HH:mm", read in the viewer's own zone. */
-export function SleepHoursRow({ row, account }: AccountRowProps) {
-  const [open, setOpen] = useState(false);
-  const settings = account.settings;
-
-  return (
-    <>
-      <DialogRowButton
-        row={row}
-        value={
-          settings
-            ? formatSleepHours(settings.sleepHoursStart, settings.sleepHoursEnd)
-            : undefined
-        }
-        onOpen={() => setOpen(true)}
-      />
-      {open && settings && (
-        <SleepHoursModal
-          row={row}
-          account={account}
-          start={settings.sleepHoursStart}
-          end={settings.sleepHoursEnd}
           onClose={() => setOpen(false)}
         />
       )}
@@ -286,123 +255,5 @@ function ChoiceModal<T>({
         })}
       </div>
     </Modal>
-  );
-}
-
-function SleepHoursModal({
-  row,
-  account,
-  start,
-  end,
-  onClose,
-}: AccountRowProps & {
-  start: string | null;
-  end: string | null;
-  onClose: () => void;
-}) {
-  const form = useForm({
-    schema: sleepHoursSchema,
-    initialValues: { start: start ?? "22:00", end: end ?? "07:00" },
-    onSubmit: async (values) => {
-      await account.update({ sleepHoursStart: values.start });
-      onClose();
-    },
-  });
-
-  const [turningOff, setTurningOff] = useState(false);
-  const busy = form.submitting || turningOff;
-
-  const turnOff = async () => {
-    setTurningOff(true);
-    try {
-      await account.update({ sleepHoursStart: null });
-      onClose();
-    } catch (cause) {
-      toast.error(messageFor(cause));
-      setTurningOff(false);
-    }
-  };
-
-  return (
-    <Modal onClose={onClose} className="w-[400px] rounded-[12px] p-6">
-      <form onSubmit={form.handleSubmit} noValidate>
-        <h2 className="text-center text-[20px] font-bold text-[var(--tt-text)]">
-          {row.title}
-        </h2>
-        {row.description && (
-          <p className="mt-1 text-center text-[14px] text-[var(--tt-text-secondary)]">
-            {row.description}
-          </p>
-        )}
-
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <TimeField label="Start" {...form.field("start")} />
-          <TimeField label="End" {...form.field("end")} />
-        </div>
-
-        {form.formError && (
-          <p className="mt-3 text-[13px] text-[var(--tt-red-active)]">
-            {form.formError}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={busy}
-          className="mt-6 h-11 w-full rounded-[8px] bg-[var(--tt-red)] text-[15px] font-semibold text-white transition-colors hover:bg-[var(--tt-red-hover)] disabled:opacity-60"
-        >
-          {form.submitting ? "Saving…" : "Save"}
-        </button>
-        {start && (
-          <button
-            type="button"
-            onClick={turnOff}
-            disabled={busy}
-            className="mt-2 h-11 w-full rounded-[8px] bg-[var(--tt-field)] text-[15px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-shape-neutral-3)] disabled:opacity-60"
-          >
-            {turningOff ? "Turning off…" : "Turn off"}
-          </button>
-        )}
-      </form>
-    </Modal>
-  );
-}
-
-function TimeField({
-  label,
-  name,
-  value,
-  error,
-  onChange,
-  ref,
-}: {
-  label: string;
-  name: string;
-  value: string;
-  error?: string;
-  onChange: (value: string) => void;
-  ref: React.Ref<HTMLInputElement>;
-}) {
-  return (
-    <label className="block">
-      <span className="text-[14px] font-semibold text-[var(--tt-text)]">{label}</span>
-      <input
-        ref={ref}
-        type="time"
-        name={name}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        aria-invalid={error ? true : undefined}
-        className={cn(
-          "mt-1 w-full rounded-[8px] border bg-[var(--tt-field)] px-3 py-2 text-[15px] text-[var(--tt-text)] [color-scheme:dark]",
-          error ? "border-[var(--tt-red-active)]" : "border-[var(--tt-divider)]",
-        )}
-      />
-      {error && (
-        <span className="mt-1 block text-[12px] text-[var(--tt-red-active)]">
-          {error}
-        </span>
-      )}
-    </label>
   );
 }

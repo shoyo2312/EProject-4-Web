@@ -202,7 +202,7 @@ function DailyScreenTime({
         </span>
         {/* Live, an empty 12px label trails the switch. */}
         <span className="pr-3">
-          <Switch on={on} label="Set daily screen time" onToggle={() => setOn(!on)} darkKnob />
+          <Switch on={on} label="Set daily screen time" onToggle={() => setOn(!on)} variant="daily" />
         </span>
       </div>
 
