@@ -10,6 +10,7 @@ import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { messageFor } from "@/lib/api/errors";
 import { verifyScreenTimePasscode } from "@/lib/api/screen-time";
 import { emptyCode } from "@/lib/forms/code-digits";
+import { holdPlayback } from "@/lib/playback-hold";
 
 const PASSCODE_LENGTH = 4;
 
@@ -33,11 +34,27 @@ export function ScreenTimeLimitOverlay({ onUnlock }: { onUnlock: () => void }) {
   const firstBox = useRef<HTMLInputElement>(null);
   useFocusTrap(dialogRef, true);
 
-  // Nothing keeps playing under the screen.
+  // Nothing plays under the cover: the feed's cards and the story player hold
+  // still (and count no watching) until it lifts, and any other media that
+  // starts — a preview, say — is stopped as it does.
   useEffect(() => {
-    document.querySelectorAll("video").forEach((video) => video.pause());
-    firstBox.current?.focus();
+    const release = holdPlayback();
+    const stop = (event: Event) => {
+      if (event.target instanceof HTMLMediaElement) event.target.pause();
+    };
+    document.querySelectorAll<HTMLMediaElement>("video, audio").forEach((media) => media.pause());
+    document.addEventListener("play", stop, true);
+    return () => {
+      release();
+      document.removeEventListener("play", stop, true);
+    };
   }, []);
+
+  // Once the boxes take input again — on opening, and after a wrong passcode,
+  // when they were disabled while it was checked — the keyboard is on the first.
+  useEffect(() => {
+    if (!checking) firstBox.current?.focus();
+  }, [checking]);
 
   const onChange = async (next: string[]) => {
     setDigits(next);
@@ -54,7 +71,6 @@ export function ScreenTimeLimitOverlay({ onUnlock }: { onUnlock: () => void }) {
     }
     setChecking(false);
     setDigits(emptyCode(PASSCODE_LENGTH));
-    firstBox.current?.focus();
   };
 
   return (

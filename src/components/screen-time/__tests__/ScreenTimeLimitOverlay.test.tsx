@@ -4,6 +4,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ScreenTimeLimitOverlay } from "@/components/screen-time/ScreenTimeLimitOverlay";
 import { ApiError } from "@/lib/api/errors";
 import { verifyScreenTimePasscode } from "@/lib/api/screen-time";
+import { playbackHeld } from "@/lib/playback-hold";
 
 vi.mock("@/lib/api/screen-time", () => ({ verifyScreenTimePasscode: vi.fn() }));
 vi.mock("@/components/session/SessionProvider", () => ({
@@ -53,4 +54,32 @@ it("tells the passcode lockout from the gateway's rate limit", async () => {
   );
   enterCode("2222");
   expect(await screen.findByText("Too many requests. Please slow down.")).toBeTruthy();
+});
+
+it("holds every player while it covers the app, and stops media that starts behind it", () => {
+  const { unmount } = render(<ScreenTimeLimitOverlay onUnlock={() => {}} />);
+  expect(playbackHeld()).toBe(true);
+
+  const preview = document.createElement("video");
+  document.body.append(preview);
+  const pause = vi.spyOn(preview, "pause").mockImplementation(() => {});
+  preview.dispatchEvent(new Event("play"));
+  expect(pause).toHaveBeenCalled();
+
+  unmount();
+  expect(playbackHeld()).toBe(false);
+  pause.mockClear();
+  preview.dispatchEvent(new Event("play"));
+  expect(pause).not.toHaveBeenCalled();
+  preview.remove();
+});
+
+it("puts the keyboard back on the first box after a wrong passcode", async () => {
+  vi.mocked(verifyScreenTimePasscode).mockResolvedValue(false);
+  render(<ScreenTimeLimitOverlay onUnlock={() => {}} />);
+
+  enterCode("1111");
+  await screen.findByText("Incorrect passcode");
+
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Digit 1")));
 });

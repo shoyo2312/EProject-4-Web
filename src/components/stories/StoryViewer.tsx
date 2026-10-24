@@ -8,6 +8,7 @@ import { useSession } from "@/components/session/SessionProvider";
 import { useEscapeKey } from "@/hooks/use-escape-key";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useMounted } from "@/hooks/use-mounted";
+import { usePlaybackHeld } from "@/hooks/use-playback-held";
 import { unknownAuthor } from "@/lib/api/adapters";
 import { getStory, recordStoryView } from "@/lib/api/stories";
 import type { StoryGroup } from "@/lib/api/types";
@@ -68,7 +69,9 @@ export function StoryViewer({
   const own = story !== undefined && story.userId === user?.userId;
   const mediaUrl = story && !broken[story.id] ? (freshUrls[story.id] ?? story.mediaUrl) : null;
   const progress = clock.storyId === storyId ? clock.fraction : 0;
-  const paused = (busyStory !== null && busyStory === storyId) || hidden;
+  // Held too while the daily limit's cover is up: no clock, no next story, no view counted.
+  const held = usePlaybackHeld();
+  const paused = (busyStory !== null && busyStory === storyId) || hidden || held;
 
   // Through a ref: a parent's inline `onClose` would otherwise restart the clock on every render.
   const onCloseRef = useRef(onClose);

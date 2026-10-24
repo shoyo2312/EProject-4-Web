@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { StoryViewer } from "@/components/stories/StoryViewer";
+import { holdPlayback } from "@/lib/playback-hold";
 import type { StoryGroup, StoryResponse } from "@/lib/api/types";
 
 vi.mock("@/components/session/SessionProvider", () => ({
@@ -118,6 +119,24 @@ describe("StoryViewer", () => {
     expect(first).toBe(1);
     expect(second).toBeGreaterThan(0.1);
     expect(second).toBeLessThan(0.3);
+  });
+
+  it("stands still while playback is held, and runs on once released", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+    const onClose = vi.fn();
+    const release = holdPlayback();
+    renderViewer(theirs, { onClose });
+    await act(async () => {});
+
+    try {
+      act(() => vi.advanceTimersByTime(12_000));
+      expect(progressValues()[0]).toBe(0);
+    } finally {
+      act(() => release());
+    }
+
+    act(() => vi.advanceTimersByTime(6_000));
+    expect(progressValues()[0]).toBe(1);
   });
 
   it("asks once for a fresh media URL when the signed one fails, then gives up", async () => {
