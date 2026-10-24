@@ -14,6 +14,10 @@ describe("SETTINGS_SECTIONS", () => {
     );
   });
 
+  it("gives every row an action", () => {
+    expect(rows.filter((r) => !r.action).map((r) => r.title)).toEqual([]);
+  });
+
   it("has no mentions in Interactions", () => {
     expect(rows.find((r) => r.title === "Interactions")?.description).toBe(
       "Likes, comments, new followers",

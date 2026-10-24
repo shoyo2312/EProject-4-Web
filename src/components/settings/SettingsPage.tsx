@@ -379,13 +379,8 @@ function Group({
 }
 
 /**
- * One row, dispatched on `row.action`.
- *
- * A row without an action is still rendered exactly and left inert: it is the
- * entry point to a flow whose state no backend service stores yet, and a
- * control that pretends to save something is worse than one that visibly does
- * nothing. The wired ones need a hook each, so each is its own component
- * rather than a branch inside one.
+ * One row, dispatched on `row.action` — every row has one. The wired ones need
+ * a hook each, so each is its own component rather than a branch inside one.
  */
 function Row({
   row,
@@ -491,12 +486,8 @@ function Row({
       return <KeywordFiltersRow row={row} onOpen={() => onOpen("keyword-filters")} />;
   }
 
-  return (
-    <button type="button" className={cn(ROW_CLASS, "hover:bg-white/[0.03]")}>
-      <RowBody row={row} />
-      <Accessory row={row} />
-    </button>
-  );
+  // An action that does not belong to its row's kind — a data mistake.
+  return null;
 }
 
 /** Accessibility → "Increase color contrast". Browser-local, by its own copy. */

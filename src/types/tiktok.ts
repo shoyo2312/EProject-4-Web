@@ -279,8 +279,8 @@ export type SettingsIconName =
   | "accessibility";
 
 /**
- * What a settings row actually does. Absent on the rows that are still inert —
- * the ones whose flows need account state no backend service stores yet.
+ * What a settings row actually does. Every row has one: a row TikTok shows
+ * that this app cannot back is left out of the page, not drawn inert.
  *
  * The layout stays local data (`SETTINGS_SECTIONS`) while behaviour hangs off
  * this key, so a row gaining an action is one word here and a branch in `Row`,
@@ -316,7 +316,7 @@ export type SettingsAction =
 export type SettingsRow = {
   title: string;
   description?: string;
-  action?: SettingsAction;
+  action: SettingsAction;
 } & (
   | { kind: "link" }
   | { kind: "value"; value: string }
