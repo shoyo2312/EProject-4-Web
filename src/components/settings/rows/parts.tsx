@@ -1,11 +1,54 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { ChevronRightIcon, TriangleDownIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import type { SettingsRow } from "@/types/tiktok";
 
 export const ROW_CLASS =
   "flex w-full items-center gap-4 border-b border-[var(--tt-divider)] px-4 py-3 text-left last:border-b-0";
+
+/**
+ * A row that opens in place onto `children`. As on the live panel the caret is
+ * a filled triangle that keeps pointing down, open or not, and a `heading` row
+ * sets its title as a group heading ("In-app notifications").
+ */
+export function ExpandRow({
+  row,
+  expanded,
+  onToggle,
+  children,
+}: {
+  row: SettingsRow;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  const heading = row.kind === "expand" && row.heading;
+
+  return (
+    <div className="border-b border-[var(--tt-divider)] last:border-b-0">
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={onToggle}
+        className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-white/[0.03]"
+      >
+        {heading ? (
+          <span className="min-w-0 flex-1 text-[18px] leading-6 font-semibold text-[var(--tt-text)]">
+            {row.title}
+          </span>
+        ) : (
+          <RowBody row={row} />
+        )}
+        <TriangleDownIcon className="h-5 w-5 flex-none text-[rgb(255_255_255/0.6)]" />
+      </button>
+
+      {expanded && children}
+    </div>
+  );
+}
 
 export function RowBody({ row, note }: { row: SettingsRow; note?: string }) {
   return (

@@ -4,6 +4,7 @@ import "./globals.css";
 
 import { TopBar } from "@/components/layout/TopBar";
 import { PlayerSettingsProvider } from "@/components/player/PlayerSettingsProvider";
+import { ScreenTimeGuard } from "@/components/screen-time/ScreenTimeGuard";
 import { SessionProvider } from "@/components/session/SessionProvider";
 import { HighContrastSync } from "@/components/settings/HighContrastSync";
 import { StoriesProvider } from "@/components/stories/StoriesProvider";
@@ -58,6 +59,9 @@ export default function RootLayout({
           {/* The account's settings, read once: /setting shows them, and the
               notification gates and the screen-time guard act on every page. */}
           <AccountSettingsProvider>
+            {/* Renders nothing; counts the signed-in viewer's time on the site. */}
+            <ScreenTimeGuard />
+
             {/* Sound is a viewer preference shared by the feed and /video/[id],
                 so it lives above the route that happens to be mounted. */}
             <PlayerSettingsProvider>

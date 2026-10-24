@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -19,6 +19,7 @@ import {
 } from "@/components/settings/rows/AccountRows";
 import { AddEmailRow } from "@/components/settings/rows/AddEmailModal";
 import { PreferenceExpandRow } from "@/components/settings/rows/NotificationPreferenceRows";
+import { ScreenTimeSummaryRow } from "@/components/settings/rows/ScreenTimeSummary";
 import {
   CloseAccountPanel,
   CloseAccountRow,
@@ -69,6 +70,9 @@ type SwitchSettingsRow = Extract<SettingsRow, { kind: "switch" }>;
 /** The pages that take over the panel in place of the sections. */
 type Subpage = "close-account" | "download-data";
 
+/** Screen time → Summary, which a weekly update in the inbox opens. */
+const SUMMARY_TITLE = "Summary";
+
 const ICONS: Record<SettingsIconName, typeof ManageAccountIcon> = {
   "manage-account": ManageAccountIcon,
   privacy: PrivacyLockIcon,
@@ -100,6 +104,7 @@ const ICONS: Record<SettingsIconName, typeof ManageAccountIcon> = {
  */
 export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const account = useAccountSettings();
   const panelRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef(new Map<string, HTMLElement>());
@@ -202,6 +207,25 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
     pendingSection.current = id;
     setSubpage(null);
   };
+
+  // A weekly screen time update in the inbox links to `?summary=1`: open the
+  // Summary chart — during render, the way a prop change adjusts state — then
+  // scroll to it and spend the link, so the next one opens it again even when
+  // it arrives with the page already showing.
+  const summaryRequested = searchParams.get("summary") === "1";
+  const [summaryOpened, setSummaryOpened] = useState(false);
+  if (summaryRequested !== summaryOpened) {
+    setSummaryOpened(summaryRequested);
+    if (summaryRequested) setOpenExpand(SUMMARY_TITLE);
+  }
+  useEffect(() => {
+    if (!summaryRequested) return;
+    // Next frame, once the opened chart is laid out.
+    requestAnimationFrame(() => {
+      goTo("screen-time");
+      router.replace("/setting", { scroll: false });
+    });
+  }, [summaryRequested, router]);
 
   return (
     <main className="relative h-screen flex-1 overflow-hidden">
@@ -374,6 +398,8 @@ function Row({
             switches={IN_APP_SWITCHES}
           />
         );
+      case "screen-time-summary":
+        return <ScreenTimeSummaryRow row={row} expanded={expanded} onToggle={onToggle} />;
     }
   }
 

@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 
-import { TriangleDownIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
-import { RowBody, Switch } from "@/components/settings/rows/parts";
+import { ExpandRow, Switch } from "@/components/settings/rows/parts";
 import { toast } from "@/components/ui/toast";
 import type { AccountSettings } from "@/hooks/use-account-settings";
 import { messageFor } from "@/lib/api/errors";
@@ -30,31 +29,12 @@ export function PreferenceExpandRow({
   onToggle: () => void;
   switches: NotificationSwitch[];
 }) {
-  const heading = row.kind === "expand" && row.heading;
-
   return (
-    <div className="border-b border-[var(--tt-divider)] last:border-b-0">
-      <button
-        type="button"
-        aria-expanded={expanded}
-        onClick={onToggle}
-        className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-white/[0.03]"
-      >
-        {heading ? (
-          <span className="min-w-0 flex-1 text-[18px] leading-6 font-semibold text-[var(--tt-text)]">
-            {row.title}
-          </span>
-        ) : (
-          <RowBody row={row} />
-        )}
-        <TriangleDownIcon className="h-5 w-5 flex-none text-[rgb(255_255_255/0.6)]" />
-      </button>
-
-      {expanded &&
-        switches.map((item) => (
-          <PreferenceSwitch key={item.field} item={item} account={account} />
-        ))}
-    </div>
+    <ExpandRow row={row} expanded={expanded} onToggle={onToggle}>
+      {switches.map((item) => (
+        <PreferenceSwitch key={item.field} item={item} account={account} />
+      ))}
+    </ExpandRow>
   );
 }
 

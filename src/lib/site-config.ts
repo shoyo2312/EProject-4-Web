@@ -344,6 +344,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             title: "Summary",
             description:
               "Your weekly metrics include your time on the app and on nowa.com.",
+            action: "screen-time-summary",
           },
         ],
       },
