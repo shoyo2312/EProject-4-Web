@@ -12,14 +12,18 @@ vi.mock("@/components/session/SessionProvider", () => ({
 
 const listNotifications = vi.fn<() => Promise<NotificationResponse[]>>();
 const getUnreadCount = vi.fn<() => Promise<number>>();
-vi.mock("@/lib/api/notifications", () => ({
+// The real module underneath, so referencesUser — which the hook calls once an entry has a
+// referenceId — is the real one.
+vi.mock("@/lib/api/notifications", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/notifications")>()),
   listNotifications: () => listNotifications(),
   getUnreadCount: () => getUnreadCount(),
   markAllNotificationsRead: vi.fn(),
   markNotificationRead: vi.fn(),
 }));
 vi.mock("@/lib/api/users", () => ({ getProfiles: async () => [], MAX_PROFILE_BATCH: 100 }));
-vi.mock("@/lib/api/videos", () => ({ getVideosByIds: async () => [] }));
+const getVideosByIds = vi.fn<(ids: string[]) => Promise<unknown[]>>(async () => []);
+vi.mock("@/lib/api/videos", () => ({ getVideosByIds: (ids: string[]) => getVideosByIds(ids) }));
 vi.mock("@/lib/settings/browser-notifications", () => ({ showBrowserNotification: vi.fn() }));
 
 let relay: (frame: NotificationFrame) => void = () => {};
@@ -82,5 +86,16 @@ describe("useNotifications", () => {
 
     expect(result.current.items).toHaveLength(1);
     expect(result.current.unreadCount).toBe(1);
+  });
+
+  /** Its referenceId is the web's cue for the "Secure your account" link, not a video. */
+  it("never looks up a video for an account-security notice", async () => {
+    listNotifications.mockResolvedValue([{ ...entry, referenceId: "account-security" }]);
+    getUnreadCount.mockResolvedValue(1);
+    const { result } = renderHook(() => useNotifications());
+
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+
+    expect(getVideosByIds).not.toHaveBeenCalled();
   });
 });

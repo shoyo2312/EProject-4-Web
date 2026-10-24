@@ -15,7 +15,11 @@ import {
   type NotificationInbox,
 } from "@/hooks/use-notifications";
 import { authorFromProfile, DEFAULT_AVATAR, unknownAuthor } from "@/lib/api/adapters";
-import { referencesUser, type NotificationResponse } from "@/lib/api/notifications";
+import {
+  ACCOUNT_SECURITY_REFERENCE,
+  referencesUser,
+  type NotificationResponse,
+} from "@/lib/api/notifications";
 import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
 import { getFollowRequests } from "@/lib/api/users";
 import { formatRelativeTime } from "@/lib/format";
@@ -301,6 +305,7 @@ export function ActivityDrawer({
                           video={item.referenceId ? inbox.videos.get(item.referenceId) : undefined}
                           onOpen={() => openNotification(item, actor)}
                           onOpenActor={() => openActor(item, actor)}
+                          onSecure={() => navigate("/setting")}
                         />
                       </li>
                     );
@@ -391,6 +396,7 @@ function NotificationItem({
   video,
   onOpen,
   onOpenActor,
+  onSecure,
 }: {
   item: NotificationResponse;
   /** Undefined while still resolving, or absent for SYSTEM (no actor). */
@@ -399,6 +405,8 @@ function NotificationItem({
   video: VideoResponse | undefined;
   onOpen: () => void;
   onOpenActor: () => void;
+  /** Settings, where "Change password" is — offered on the new-device notice only. */
+  onSecure: () => void;
 }) {
   /**
    * The actor is the heading — a row about a person shows that person, never the service's own
@@ -505,6 +513,29 @@ function NotificationItem({
             <p className="mt-1 text-[12px] leading-[16px] text-[rgb(255_255_255_/_0.5)]">
               {new Date(item.createdAt).toLocaleString()}
             </p>
+            {item.type === "SYSTEM" && item.referenceId === ACCOUNT_SECURITY_REFERENCE && (
+              // Its own target, like the actor's name: stopPropagation so the row does not also
+              // collapse. Settings opens on Manage account, where "Change password" is — and
+              // changing it signs every other device out.
+              <span
+                role="link"
+                tabIndex={0}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSecure();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onSecure();
+                  }
+                }}
+                className="mt-2 inline-block text-[13px] font-semibold leading-[17px] text-[var(--tt-red)] hover:underline"
+              >
+                Secure your account
+              </span>
+            )}
           </>
         ) : (
           <p className="truncate text-[13px] leading-[17px] text-[var(--tt-text)]">

@@ -122,3 +122,53 @@ describe("ActivityDrawer, a story entry", () => {
     expect(push).not.toHaveBeenCalled();
   });
 });
+
+// As notification-service writes it: SYSTEM, no actor, and the reference the web keys the link on.
+const alert: NotificationResponse = {
+  id: "n9",
+  actorId: null,
+  type: "SYSTEM",
+  title: "Your account logged in from a new device",
+  body:
+    "Your account logged in from device Chrome on macOS 27 on 10/23 21:42 +07 in Ho Chi Minh City, " +
+    "Vietnam. If this wasn't you, secure your account immediately.",
+  referenceId: "account-security",
+  read: false,
+  createdAt: new Date().toISOString(),
+};
+
+function show(item: NotificationResponse) {
+  const inbox: NotificationInbox = {
+    items: [item],
+    unreadCount: 1,
+    loaded: true,
+    actors: new Map(),
+    videos: new Map(),
+    markRead,
+    markAllRead: vi.fn(),
+  };
+  render(<ActivityDrawer open inbox={inbox} onClose={onClose} />);
+}
+
+describe("ActivityDrawer, an account-security notice", () => {
+  it("expands to the whole message and a link to Settings, which closes the drawer", () => {
+    show(alert);
+    expect(screen.queryByRole("link", { name: "Secure your account" })).toBeNull();
+
+    fireEvent.click(screen.getByText("Your account logged in from a new device"));
+    expect(markRead).toHaveBeenCalledWith("n9");
+    expect(push).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("link", { name: "Secure your account" }));
+    expect(push).toHaveBeenCalledWith("/setting");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("another system notice has no link", () => {
+    show({ ...alert, id: "n10", title: "Welcome to Nowaa!", body: "Hi nora, thanks for joining us.", referenceId: null });
+
+    fireEvent.click(screen.getByText("Welcome to Nowaa!"));
+
+    expect(screen.queryByRole("link", { name: "Secure your account" })).toBeNull();
+  });
+});
