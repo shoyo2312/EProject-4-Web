@@ -11,6 +11,8 @@ const settings: UserSettingsResponse = {
   commentAudience: "EVERYONE",
   dmAudience: "EVERYONE",
   screenTimeLimitMinutes: null,
+  screenTimeLimitsByDay: null,
+  hasScreenTimePasscode: false,
   sleepHoursStart: null,
   sleepHoursEnd: null,
   weeklyScreenTimeDigest: true,
@@ -18,6 +20,14 @@ const settings: UserSettingsResponse = {
   filterSpamOffensive: true,
   filterAllComments: false,
   commentKeywords: ["giảm giá"],
+  pushLikes: true,
+  pushComments: true,
+  pushNewFollowers: true,
+  inAppLikes: true,
+  inAppComments: true,
+  inAppNewFollowers: true,
+  inAppReposts: true,
+  timeZone: null,
 };
 
 afterEach(cleanup);

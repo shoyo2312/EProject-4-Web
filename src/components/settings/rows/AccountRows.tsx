@@ -28,7 +28,7 @@ import type { SettingsRow } from "@/types/tiktok";
 
 /*
  * The `/setting` rows backed by user-service's `user_settings`. One read feeds
- * them all (`useAccountSettings`, owned by the page); each save PATCHes only
+ * them all (`AccountSettingsProvider`, in the root layout); each save PATCHes only
  * its own keys and repaints from the server's answer.
  */
 
@@ -344,10 +344,7 @@ function SleepHoursModal({
     schema: sleepHoursSchema,
     initialValues: { start: start ?? "22:00", end: end ?? "07:00" },
     onSubmit: async (values) => {
-      await account.update({
-        sleepHoursStart: values.start,
-        sleepHoursEnd: values.end,
-      });
+      await account.update({ sleepHoursStart: values.start });
       onClose();
     },
   });
@@ -358,7 +355,7 @@ function SleepHoursModal({
   const turnOff = async () => {
     setTurningOff(true);
     try {
-      await account.update({ sleepHoursStart: null, sleepHoursEnd: null });
+      await account.update({ sleepHoursStart: null });
       onClose();
     } catch (cause) {
       toast.error(messageFor(cause));

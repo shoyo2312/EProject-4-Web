@@ -8,6 +8,7 @@ import type {
   FriendshipResponse,
   PageResponse,
   UserProfileResponse,
+  UserSettingsPatch,
   UserSettingsResponse,
 } from "@/lib/api/types";
 
@@ -362,15 +363,15 @@ export function getMySettings(): Promise<UserSettingsResponse> {
  * and the answer is the whole settings object as it now stands.
  *
  * Not `PATCH /users/me`'s rules: `""` clears nothing here, and `null` is how
- * the three screen-time fields are switched off. The type keeps `null` away
- * from the three fields the server refuses it on.
+ * the daily limit (in either shape) and sleep hours are switched off. The type
+ * keeps `null` away from every other field, which the server refuses it on.
  *
  * Replayed once on `CONCURRENT_MODIFICATION`, as the contract asks: two
  * devices, or two first writes racing the row's insert. The body is the
  * viewer's own intent, so it is sent again as is rather than re-derived.
  */
 export async function updateMySettings(
-  patch: Partial<UserSettingsResponse>,
+  patch: UserSettingsPatch,
 ): Promise<UserSettingsResponse> {
   const send = () =>
     apiFetch<UserSettingsResponse>("/users/me/settings", {

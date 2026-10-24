@@ -8,6 +8,7 @@ import { SessionProvider } from "@/components/session/SessionProvider";
 import { HighContrastSync } from "@/components/settings/HighContrastSync";
 import { StoriesProvider } from "@/components/stories/StoriesProvider";
 import { Toaster } from "@/components/ui/toast";
+import { AccountSettingsProvider } from "@/hooks/use-account-settings";
 import { LOGIN_OPTIONS, SIGNUP_OPTIONS } from "@/lib/site-config";
 
 // TikTok ships a proprietary self-hosted webfont ("TikTokFont") that cannot be
@@ -54,21 +55,25 @@ export default function RootLayout({
               every route reads through the design tokens. */}
           <HighContrastSync />
 
-          {/* Sound is a viewer preference shared by the feed and /video/[id],
-              so it lives above the route that happens to be mounted. */}
-          <PlayerSettingsProvider>
-            {/* Story rings, and the player a ring opens. Avatars on /video/[id] and on every
-                shell page ask it, so it sits above the routes. */}
-            <StoriesProvider>
-              <div className="flex min-h-screen flex-col">
-                <div className="flex h-screen justify-between bg-[var(--tt-page)]">
-                  {children}
-                </div>
+          {/* The account's settings, read once: /setting shows them, and the
+              notification gates and the screen-time guard act on every page. */}
+          <AccountSettingsProvider>
+            {/* Sound is a viewer preference shared by the feed and /video/[id],
+                so it lives above the route that happens to be mounted. */}
+            <PlayerSettingsProvider>
+              {/* Story rings, and the player a ring opens. Avatars on /video/[id] and on every
+                  shell page ask it, so it sits above the routes. */}
+              <StoriesProvider>
+                <div className="flex min-h-screen flex-col">
+                  <div className="flex h-screen justify-between bg-[var(--tt-page)]">
+                    {children}
+                  </div>
 
-                <TopBar />
-              </div>
-            </StoriesProvider>
-          </PlayerSettingsProvider>
+                  <TopBar />
+                </div>
+              </StoriesProvider>
+            </PlayerSettingsProvider>
+          </AccountSettingsProvider>
           <Toaster />
         </SessionProvider>
       </body>

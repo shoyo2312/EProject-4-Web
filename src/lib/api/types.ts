@@ -162,10 +162,15 @@ export type SettingsAudience = "EVERYONE" | "FRIENDS" | "NO_ONE";
 export interface UserSettingsResponse {
   commentAudience: SettingsAudience;
   dmAudience: SettingsAudience;
-  /** 10–1440 when set. */
+  /** 10–480, the same limit every day. Null when off or when the limit is set per day. */
   screenTimeLimitMinutes: number | null;
-  /** "HH:mm" wall-clock with no timezone. Both ends set, or both null. */
+  /** Seven limits of 10–480, Monday first. Null unless the limit is set per day. */
+  screenTimeLimitsByDay: number[] | null;
+  /** The passcode itself is write-only; this says whether one is set. */
+  hasScreenTimePasscode: boolean;
+  /** "HH:mm" wall-clock with no timezone, or null when sleep hours are off. */
   sleepHoursStart: string | null;
+  /** Always the start plus eight hours, worked out by the server. */
   sleepHoursEnd: string | null;
   weeklyScreenTimeDigest: boolean;
   /**
@@ -183,7 +188,26 @@ export interface UserSettingsResponse {
   filterAllComments: boolean;
   /** Replaced whole by a PATCH. At most 50, each 1–30 code points. */
   commentKeywords: string[];
+  /** Push notifications → Interactions: what may raise a push or a desktop notification. */
+  pushLikes: boolean;
+  pushComments: boolean;
+  pushNewFollowers: boolean;
+  /** Push notifications → In-app notifications: what may raise a banner on an open tab. */
+  inAppLikes: boolean;
+  inAppComments: boolean;
+  inAppNewFollowers: boolean;
+  inAppReposts: boolean;
+  /** The IANA zone the last screen-time heartbeat came from. Null until there has been one. */
+  timeZone: string | null;
 }
+
+/**
+ * `PATCH /api/v1/users/me/settings`: any of the settings, less the three the
+ * server works out itself, plus the write-only four-digit passcode.
+ */
+export type UserSettingsPatch = Partial<
+  Omit<UserSettingsResponse, "hasScreenTimePasscode" | "timeZone" | "sleepHoursEnd">
+> & { screenTimePasscode?: string };
 
 /* --- api-gateway aggregate ----------------------------------------------- */
 
