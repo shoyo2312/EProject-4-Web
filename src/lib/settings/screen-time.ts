@@ -16,6 +16,11 @@ function mondayOf(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() - sinceMonday);
 }
 
+/** `d`'s local calendar day, "YYYY-MM-DD" — how the week read names its days. */
+export function localDate(d: Date): string {
+  return isoDate(d);
+}
+
 /** The local Monday of `d`'s week, "YYYY-MM-DD": the key the week read takes. */
 export function weekStartOf(d: Date): string {
   return isoDate(mondayOf(d));
@@ -71,4 +76,23 @@ export function formatDuration(seconds: number): string {
   const minutes = Math.round(seconds / 60);
   const hours = Math.floor(minutes / 60);
   return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+}
+
+/**
+ * Whether the daily limit covers the app now. Never without a passcode, which
+ * is the only way past it; never on /setting, where the limit can still be
+ * changed; and not again on a day the passcode was already entered.
+ */
+export function isLocked(input: {
+  todaySeconds: number;
+  limitMinutes: number | null;
+  hasPasscode: boolean;
+  unlockedDate: string | null;
+  today: string;
+  pathname: string;
+}): boolean {
+  if (input.limitMinutes === null || !input.hasPasscode) return false;
+  if (input.pathname === "/setting" || input.pathname.startsWith("/setting/")) return false;
+  if (input.unlockedDate === input.today) return false;
+  return input.todaySeconds >= input.limitMinutes * 60;
 }

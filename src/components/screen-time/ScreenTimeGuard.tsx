@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useReducer, useRef, useState } from "react";
 
+import { ScreenTimeLimitOverlay } from "@/components/screen-time/ScreenTimeLimitOverlay";
 import { useSession } from "@/components/session/SessionProvider";
-import { sendScreenTimeHeartbeat } from "@/lib/api/screen-time";
+import { useAccountSettings } from "@/hooks/use-account-settings";
+import { getScreenTimeWeek, sendScreenTimeHeartbeat } from "@/lib/api/screen-time";
+import { todayLimitMinutes } from "@/lib/settings/account-settings";
+import { isLocked, localDate, weekStartOf } from "@/lib/settings/screen-time";
 
 /** How often the page counts, in seconds. */
 const TICK_SECONDS = 15;
@@ -12,27 +17,69 @@ const SEND_AT_SECONDS = 60;
 /** The most one heartbeat may carry; the server clamps there too. */
 const MAX_PENDING_SECONDS = 120;
 
+const unlockKey = (userId: string) => `nowa:screen-time-unlocked:${userId}`;
+
+/** The day the passcode was last entered on this browser, "YYYY-MM-DD". */
+function unlockedDate(userId: string): string | null {
+  try {
+    return localStorage.getItem(unlockKey(userId));
+  } catch {
+    return null;
+  }
+}
+
+function rememberUnlock(userId: string, date: string): void {
+  try {
+    localStorage.setItem(unlockKey(userId), date);
+  } catch {
+    // Storage blocked: the screen comes back on the next load, the passcode still works.
+  }
+}
+
 /**
- * Measures time on the site for Screen time. Every 15 seconds the tab is in
- * view and focused counts, and each minute of it goes to user-service with the
- * browser's time zone, which is what decides day time from night time. Renders
- * nothing.
+ * Measures time on the site for Screen time, and holds the daily limit.
  *
- * A send that fails keeps its seconds for the next try, up to the 120 one
- * heartbeat may carry: a long outage loses time rather than reporting it all
- * at once afterwards.
+ * Every 15 seconds the tab is in view and focused counts, and each minute of
+ * it goes to user-service with the browser's time zone, which is what decides
+ * day time from night time. A send that fails keeps its seconds for the next
+ * try, up to the 120 one heartbeat may carry: a long outage loses time rather
+ * than reporting it all at once afterwards.
+ *
+ * With a limit and a passcode set, today's total — read from the server when
+ * this mounts, when the tab comes back into view and when the day turns, plus
+ * what this tab counted since — puts `ScreenTimeLimitOverlay` over every page
+ * but /setting once it reaches the limit. The passcode lifts it for the rest of
+ * the day on this browser.
  */
 export function ScreenTimeGuard() {
   const { user } = useSession();
-  const signedIn = user !== null;
+  const { settings } = useAccountSettings();
+  const pathname = usePathname() ?? "";
+  const userId = user?.userId ?? null;
+  const [now, setNow] = useState(() => new Date());
+  /** Today's total on the server, for one viewer and day. */
+  const [base, setBase] = useState<{ key: string; seconds: number } | null>(null);
+  /** Seconds this tab counted since `base` was read. */
+  const [counted, setCounted] = useState(0);
+  /** Re-renders after an unlock is written, so storage is read again. */
+  const [, unlocked] = useReducer((count: number) => count + 1, 0);
+  /** Time behind the lock screen is not time on the app. */
+  const lockedRef = useRef(false);
+
+  const today = localDate(now);
+  const limit = settings ? todayLimitMinutes(settings, now) : null;
+  const guarded = userId !== null && limit !== null && settings?.hasScreenTimePasscode === true;
 
   useEffect(() => {
-    if (!signedIn) return;
+    if (!userId) return;
     let pending = 0;
     let sending = false;
 
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+      if (lockedRef.current) return;
+      setNow(new Date());
+      setCounted((seconds) => seconds + TICK_SECONDS);
       pending = Math.min(pending + TICK_SECONDS, MAX_PENDING_SECONDS);
       if (sending || pending < SEND_AT_SECONDS) return;
 
@@ -49,7 +96,68 @@ export function ScreenTimeGuard() {
     }, TICK_SECONDS * 1000);
 
     return () => window.clearInterval(timer);
-  }, [signedIn]);
+  }, [userId]);
 
-  return null;
+  useEffect(() => {
+    if (!guarded) return;
+    let cancelled = false;
+
+    const read = () => {
+      const at = new Date();
+      getScreenTimeWeek(weekStartOf(at)).then(
+        (week) => {
+          if (cancelled) return;
+          const date = localDate(at);
+          const day = week.days.find((entry) => entry.date === date);
+          setBase({
+            key: `${userId}:${date}`,
+            seconds: day ? day.daySeconds + day.nightSeconds : 0,
+          });
+          setCounted(0);
+        },
+        // Unread, nothing locks: the limit is a nudge, not a wall worth an outage.
+        () => {},
+      );
+    };
+
+    read();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") read();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [guarded, userId, today]);
+
+  const todaySeconds =
+    userId !== null && base?.key === `${userId}:${today}` ? base.seconds + counted : null;
+  const locked =
+    guarded &&
+    userId !== null &&
+    todaySeconds !== null &&
+    isLocked({
+      todaySeconds,
+      limitMinutes: limit,
+      hasPasscode: true,
+      unlockedDate: unlockedDate(userId),
+      today,
+      pathname,
+    });
+
+  useEffect(() => {
+    lockedRef.current = locked;
+  }, [locked]);
+
+  if (!locked || userId === null) return null;
+
+  return (
+    <ScreenTimeLimitOverlay
+      onUnlock={() => {
+        rememberUnlock(userId, today);
+        unlocked();
+      }}
+    />
+  );
 }

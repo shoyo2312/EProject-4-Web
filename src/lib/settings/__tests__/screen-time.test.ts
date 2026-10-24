@@ -4,7 +4,9 @@ import {
   axisTicks,
   axisTop,
   formatDuration,
+  isLocked,
   lastFourWeeks,
+  localDate,
   weekStartOf,
 } from "@/lib/settings/screen-time";
 
@@ -41,5 +43,38 @@ describe("screen time helpers", () => {
     expect(formatDuration(720)).toBe("12m");
     expect(formatDuration(0)).toBe("0m");
     expect(formatDuration(30)).toBe("1m");
+  });
+});
+
+describe("isLocked", () => {
+  const base = {
+    todaySeconds: 600,
+    limitMinutes: 10,
+    hasPasscode: true,
+    unlockedDate: null,
+    today: "2026-10-24",
+    pathname: "/",
+  };
+
+  it("locks once today's time reaches the limit", () => {
+    expect(isLocked(base)).toBe(true);
+    expect(isLocked({ ...base, todaySeconds: 599 })).toBe(false);
+  });
+
+  it("leaves Settings open, so the limit can still be changed", () => {
+    expect(isLocked({ ...base, pathname: "/setting" })).toBe(false);
+  });
+
+  it("never locks without a limit or a passcode, or once unlocked today", () => {
+    expect(isLocked({ ...base, limitMinutes: null })).toBe(false);
+    expect(isLocked({ ...base, hasPasscode: false })).toBe(false);
+    expect(isLocked({ ...base, unlockedDate: "2026-10-24" })).toBe(false);
+    expect(isLocked({ ...base, unlockedDate: "2026-10-23" })).toBe(true);
+  });
+});
+
+describe("localDate", () => {
+  it("is the local calendar day", () => {
+    expect(localDate(new Date(2026, 9, 24, 23, 59))).toBe("2026-10-24");
   });
 });

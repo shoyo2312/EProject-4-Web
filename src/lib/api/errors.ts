@@ -132,6 +132,9 @@ const MESSAGES: Record<string, string> = {
   INVALID_AVATAR: "That photo must be a JPEG, PNG, or WebP under 5 MB.",
   PRIVATE_ACCOUNT: "This account is private. Follow it to see its videos.",
   DISPLAY_NAME_CHANGE_TOO_SOON: "Your nickname can only be changed once every 7 days.",
+  // The daily limit's passcode, locked for 15 minutes after five wrong tries.
+  // A 429 without this code is the gateway's own rate limit, read below.
+  TOO_MANY_PASSCODE_ATTEMPTS: "Too many incorrect passcodes. Try again in 15 minutes.",
   // Download your data. The panel re-reads the list after these, so the card
   // underneath already shows what happened instead.
   DATA_EXPORT_IN_PROGRESS: "You already have a request being processed.",
