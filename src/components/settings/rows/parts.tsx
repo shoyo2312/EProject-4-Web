@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  CaretDownIcon,
-  ChevronRightIcon,
-  ExternalLinkIcon,
-} from "@/components/icons";
+import { CaretDownIcon, ChevronRightIcon } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import type { SettingsRow } from "@/types/tiktok";
 
@@ -36,12 +32,6 @@ export function Accessory({ row, value }: { row: SettingsRow; value?: string }) 
   if (row.kind === "expand") {
     return (
       <CaretDownIcon className="h-4 w-4 flex-none text-[rgb(255_255_255/0.6)]" />
-    );
-  }
-
-  if (row.kind === "external") {
-    return (
-      <ExternalLinkIcon className="h-4 w-4 flex-none text-[var(--tt-red)]" />
     );
   }
 

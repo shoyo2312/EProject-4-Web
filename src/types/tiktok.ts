@@ -274,7 +274,6 @@ export type SettingsIconName =
   | "manage-account"
   | "privacy"
   | "push-notifications"
-  | "business-verification"
   | "screen-time"
   | "content-preferences"
   | "accessibility";
@@ -305,9 +304,9 @@ export type SettingsAction =
   | "weekly-screen-time";
 
 /**
- * The five row shapes the live settings panel uses. `link` and `value` both
- * end in a chevron; `value` also shows the current choice before it. `expand`
- * is a row that opens in place (caret), `external` leaves TikTok.
+ * The row shapes the settings panel uses. `link` and `value` both end in a
+ * chevron; `value` also shows the current choice before it. `expand` is a row
+ * that opens in place (caret).
  */
 export type SettingsRow = {
   title: string;
@@ -318,7 +317,6 @@ export type SettingsRow = {
   | { kind: "value"; value: string }
   | { kind: "switch"; on: boolean }
   | { kind: "expand" }
-  | { kind: "external" }
 );
 
 export interface SettingsGroup {

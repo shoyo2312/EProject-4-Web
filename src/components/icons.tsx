@@ -587,9 +587,7 @@ export function EmptyGridIcon(props: IconProps) {
  * `/setting` glyphs.
  *
  * Every path below is the live 48-grid `d` attribute read from the settings
- * page's own SVGs, except `BusinessVerificationIcon` — that one ships on a
- * 20-grid as a 3.2KB multi-part logo, so it is redrawn here on the 48 grid at
- * the same optical weight. It is marked again at its definition.
+ * page's own SVGs.
  * ---------------------------------------------------------------------------
  */
 
@@ -628,16 +626,6 @@ export function CaretDownIcon(props: IconProps) {
   );
 }
 
-/** Marks a row that leaves TikTok — drawn to the 48 grid, not extracted. */
-export function ExternalLinkIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M28 6a1.5 1.5 0 0 0 0 3h8.88L21.44 24.44a1.5 1.5 0 0 0 2.12 2.12L39 11.12V20a1.5 1.5 0 0 0 3 0V7.5A1.5 1.5 0 0 0 40.5 6H28Z" />
-      <path d="M9 13.5A1.5 1.5 0 0 1 10.5 12H22a1.5 1.5 0 0 1 0 3H12v21h21V26a1.5 1.5 0 0 1 3 0v11.5a1.5 1.5 0 0 1-1.5 1.5h-24A1.5 1.5 0 0 1 9 37.5v-24Z" />
-    </Icon>
-  );
-}
-
 export function ManageAccountIcon(props: IconProps) {
   return (
     <Icon {...props}>
@@ -670,19 +658,6 @@ export function PushNotificationsIcon(props: IconProps) {
         clipRule="evenodd"
         d="M24 6C30.6274 6 36 11.3726 36 18V26C36 28.0577 36.4561 30.2073 37.4628 32H10.5372C11.544 30.2073 12 28.0577 12 26V18C12 11.3726 17.3726 6 24 6ZM44 32C42.7758 32 41.8568 31.4296 41.1641 30.3906C40.4319 29.2923 40 27.7033 40 26V18C40 9.16344 32.8366 2 24 2C15.1634 2 8 9.16344 8 18V26C8 27.7033 7.56811 29.2923 6.8359 30.3906C6.1432 31.4296 5.22419 32 4 32C2.89543 32 2 32.8954 2 34C2 35.1046 2.89543 36 4 36H44C45.1046 36 46 35.1046 46 34C46 32.8954 45.1046 32 44 32ZM18.2987 40.9485C18.6631 40.3589 19.3068 40 20 40H28C28.6932 40 29.3369 40.3589 29.7013 40.9485C30.0657 41.5382 30.0988 42.2745 29.7889 42.8944C29.7889 42.8944 29.7878 42.8965 29.7867 42.8987L29.7844 42.9032L29.7796 42.9128L29.7684 42.9343C29.7604 42.9496 29.7511 42.967 29.7405 42.9863C29.7193 43.0248 29.6928 43.0711 29.6607 43.1239C29.5967 43.2293 29.5097 43.3621 29.3969 43.5125C29.1719 43.8125 28.8387 44.1903 28.3744 44.5617C27.4203 45.325 25.9858 46 24 46C22.0142 46 20.5797 45.325 19.6256 44.5617C19.1613 44.1903 18.8281 43.8125 18.6031 43.5125C18.4903 43.3621 18.4033 43.2293 18.3393 43.1239C18.3072 43.0711 18.2807 43.0248 18.2595 42.9863C18.2489 42.967 18.2396 42.9496 18.2316 42.9343L18.2204 42.9128L18.2156 42.9032L18.2133 42.8987L18.2122 42.8965C17.9012 42.2745 17.9343 41.5382 18.2987 40.9485Z"
       />
-    </Icon>
-  );
-}
-
-/**
- * Business verification's storefront. NOT extracted — the live glyph is a
- * 3.2KB multi-part mark on a 20 viewBox; this is the same shape redrawn on the
- * 48 grid, from a screenshot of the settings page.
- */
-export function BusinessVerificationIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M8 6a2 2 0 0 0-1.86 1.26l-3 7.5A2 2 0 0 0 3 15.5V17a5 5 0 0 0 2 4v18a2 2 0 0 0 2 2h34a2 2 0 0 0 2-2V21a5 5 0 0 0 2-4v-1.5a2 2 0 0 0-.14-.74l-3-7.5A2 2 0 0 0 40 6H8Zm1.35 4h29.3l2.2 5.5V17a2 2 0 0 1-4 0 2 2 0 0 0-4 0 2 2 0 0 1-4 0 2 2 0 0 0-4 0 2 2 0 0 1-4 0 2 2 0 0 0-4 0 2 2 0 0 1-4 0 2 2 0 0 0-4 0 2 2 0 0 1-4 0v-1.5L9.35 10ZM9 22.8a6 6 0 0 0 6-1.7 6 6 0 0 0 9 0 6 6 0 0 0 9 0 6 6 0 0 0 6 1.7V37H9V22.8Z" />
     </Icon>
   );
 }

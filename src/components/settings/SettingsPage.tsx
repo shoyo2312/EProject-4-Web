@@ -44,7 +44,6 @@ import { toast } from "@/components/ui/toast";
 import {
   AccessibilityIcon,
   ArrowLeftIcon,
-  BusinessVerificationIcon,
   ContentPreferencesIcon,
   ManageAccountIcon,
   PrivacyLockIcon,
@@ -69,7 +68,6 @@ const ICONS: Record<SettingsIconName, typeof ManageAccountIcon> = {
   "manage-account": ManageAccountIcon,
   privacy: PrivacyLockIcon,
   "push-notifications": PushNotificationsIcon,
-  "business-verification": BusinessVerificationIcon,
   "screen-time": ScreenTimeIcon,
   "content-preferences": ContentPreferencesIcon,
   accessibility: AccessibilityIcon,
@@ -356,7 +354,7 @@ function Row({
           />
         );
       default:
-        return <SessionSwitchRow row={row} />;
+        return null;
     }
   }
 
@@ -392,22 +390,6 @@ function Row({
       <RowBody row={row} />
       <Accessory row={row} />
     </button>
-  );
-}
-
-/**
- * The unwired switch — business verification. It holds its position for the
- * session and is forgotten on reload, which is the honest rendering of a
- * control with nowhere to save to.
- */
-function SessionSwitchRow({ row }: { row: SwitchSettingsRow }) {
-  const [on, setOn] = useState(row.on);
-
-  return (
-    <div className={ROW_CLASS}>
-      <RowBody row={row} />
-      <Switch on={on} label={row.title} onToggle={() => setOn((w) => !w)} />
-    </div>
   );
 }
 

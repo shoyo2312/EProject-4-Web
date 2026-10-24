@@ -201,18 +201,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
           { kind: "link", title: "Deactivate or delete account", action: "close-account" },
         ],
       },
-      {
-        heading: "Account information",
-        rows: [
-          {
-            kind: "value",
-            title: "Account region",
-            description:
-              "Your account region is initially set based on the time and place of registration.",
-            value: "Vietnam",
-          },
-        ],
-      },
     ],
   },
   {
@@ -306,29 +294,11 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
           {
             kind: "expand",
             title: "Interactions",
-            description: "Likes, comments, new followers, mentions and tags",
+            description: "Likes, comments, new followers",
           },
         ],
       },
       { rows: [{ kind: "expand", title: "In-app notifications" }] },
-    ],
-  },
-  {
-    id: "business-verification",
-    label: "Business verification",
-    icon: "business-verification",
-    groups: [
-      {
-        rows: [
-          {
-            kind: "switch",
-            title: "Business verification",
-            description:
-              "Verify your business to access marketing tools and exclusive features that better connect you with viewers.",
-            on: false,
-          },
-        ],
-      },
     ],
   },
   {
@@ -366,10 +336,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
               "Your weekly metrics include your time on the app and on nowa.com.",
           },
         ],
-      },
-      {
-        heading: "Help and resources",
-        rows: [{ kind: "external", title: "Digital well-being tips" }],
       },
     ],
   },
