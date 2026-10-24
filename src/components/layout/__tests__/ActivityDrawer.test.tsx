@@ -215,3 +215,24 @@ describe("ActivityDrawer, a repost", () => {
     expect(screen.getByText(/reposted your video/)).toBeTruthy();
   });
 });
+
+describe("ActivityDrawer, a weekly screen time update", () => {
+  it("opens the Screen time summary from a weekly update", () => {
+    show({
+      id: "n12",
+      actorId: null,
+      type: "SCREEN_TIME",
+      title: "Your weekly screen time",
+      body: "Last week you spent 3h 20m on Nowaa, a daily average of 28m.",
+      referenceId: "2026-10-19",
+      read: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    fireEvent.click(screen.getByText(/Last week you spent 3h 20m/));
+
+    expect(markRead).toHaveBeenCalledWith("n12");
+    expect(push).toHaveBeenCalledWith("/setting?summary=1#screen-time");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+});

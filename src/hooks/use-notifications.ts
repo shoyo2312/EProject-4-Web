@@ -247,8 +247,8 @@ export function useNotifications(options?: { onOpenInbox?: () => void }): Notifi
   }, [unresolvedActorIds]);
 
   // Same batching as actors above, keyed by referenceId instead of actorId —
-  // The types that name an account (`referencesUser`) and SYSTEM are the only ones that do not
-  // name a video.
+  // The types that name an account (`referencesUser`), SYSTEM and SCREEN_TIME (whose
+  // referenceId is a week) are the only ones that do not name a video.
   const unresolvedVideoIds = useMemo(() => {
     const ids = new Set<string>();
     for (const item of items) {
@@ -256,6 +256,7 @@ export function useNotifications(options?: { onOpenInbox?: () => void }): Notifi
         item.referenceId &&
         !referencesUser(item.type) &&
         item.type !== "SYSTEM" &&
+        item.type !== "SCREEN_TIME" &&
         !videos.has(item.referenceId)
       ) {
         ids.add(item.referenceId);

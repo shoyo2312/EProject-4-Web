@@ -127,6 +127,13 @@ export function ActivityDrawer({
     actor: UserProfileResponse | undefined,
   ) => {
     inbox.markRead(item.id);
+
+    // A weekly update names the week it covers, not a video: it opens the
+    // Summary chart on the settings page.
+    if (item.type === "SCREEN_TIME") {
+      navigate("/setting?summary=1#screen-time");
+      return;
+    }
     if (!item.referenceId) return;
 
     // The story's owner, not a story: one entry stands for all of their stories in the last
