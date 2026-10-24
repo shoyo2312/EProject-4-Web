@@ -13,8 +13,10 @@ import { NextResponse, type NextRequest } from "next/server";
  *   sends that response back exactly as the gateway wrote it — a cookie set here on an auth call
  *   is silently dropped (so is `Accept-CH`, from next.config). A page always loads before a
  *   sign-in can be sent, so the page is where the cookie is minted.
- * - **HttpOnly, scoped to `/api/v1/auth`.** No script reads it, and the browser sends it only to
- *   sign-in, sign-up, refresh and logout — never on the feed or anything else a guest browses.
+ * - **HttpOnly, Path `/`.** No script reads it. The browser sends it with every request to this
+ *   site, because the page is where it is read too: a cookie scoped to `/api/v1/auth` never comes
+ *   back on a page, so every page would mint a fresh id and every sign-in would look like a new
+ *   device. Only auth calls turn it into `X-Device-Id`; the rest of the API never runs this proxy.
  * - **Not a credential.** Knowing it only keeps an alert quiet; signing in still takes the password.
  *   An `X-Device-Id` the page wrote itself never reaches the gateway: the header carries the
  *   cookie's id or nothing.
@@ -53,7 +55,7 @@ export function proxy(request: NextRequest): NextResponse {
       value: crypto.randomUUID(),
       httpOnly: true,
       sameSite: "lax",
-      path: "/api/v1/auth",
+      path: "/",
       maxAge: ONE_YEAR_SECONDS,
       secure: process.env.NODE_ENV === "production",
     });

@@ -19,6 +19,12 @@ const authCall = (headers: Record<string, string> = {}) =>
 const page = (headers: Record<string, string> = {}) =>
   proxy(new NextRequest("http://localhost:3000/foryou", { headers }));
 
+/** RFC 6265 §5.1.4: whether a browser sends a cookie whose Path is `cookiePath` on a request to `requestPath`. */
+const sentTo = (cookiePath: string, requestPath: string) =>
+  requestPath === cookiePath ||
+  (requestPath.startsWith(cookiePath) &&
+    (cookiePath.endsWith("/") || requestPath[cookiePath.length] === "/"));
+
 describe("proxy, on an auth call", () => {
   it("carries the browser's id to auth-service as X-Device-Id", () => {
     expect(forwarded(authCall({ cookie: `${DEVICE_COOKIE}=${KNOWN}` }))).toBe(KNOWN);
@@ -54,7 +60,19 @@ describe("proxy, on a page", () => {
     const set = page().cookies.get(DEVICE_COOKIE);
 
     expect(set?.value).toMatch(UUID);
-    expect(set).toMatchObject({ httpOnly: true, sameSite: "lax", path: "/api/v1/auth", maxAge: 31536000 });
+    expect(set).toMatchObject({ httpOnly: true, sameSite: "lax", path: "/", maxAge: 31536000 });
+  });
+
+  /**
+   * The page reads the cookie to decide whether to mint one. A Path the browser does not send back
+   * on pages means every page mints a fresh id, and every sign-in looks like a new device.
+   */
+  it("is sent back on every page and on auth calls, so a browser keeps one id", () => {
+    const path = page().cookies.get(DEVICE_COOKIE)?.path ?? "";
+
+    for (const url of ["/", "/foryou", "/@nora.v/video/1", "/api/v1/auth/login"]) {
+      expect(sentTo(path, url), url).toBe(true);
+    }
   });
 
   it("leaves the id a browser already has alone", () => {
