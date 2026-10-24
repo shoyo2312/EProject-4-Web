@@ -188,3 +188,30 @@ describe("ActivityDrawer, an account-security notice", () => {
     expect(screen.queryByRole("link", { name: "Secure your account" })).toBeNull();
   });
 });
+
+describe("ActivityDrawer, a repost", () => {
+  it("describes a repost", () => {
+    const reposted: NotificationResponse = {
+      id: "n11",
+      actorId: "2",
+      type: "REPOST",
+      title: "New repost",
+      body: "Someone reposted your video.",
+      referenceId: "7",
+      read: false,
+      createdAt: new Date().toISOString(),
+    };
+    const inbox: NotificationInbox = {
+      items: [reposted],
+      unreadCount: 1,
+      loaded: true,
+      actors: new Map([["2", bob]]),
+      videos: new Map(),
+      markRead,
+      markAllRead: vi.fn(),
+    };
+    render(<ActivityDrawer open inbox={inbox} onClose={onClose} />);
+
+    expect(screen.getByText(/reposted your video/)).toBeTruthy();
+  });
+});

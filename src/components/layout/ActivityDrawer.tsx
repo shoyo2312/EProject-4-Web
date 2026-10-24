@@ -383,9 +383,12 @@ function describe(item: NotificationResponse): string {
       return "accepted your follow request";
     case "STORY":
       return "posted a new story";
+    case "REPOST":
+      return "reposted your video";
     case "COMMENT":
       return `commented: ${item.body}`;
     case "SYSTEM":
+    case "SCREEN_TIME":
       return item.body;
   }
 }

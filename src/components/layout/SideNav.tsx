@@ -59,16 +59,24 @@ export function SideNav({
   navItems: NavItem[];
   footerSections: FooterSection[];
 }) {
-  // One inbox for both readers: the rail's badge and the drawer's list are the
-  // same unread set, and fetching it twice would let the two disagree.
-  const inbox = useNotifications();
-  // Likewise the following list: the rows under the nav and the drawer behind
-  // View all are one list.
-  const following = useFollowingAccounts();
   const [activityOpen, setActivityOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [followingOpen, setFollowingOpen] = useState(false);
+  // One inbox for both readers: the rail's badge and the drawer's list are the
+  // same unread set, and fetching it twice would let the two disagree. A click
+  // on an in-app banner opens the drawer, as the rail's Activity row does.
+  const inbox = useNotifications({
+    onOpenInbox: () => {
+      setSearchOpen(false);
+      setMoreOpen(false);
+      setFollowingOpen(false);
+      setActivityOpen(true);
+    },
+  });
+  // Likewise the following list: the rows under the nav and the drawer behind
+  // View all are one list.
+  const following = useFollowingAccounts();
   // The drawers sit in the same slot beside the rail, so opening one closes
   // the others, and any one collapses the rail the same way.
   const collapsed = activityOpen || searchOpen || moreOpen || followingOpen;

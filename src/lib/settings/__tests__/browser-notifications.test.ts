@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { shouldNotify } from "@/lib/settings/browser-notifications";
+import { shouldNotify, showBrowserNotification } from "@/lib/settings/browser-notifications";
+import { setBrowserNotifications } from "@/lib/settings/local-settings";
+import { DEFAULT_SETTINGS } from "@/lib/settings/__tests__/user-settings-fixture";
 
 const allowed = {
   enabled: true,
@@ -25,5 +27,38 @@ describe("shouldNotify", () => {
     for (const permission of ["default", "denied", "unsupported"] as const) {
       expect(shouldNotify({ ...allowed, permission })).toBe(false);
     }
+  });
+});
+
+describe("showBrowserNotification", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(document, "hidden");
+  });
+
+  it("does not raise a desktop notification for a switched-off type", () => {
+    const raised = vi.fn();
+    class FakeNotification {
+      static permission = "granted";
+      onclick: (() => void) | null = null;
+      constructor(title: string) {
+        raised(title);
+      }
+      close() {}
+    }
+    vi.stubGlobal("Notification", FakeNotification);
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    setBrowserNotifications(true);
+
+    showBrowserNotification(
+      { id: "n1", title: "New like", body: "", type: "LIKE" },
+      DEFAULT_SETTINGS,
+    );
+    showBrowserNotification(
+      { id: "n2", title: "New like", body: "", type: "LIKE" },
+      { ...DEFAULT_SETTINGS, pushLikes: false },
+    );
+
+    expect(raised).toHaveBeenCalledTimes(1);
   });
 });

@@ -18,7 +18,9 @@ export type NotificationType =
   | "FOLLOW_REQUEST"
   | "FOLLOW_REQUEST_ACCEPTED"
   | "STORY"
-  | "SYSTEM";
+  | "SYSTEM"
+  | "REPOST"
+  | "SCREEN_TIME";
 
 /**
  * The types whose `referenceId` is an account, not a video: the new follower,

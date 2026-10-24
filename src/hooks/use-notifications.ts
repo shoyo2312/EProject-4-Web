@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { showInAppBanner } from "@/components/notifications/InAppBanner";
 import { useSession } from "@/components/session/SessionProvider";
+import { useAccountSettings } from "@/hooks/use-account-settings";
 import {
   getUnreadCount,
   listNotifications,
@@ -16,6 +18,7 @@ import { getProfiles, MAX_PROFILE_BATCH } from "@/lib/api/users";
 import { getVideosByIds } from "@/lib/api/videos";
 import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
 import { showBrowserNotification } from "@/lib/settings/browser-notifications";
+import { inAppAllowed } from "@/lib/settings/notification-preferences";
 import {
   useNotificationRealtime,
   type NotificationFrame,
@@ -133,9 +136,22 @@ export interface NotificationInbox {
  * `markRead` that either lands or does not, and re-painting a row as unread
  * under someone who just opened it is worse than a count the next fetch
  * corrects.
+ *
+ * Each arriving frame also nudges, once: a desktop notification while the tab
+ * is hidden, an in-app banner while it is in view — each behind the account's
+ * own switches. `onOpenInbox` is what a click on the banner does.
  */
-export function useNotifications(): NotificationInbox {
+export function useNotifications(options?: { onOpenInbox?: () => void }): NotificationInbox {
   const { user } = useSession();
+  const { settings } = useAccountSettings();
+  // The frame handler is registered once; these keep it reading the latest
+  // settings and callback without re-subscribing to the socket.
+  const settingsRef = useRef(settings);
+  const onOpenInboxRef = useRef(options?.onOpenInbox);
+  useEffect(() => {
+    settingsRef.current = settings;
+    onOpenInboxRef.current = options?.onOpenInbox;
+  });
   // The inbox belongs to an account, not to a render of it: keyed on `user`,
   // every `/me` read and profile edit refetched it.
   const viewerId = user?.userId;
@@ -287,18 +303,29 @@ export function useNotifications(): NotificationInbox {
         setUnreadCount((count) => count + 1);
       }
 
-      // Gated inside — on the viewer's switch, the browser permission and
-      // whether this tab is even hidden. Called for every frame rather than
-      // only the ones the list kept: whether this id is already in `items` can
-      // only be answered inside the updater above, and a flag set there is
-      // still false on this line (see `markRead`). The duplicate is harmless —
-      // the notification carries the id as its `tag`, so a second one for the
-      // same entry replaces the first instead of alerting twice.
-      showBrowserNotification({
-        id: frame.notificationId,
-        title: frame.title,
-        body: frame.body,
-      });
+      // Gated inside — on the viewer's switches and sleep hours, the browser
+      // permission and whether this tab is even hidden. Called for every frame
+      // rather than only the ones the list kept: whether this id is already in
+      // `items` can only be answered inside the updater above, and a flag set
+      // there is still false on this line (see `markRead`). The duplicate is
+      // harmless — the notification carries the id as its `tag`, and the
+      // banner its id, so a second one for the same entry replaces the first.
+      showBrowserNotification(
+        {
+          id: frame.notificationId,
+          title: frame.title,
+          body: frame.body,
+          type: frame.type,
+        },
+        settingsRef.current,
+      );
+
+      if (
+        document.visibilityState === "visible" &&
+        inAppAllowed(settingsRef.current, frame.type)
+      ) {
+        showInAppBanner(frame, onOpenInboxRef.current);
+      }
     }, []),
   );
 
