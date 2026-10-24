@@ -6,7 +6,7 @@ import { useSession } from "@/components/session/SessionProvider";
 import { useStompTopic } from "@/hooks/use-stomp-topic";
 import { toFeedCards } from "@/lib/api/feed-cards";
 import { getPersonalizedFeed } from "@/lib/api/recommendations";
-import { getFeed, getVideo, getVideosByIds } from "@/lib/api/videos";
+import { getFeed, getVideosByIds } from "@/lib/api/videos";
 import type { VideoResponse } from "@/lib/api/types";
 import type { FeedVideo } from "@/types/tiktok";
 
@@ -201,12 +201,14 @@ export function useVideoFeed(): VideoFeedState {
    * chat-service broadcasts only the id (`/topic/feed`, on an APPROVED
    * moderation verdict); hydrating it here runs the normal read path, so a
    * PRIVATE video the owner happens to be subscribed for is filtered out by the
-   * status/visibility check rather than by trusting the frame.
+   * status/visibility check rather than by trusting the frame. It is read as a
+   * For You batch, so a video carrying a keyword the viewer filtered from For
+   * You never joins it.
    */
   const appendPublished = useCallback(
     async (videoId: string) => {
       if (seenIds.current.has(videoId)) return;
-      const video = await getVideo(videoId).catch(() => null);
+      const [video] = await getVideosByIds([videoId], undefined, "FOR_YOU").catch(() => []);
       if (!video) return;
       if (video.status !== "PUBLISHED" || video.visibility !== "PUBLIC") return;
 
