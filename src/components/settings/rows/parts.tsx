@@ -93,18 +93,21 @@ export function Accessory({ row, value }: { row: SettingsRow; value?: string }) 
 /**
  * `.DivSwitchWrapper` — 44 × 24 track, 20px knob inset 2px, `#0BE09B` when on.
  * Green, not the brand red: `/setting` is the only page in the app using it.
+ * The Daily screen time page draws the same switch with a dark knob.
  */
 export function Switch({
   on,
   label,
   onToggle,
   disabled,
+  darkKnob = false,
 }: {
   on: boolean;
   label: string;
   onToggle: () => void;
   /** For a control the browser will never let through. */
   disabled?: boolean;
+  darkKnob?: boolean;
 }) {
   return (
     <button
@@ -122,7 +125,8 @@ export function Switch({
     >
       <span
         className={cn(
-          "h-5 w-5 rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.15)] transition-transform",
+          "h-5 w-5 rounded-full transition-transform",
+          darkKnob ? "bg-[#121212]" : "bg-white shadow-[0_1px_2px_rgba(0,0,0,0.15)]",
           on && "translate-x-5",
         )}
       />

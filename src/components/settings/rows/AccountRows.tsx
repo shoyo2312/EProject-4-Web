@@ -17,12 +17,7 @@ import { messageFor } from "@/lib/api/errors";
 import type { SettingsAudience } from "@/lib/api/types";
 import { sleepHoursSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
-import {
-  AUDIENCE_LABELS,
-  formatScreenTimeLimit,
-  formatSleepHours,
-  screenTimeChoices,
-} from "@/lib/settings/account-settings";
+import { AUDIENCE_LABELS, formatSleepHours } from "@/lib/settings/account-settings";
 import { cn } from "@/lib/utils";
 import type { SettingsRow } from "@/types/tiktok";
 
@@ -111,41 +106,6 @@ export function CommentFiltersRow({ row, account }: AccountRowProps) {
   );
 }
 
-/**
- * Screen time → Daily screen time. Stored for every client to read back; no
- * server reads it, so the limit is only as live as a client that enforces it.
- */
-export function ScreenTimeLimitRow({ row, account }: AccountRowProps) {
-  const [open, setOpen] = useState(false);
-  const settings = account.settings;
-
-  return (
-    <>
-      <DialogRowButton
-        row={row}
-        value={
-          settings ? formatScreenTimeLimit(settings.screenTimeLimitMinutes) : undefined
-        }
-        onOpen={() => setOpen(true)}
-      />
-      {open && settings && (
-        <ChoiceModal
-          title={row.title}
-          description={row.description}
-          choices={screenTimeChoices(settings.screenTimeLimitMinutes).map(
-            (minutes) => ({ value: minutes, label: formatScreenTimeLimit(minutes) }),
-          )}
-          selected={settings.screenTimeLimitMinutes}
-          onChoose={(minutes) =>
-            account.update({ screenTimeLimitMinutes: minutes })
-          }
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </>
-  );
-}
-
 /** Screen time → Sleep hours. Wall-clock "HH:mm", read in the viewer's own zone. */
 export function SleepHoursRow({ row, account }: AccountRowProps) {
   const [open, setOpen] = useState(false);
@@ -208,11 +168,11 @@ export function AccountSwitchRow({
 }
 
 /**
- * A row that opens a dialog over the account's settings. `value` is undefined
- * until they have loaded: signed out, the row keeps its static copy; signed in,
- * it stays blank rather than flash the default before the real answer.
+ * A row that opens a dialog or a page over the account's settings. `value` is
+ * undefined until they have loaded: signed out, the row keeps its static copy;
+ * signed in, it stays blank rather than flash the default before the real answer.
  */
-function DialogRowButton({
+export function DialogRowButton({
   row,
   value,
   onOpen,

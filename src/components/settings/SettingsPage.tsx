@@ -14,12 +14,15 @@ import {
   AccountSwitchRow,
   AudienceRow,
   CommentFiltersRow,
-  ScreenTimeLimitRow,
   SleepHoursRow,
 } from "@/components/settings/rows/AccountRows";
 import { AddEmailRow } from "@/components/settings/rows/AddEmailModal";
 import { PreferenceExpandRow } from "@/components/settings/rows/NotificationPreferenceRows";
 import { ScreenTimeSummaryRow } from "@/components/settings/rows/ScreenTimeSummary";
+import {
+  DailyScreenTimePage,
+  DailyScreenTimeRow,
+} from "@/components/settings/rows/screen-time/DailyScreenTimePage";
 import {
   CloseAccountPanel,
   CloseAccountRow,
@@ -68,7 +71,7 @@ import type {
 type SwitchSettingsRow = Extract<SettingsRow, { kind: "switch" }>;
 
 /** The pages that take over the panel in place of the sections. */
-type Subpage = "close-account" | "download-data";
+type Subpage = "close-account" | "download-data" | "daily-screen-time";
 
 /** Screen time → Summary, which a weekly update in the inbox opens. */
 const SUMMARY_TITLE = "Summary";
@@ -229,9 +232,11 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
 
   return (
     <main className="relative h-screen flex-1 overflow-hidden">
+      {/* Live, each page in the panel is a route under /setting, so the arrow
+          leaves it for the sections before it leaves the settings. */}
       <button
         type="button"
-        onClick={() => router.back()}
+        onClick={() => (subpage ? leaveSubpage() : router.back())}
         aria-label="Back"
         className="absolute top-8 left-[max(0.75rem,calc(50%-611px))] flex h-10 w-10 items-center justify-center rounded-full text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)]"
       >
@@ -277,6 +282,9 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
             />
           )}
           {subpage === "download-data" && <DownloadDataPanel onLeave={leaveSubpage} />}
+          {subpage === "daily-screen-time" && (
+            <DailyScreenTimePage account={account} onLeave={leaveSubpage} />
+          )}
           <div className={cn(subpage && "hidden")}>
             {sections.map((section, index) => (
               <section
@@ -444,7 +452,13 @@ function Row({
     case "dm-audience":
       return <AudienceRow row={row} account={account} field="dmAudience" />;
     case "screen-time-limit":
-      return <ScreenTimeLimitRow row={row} account={account} />;
+      return (
+        <DailyScreenTimeRow
+          row={row}
+          account={account}
+          onOpen={() => onOpen("daily-screen-time")}
+        />
+      );
     case "sleep-hours":
       return <SleepHoursRow row={row} account={account} />;
     case "add-email":

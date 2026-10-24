@@ -1,14 +1,17 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
 
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { getScreenTimeWeek } from "@/lib/api/screen-time";
+import { DEFAULT_SETTINGS } from "@/lib/settings/__tests__/user-settings-fixture";
 import { SETTINGS_SECTIONS } from "@/lib/site-config";
 
 const replace = vi.fn();
+const back = vi.fn();
+let search = "summary=1";
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ back: vi.fn(), push: vi.fn(), replace }),
-  useSearchParams: () => new URLSearchParams("summary=1"),
+  useRouter: () => ({ back, push: vi.fn(), replace }),
+  useSearchParams: () => new URLSearchParams(search),
 }));
 vi.mock("@/components/session/SessionProvider", () => ({
   useSession: () => ({
@@ -19,7 +22,7 @@ vi.mock("@/components/session/SessionProvider", () => ({
   }),
 }));
 vi.mock("@/hooks/use-account-settings", () => ({
-  useAccountSettings: () => ({ settings: null, update: vi.fn() }),
+  useAccountSettings: () => ({ settings: DEFAULT_SETTINGS, update: vi.fn() }),
 }));
 vi.mock("@/hooks/use-browser-notifications", () => ({
   useBrowserNotifications: () => ({ on: false, blocked: false, unsupported: false, toggle: vi.fn() }),
@@ -44,7 +47,11 @@ beforeAll(() => {
   HTMLElement.prototype.scrollTo = vi.fn();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  search = "summary=1";
+  back.mockReset();
+});
 
 it("opens the Screen time summary when a weekly update links to it", async () => {
   render(<SettingsPage sections={SETTINGS_SECTIONS} />);
@@ -57,4 +64,16 @@ it("opens the Screen time summary when a weekly update links to it", async () =>
   expect(getScreenTimeWeek).toHaveBeenCalled();
   // The link is spent, so the next weekly update opens it again.
   await waitFor(() => expect(replace).toHaveBeenCalledWith("/setting", { scroll: false }));
+});
+
+it("goes back from a page in the panel to the sections, not off /setting", () => {
+  search = "";
+  render(<SettingsPage sections={SETTINGS_SECTIONS} />);
+
+  fireEvent.click(screen.getByRole("button", { name: /^Daily screen time/ }));
+  expect(screen.getByText("Set your daily time")).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: "Back" }));
+  expect(screen.queryByText("Set your daily time")).toBeNull();
+  expect(back).not.toHaveBeenCalled();
 });

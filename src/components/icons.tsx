@@ -648,6 +648,25 @@ export function InfoCircleIcon(props: IconProps) {
   );
 }
 
+/** Daily screen time → "Set your daily time", and the sleep hours time fields. */
+export function TimeClockIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M22 24a2 2 0 0 0 .85 1.64l9.19 6.43a1 1 0 0 0 1.39-.25l1.15-1.64a1 1 0 0 0-.25-1.39l-7.9-5.53a1 1 0 0 1-.43-.82V13a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v11Z" />
+      <path d="M24 2a22 22 0 1 0 0 44 22 22 0 0 0 0-44ZM6 24a18 18 0 1 1 36 0 18 18 0 0 1-36 0Z" />
+    </Icon>
+  );
+}
+
+/** Daily screen time → "Get notified". */
+export function BellOutlineIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M14.83 14.33a9.22 9.22 0 0 1 18.34 0l1.03 10.59c.28 2.85 1.86 4.92 3.56 7.08H10.24c1.7-2.16 3.28-4.23 3.56-7.08l1.03-10.6ZM24 2c-6.8 0-12.5 5.17-13.16 11.94L9.82 24.53c-.3 3.19-3.4 5.86-5.27 8.23A2 2 0 0 0 6.12 36h35.76a2 2 0 0 0 1.57-3.24c-1.87-2.37-4.96-5.04-5.27-8.23l-1.02-10.59A13.22 13.22 0 0 0 24 2Zm6.9 39c.11-.55-.35-1-.9-1H18c-.55 0-1.01.45-.9 1 1.28 6.61 12.52 6.61 13.8 0Z" />
+    </Icon>
+  );
+}
+
 export function ManageAccountIcon(props: IconProps) {
   return (
     <Icon {...props}>

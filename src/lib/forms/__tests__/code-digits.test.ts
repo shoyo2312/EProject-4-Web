@@ -39,6 +39,13 @@ describe("enterDigits", () => {
     });
   });
 
+  it("fills a shorter code, such as a four-digit passcode, and stops at its end", () => {
+    expect(enterDigits(emptyCode(4), 0, "123456")).toEqual({
+      digits: ["1", "2", "3", "4"],
+      focus: 3,
+    });
+  });
+
   it("ignores input with no digits in it", () => {
     expect(enterDigits(["1", "", "", "", "", ""], 1, "a").digits).toEqual([
       "1", "", "", "", "", "",
