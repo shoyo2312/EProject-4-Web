@@ -28,9 +28,9 @@ const AccountSettingsContext = createContext<AccountSettings | null>(null);
 
 /**
  * The viewer's `user_settings`, shared by the whole app: the `/setting` rows
- * show them, and the notification gates and the screen-time guard act on them
- * on every page. One copy, so a save on `/setting` is what the rest of the app
- * sees next.
+ * show them, and the notification gates, the screen-time guard and the sleep
+ * screen act on them on every page. One copy, so a save on `/setting` is what
+ * the rest of the app sees next.
  *
  * Read on sign-in and again whenever the tab comes back into view: that picks
  * up a change made in another tab (a new daily limit, say), and recovers from

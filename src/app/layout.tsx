@@ -5,6 +5,7 @@ import "./globals.css";
 import { TopBar } from "@/components/layout/TopBar";
 import { PlayerSettingsProvider } from "@/components/player/PlayerSettingsProvider";
 import { ScreenTimeGuard } from "@/components/screen-time/ScreenTimeGuard";
+import { SleepHoursScreen } from "@/components/screen-time/SleepHoursScreen";
 import { SessionProvider } from "@/components/session/SessionProvider";
 import { HighContrastSync } from "@/components/settings/HighContrastSync";
 import { StoriesProvider } from "@/components/stories/StoriesProvider";
@@ -57,7 +58,8 @@ export default function RootLayout({
           <HighContrastSync />
 
           {/* The account's settings, read once: /setting shows them, and the
-              notification gates and the screen-time guard act on every page. */}
+              notification gates, the screen-time guard and the sleep screen act on
+              every page. */}
           <AccountSettingsProvider>
             {/* Renders nothing; counts the signed-in viewer's time on the site. */}
             <ScreenTimeGuard />
@@ -77,6 +79,7 @@ export default function RootLayout({
                 </div>
               </StoriesProvider>
             </PlayerSettingsProvider>
+            <SleepHoursScreen />
           </AccountSettingsProvider>
           <Toaster />
         </SessionProvider>

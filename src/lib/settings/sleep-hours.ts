@@ -1,6 +1,9 @@
 /** Sleep hours last this long from their start, as on TikTok: the end is never chosen. */
 export const SLEEP_HOURS_LENGTH_MINUTES = 8 * 60;
 
+/** How long "Return for now" keeps the sleep screen away, as on TikTok. */
+export const SLEEP_SNOOZE_MS = 60 * 60 * 1000;
+
 const DAY_MINUTES = 24 * 60;
 
 /**
