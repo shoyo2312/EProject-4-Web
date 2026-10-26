@@ -248,7 +248,8 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
   }, [summaryLink, router]);
 
   return (
-    <main className="relative h-screen flex-1 overflow-hidden">
+    // Below `SettingsHeader`'s fixed 60px — the live container is viewport − 60.
+    <main className="relative mt-15 h-[calc(100vh-60px)] flex-1 overflow-hidden">
       {/* Live, each page in the panel is a route under /setting, so the arrow
           leaves it for the sections before it leaves the settings. */}
       <button

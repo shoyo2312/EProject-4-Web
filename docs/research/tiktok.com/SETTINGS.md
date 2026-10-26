@@ -13,6 +13,12 @@ the search box, Upload, the two inbox glyphs and the avatar. Everything else on 
 the 240px sidebar.
 
 ```
+.DivHeaderContainer       fixed, 60 tall, #121212, box-shadow 0 1px 1px rgba(255,255,255,.12)
+  .DivHeaderWrapperMain   padding 0 24 0 16, flex, space-between
+    .DivHeaderLeft        300 wide; logo 118×42
+    .DivSearchForm        500×46, radius 92, rgba(255,255,255,.12); 1×28 divider, 52-wide button
+    .DivHeaderRight       Upload 116×36 (radius 2, rgba(255,255,255,.08), "+" 20, 16/600),
+                          then messages, inbox, avatar — 32×32 each, 32 / 16 / 24 apart
 .DivSettingContainer      full width, viewport height − 60 (932 measured)
   .DivSettingBack         absolute, 40×40 disc, top 32, 21px left of the card
   .DivLayoutContainer     1100 wide, margin-inline auto, padding-top 16, flex row
@@ -73,10 +79,9 @@ with the muted, unindented headings noted above.
 
 ## Deviations in our build
 
-- **The sidebar stays.** `/setting` lives in the `(shell)` route group, so it keeps the app's
-  sidebar and top bar instead of the live page's bespoke header. Rebuilding that header would
-  mean a second global chrome for one route, and the settings card itself — the part this page
-  is actually about — is reproduced at full fidelity beside it.
+- **The header's inbox opens the rail's Activity panel**, hung under the bar at the right edge
+  (`ActivityDrawer placement="header"`), rather than the live dropdown. Its messages glyph is
+  inert, like the rail's Messages row — there is no chat UI yet.
 - **The Ads section is dropped, not reproduced.** Seven rows and a nav entry, gone from
   `SETTINGS_SECTIONS` entirely rather than rendered inert — there is no ads subsystem anywhere in
   the backend, so every one of them would be permanently dead. The live section's measurements stay

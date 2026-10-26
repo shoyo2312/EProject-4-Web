@@ -54,16 +54,23 @@ import { cn } from "@/lib/utils";
  * `visibility` is included in the transition on purpose: it flips to visible
  * immediately on open but holds until the end of the 400ms on close, so the
  * panel does not disappear mid-slide.
+ *
+ * `placement="header"` is for `/setting`, which has a header instead of the
+ * rail: the same panel hangs under the 60px bar at the right edge, beside the
+ * inbox glyph that opened it, and slides in from that side.
  */
 export function ActivityDrawer({
   open,
   inbox,
   onClose,
+  placement = "rail",
 }: {
   open: boolean;
   inbox: NotificationInbox;
   onClose: () => void;
+  placement?: "rail" | "header";
 }) {
+  const fromRail = placement === "rail";
   const router = useRouter();
   const { openStories } = useStories();
   const signedIn = useSession().user !== null;
@@ -186,23 +193,33 @@ export function ActivityDrawer({
           type="button"
           aria-label="Close notifications"
           onClick={onClose}
-          className="fixed top-0 left-[calc(20rem+4.5rem)] z-[99] h-screen w-screen cursor-default"
+          className={cn(
+            "fixed z-[99] cursor-default",
+            fromRail
+              ? "top-0 left-[calc(20rem+4.5rem)] h-screen w-screen"
+              : "inset-x-0 top-15 bottom-0",
+          )}
         />
       )}
 
       <div
         inert={!open || undefined}
         className={cn(
-          // Under the sidebar's animation cover — see `SearchDrawer`.
-          "fixed top-0 z-[1] h-screen w-80 overscroll-contain bg-[var(--tt-page)]",
-          "left-18 border-x border-[var(--tt-divider)]",
+          "fixed w-80 overscroll-contain bg-[var(--tt-page)]",
+          fromRail
+            ? // Under the sidebar's animation cover — see `SearchDrawer`.
+              "top-0 left-18 z-[1] h-screen border-x border-[var(--tt-divider)]"
+            : // Over the mask, which covers everything below the header.
+              "top-15 right-0 z-[100] h-[calc(100vh-60px)] border-l border-[var(--tt-divider)]",
           // `transform`, not Tailwind's `translate-x-*`: in v4 those compile to the
           // `translate` property, which `transition-[transform]` does not cover —
           // the slide snapped instantly while opacity eased.
           "transition-[transform,opacity,visibility] duration-[400ms] ease-[ease]",
           open
             ? "visible opacity-100 [transform:translateX(0)]"
-            : "invisible opacity-30 [transform:translateX(-24rem)] [pointer-events:none]",
+            : fromRail
+              ? "invisible opacity-30 [transform:translateX(-24rem)] [pointer-events:none]"
+              : "invisible opacity-30 [transform:translateX(24rem)] [pointer-events:none]",
         )}
       >
         {/* `.DivDrawerCloseButtonContainer` — absolute, top 1.5rem, end 1rem.
