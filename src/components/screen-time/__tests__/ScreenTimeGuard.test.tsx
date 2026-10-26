@@ -141,7 +141,7 @@ it("reads no week for an account without a limit", async () => {
   expect(getScreenTimeWeek).not.toHaveBeenCalled();
 });
 
-it("reminds ten minutes before sleep hours and at their start, once each", async () => {
+it("reminds ten minutes before sleep hours, once, and leaves their start to the sleep screen", async () => {
   vi.setSystemTime(new Date(2026, 9, 21, 21, 49, 50));
   settings = { ...DEFAULT_SETTINGS, sleepHoursStart: "22:00", sleepHoursEnd: "06:00" };
   render(<ScreenTimeGuard />);
@@ -149,19 +149,15 @@ it("reminds ten minutes before sleep hours and at their start, once each", async
   await act(() => vi.advanceTimersByTimeAsync(15_000)); // 21:50:05
   expect(toast).toHaveBeenCalledWith("Sleep hours start in 10 minutes");
 
-  await act(() => vi.advanceTimersByTimeAsync(60_000));
+  await act(() => vi.advanceTimersByTimeAsync(10 * 60_000)); // 22:00:05
   expect(toast).toHaveBeenCalledTimes(1);
-
-  await act(() => vi.advanceTimersByTimeAsync(9 * 60_000)); // 22:00:05
-  expect(toast).toHaveBeenLastCalledWith("Your sleep hours have started");
-  expect(toast).toHaveBeenCalledTimes(2);
-  expect(localStorage.getItem("nowa:sleep-reminder:1:2026-10-21:soon")).not.toBeNull();
+  expect(localStorage.getItem("nowa:sleep-reminder:1:2026-10-21")).not.toBeNull();
 });
 
 it("does not repeat a reminder this browser already showed for the night", async () => {
   vi.setSystemTime(new Date(2026, 9, 21, 21, 55));
   settings = { ...DEFAULT_SETTINGS, sleepHoursStart: "22:00", sleepHoursEnd: "06:00" };
-  localStorage.setItem("nowa:sleep-reminder:1:2026-10-21:soon", "1");
+  localStorage.setItem("nowa:sleep-reminder:1:2026-10-21", "1");
   render(<ScreenTimeGuard />);
 
   await act(() => vi.advanceTimersByTimeAsync(60_000));

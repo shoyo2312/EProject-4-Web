@@ -109,24 +109,20 @@ export function formatClockTime(time: string): string {
   return `${pad(h % 12 || 12)}:${pad(m)} ${h < 12 ? "AM" : "PM"}`;
 }
 
-/** How long before and after the start of sleep hours each reminder is shown. */
+/** How long before the start of sleep hours the reminder is shown. */
 const REMINDER_WINDOW_MS = 10 * 60 * 1000;
 
 /**
- * Which sleep reminder is due at `now`: "soon" in the ten minutes before the
- * start, "started" in the ten minutes after it. `night` is the local day the
- * start falls on, which keys "shown once per night".
+ * Whether the sleep reminder is due at `now`, in the ten minutes before the
+ * start: the night it is for — the local day the start falls on, which keys
+ * "shown once per night" — or null. From the start on, the sleep screen says so.
  */
-export function sleepReminderDue(
-  start: string,
-  now: Date,
-): { kind: "soon" | "started"; night: string } | null {
+export function sleepReminderDue(start: string, now: Date): string | null {
   const [h, m] = start.split(":").map(Number);
-  for (const day of [-1, 0, 1]) {
+  for (const day of [0, 1]) {
     const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + day, h, m);
-    const since = now.getTime() - at.getTime();
-    if (since >= -REMINDER_WINDOW_MS && since < 0) return { kind: "soon", night: localDate(at) };
-    if (since >= 0 && since < REMINDER_WINDOW_MS) return { kind: "started", night: localDate(at) };
+    const until = at.getTime() - now.getTime();
+    if (until > 0 && until <= REMINDER_WINDOW_MS) return localDate(at);
   }
   return null;
 }

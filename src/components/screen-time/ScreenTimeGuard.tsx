@@ -42,10 +42,7 @@ function rememberUnlock(userId: string, date: string): void {
   }
 }
 
-const SLEEP_REMINDERS = {
-  soon: "Sleep hours start in 10 minutes",
-  started: "Your sleep hours have started",
-} as const;
+const SLEEP_REMINDER = "Sleep hours start in 10 minutes";
 
 /**
  * Marks a night's reminder as shown, in storage so another tab or a reload
@@ -78,8 +75,8 @@ function claimReminder(key: string, shown: Set<string>): boolean {
  * but /setting once it reaches the limit. The passcode lifts it for the rest of
  * the day on this browser.
  *
- * With sleep hours set, a toast says so ten minutes before they start and
- * again when they do, once a night, while the site is in view.
+ * With sleep hours set, a toast says so ten minutes before they start, once a
+ * night, while the site is in view. Their start is `SleepHoursScreen`'s.
  */
 export function ScreenTimeGuard() {
   const { user } = useSession();
@@ -116,9 +113,9 @@ export function ScreenTimeGuard() {
       if (document.visibilityState !== "visible") return;
 
       const start = sleepStartRef.current;
-      const due = start ? sleepReminderDue(start, new Date()) : null;
-      if (due && claimReminder(`nowa:sleep-reminder:${userId}:${due.night}:${due.kind}`, reminded)) {
-        toast(SLEEP_REMINDERS[due.kind]);
+      const night = start ? sleepReminderDue(start, new Date()) : null;
+      if (night && claimReminder(`nowa:sleep-reminder:${userId}:${night}`, reminded)) {
+        toast(SLEEP_REMINDER);
       }
 
       if (!document.hasFocus() || lockedRef.current) return;

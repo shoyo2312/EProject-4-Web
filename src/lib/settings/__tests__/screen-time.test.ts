@@ -101,19 +101,16 @@ describe("sleep hours", () => {
     expect(formatClockTime("12:15")).toBe("12:15 PM");
   });
 
-  it("is due ten minutes before the start, and at the start", () => {
+  it("is due in the ten minutes before the start, not once it has passed", () => {
     expect(sleepReminderDue("22:00", at("21:49"))).toBeNull();
-    expect(sleepReminderDue("22:00", at("21:50"))?.kind).toBe("soon");
-    expect(sleepReminderDue("22:00", at("22:00"))?.kind).toBe("started");
-    expect(sleepReminderDue("22:00", at("22:09"))?.kind).toBe("started");
-    expect(sleepReminderDue("22:00", at("22:15"))).toBeNull();
+    expect(sleepReminderDue("22:00", at("21:50"))).toBe("2026-10-24");
+    expect(sleepReminderDue("22:00", at("21:59"))).toBe("2026-10-24");
+    // From the start on, the sleep screen says so.
+    expect(sleepReminderDue("22:00", at("22:00"))).toBeNull();
+    expect(sleepReminderDue("22:00", at("22:09"))).toBeNull();
   });
 
   it("names the night by the day its start falls on", () => {
-    expect(sleepReminderDue("00:05", at("23:55"))).toEqual({ kind: "soon", night: "2026-10-25" });
-    expect(sleepReminderDue("23:58", new Date(2026, 9, 25, 0, 2))).toEqual({
-      kind: "started",
-      night: "2026-10-24",
-    });
+    expect(sleepReminderDue("00:05", at("23:55"))).toBe("2026-10-25");
   });
 });
