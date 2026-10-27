@@ -14,6 +14,7 @@ import {
   UploadIcon,
 } from "@/components/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { badgeLabel } from "@/lib/chat-unread";
 import { cn } from "@/lib/utils";
 import type { NavItem } from "@/types/tiktok";
 
@@ -99,7 +100,7 @@ export function NavRow({
 
           {item.badgeCount ? (
             <span className="absolute -right-1 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--tt-red)] px-1 text-[10px] font-bold leading-none text-white">
-              {item.badgeCount}
+              {badgeLabel(item.badgeCount)}
             </span>
           ) : null}
         </span>

@@ -884,3 +884,35 @@ export function BoldCheckIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** Smiley with a plus: "add a reaction". Stroked, drawn on the same 48×48 grid. */
+export function EmojiAddIcon(props: IconProps) {
+  return (
+    <Icon {...props} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M40.4 26A17 17 0 1 1 22 7.6" />
+      <path d="M15 29a10 10 0 0 0 14 2.5" />
+      <path d="M17 20.5v.5M27 20.5v.5" strokeWidth={4} />
+      <path d="M37 5v12M31 11h12" />
+    </Icon>
+  );
+}
+
+/** Curved arrow pointing back: "reply". */
+export function ReplyIcon(props: IconProps) {
+  return (
+    <Icon {...props} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 10 7 21l12 11" />
+      <path d="M8 21h20a12 12 0 0 1 12 12v5" />
+    </Icon>
+  );
+}
+
+export function TrashIcon(props: IconProps) {
+  return (
+    <Icon {...props} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 13h32M18 13V8h12v5" />
+      <path d="M12 13l2 27h20l2-27" />
+      <path d="M20 21v12M28 21v12" />
+    </Icon>
+  );
+}

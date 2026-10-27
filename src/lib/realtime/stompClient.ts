@@ -17,6 +17,8 @@ interface Topic {
 
 /** Every destination a mounted component is listening to, connected or not. */
 const topics = new Set<Topic>();
+/** Callers that need to know the socket (re)connected, to refetch what the broker did not replay. */
+const connectListeners = new Set<() => void>();
 let client: Client | null = null;
 
 /**
@@ -52,6 +54,7 @@ function connection(): Client {
   // ones when the socket dropped — so each one re-subscribes every topic.
   next.onConnect = () => {
     for (const topic of topics) attach(next, topic);
+    for (const listener of connectListeners) listener();
   };
 
   client = next;
@@ -96,6 +99,18 @@ export function subscribeTopic(destination: string, onMessage: (body: string) =>
     topics.delete(topic);
     if (stomp.connected) topic.subscription?.unsubscribe();
     topic.subscription = null;
+  };
+}
+
+/**
+ * Calls `listener` every time the shared connection (re)connects, including the first. The broker
+ * keeps no history, so anything sent while the socket was down is only recoverable by asking REST
+ * again — this is the cue. Returns the function that stops listening.
+ */
+export function onStompConnect(listener: () => void): () => void {
+  connectListeners.add(listener);
+  return () => {
+    connectListeners.delete(listener);
   };
 }
 
