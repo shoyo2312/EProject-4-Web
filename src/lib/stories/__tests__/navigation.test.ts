@@ -56,8 +56,8 @@ describe("previous", () => {
 });
 
 describe("displayMs", () => {
-  it("shows an image for five seconds", () => {
-    expect(displayMs(story("a"))).toBe(5000);
+  it("shows an image for thirty seconds", () => {
+    expect(displayMs(story("a"))).toBe(30000);
   });
 
   it("shows a video for its own length", () => {

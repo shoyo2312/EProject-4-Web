@@ -6,7 +6,7 @@ export interface StoryPosition {
   story: number;
 }
 
-const IMAGE_MS = 5000;
+const IMAGE_MS = 30000;
 /** A video whose length moderation could not read still has to advance. */
 const UNKNOWN_VIDEO_MS = 15000;
 

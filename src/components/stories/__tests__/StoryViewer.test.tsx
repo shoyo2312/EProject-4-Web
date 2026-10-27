@@ -111,8 +111,9 @@ describe("StoryViewer", () => {
     renderViewer(theirs, { onClose });
     await act(async () => {});
 
-    act(() => vi.advanceTimersByTime(5_050));
-    act(() => vi.advanceTimersByTime(1_000));
+    // An image story runs 30 s (navigation.ts IMAGE_MS); 6 s into the next one is 0.2.
+    act(() => vi.advanceTimersByTime(30_050));
+    act(() => vi.advanceTimersByTime(6_000));
 
     expect(onClose).not.toHaveBeenCalled();
     const [first, second] = progressValues();
@@ -135,7 +136,7 @@ describe("StoryViewer", () => {
       act(() => release());
     }
 
-    act(() => vi.advanceTimersByTime(6_000));
+    act(() => vi.advanceTimersByTime(31_000));
     expect(progressValues()[0]).toBe(1);
   });
 
