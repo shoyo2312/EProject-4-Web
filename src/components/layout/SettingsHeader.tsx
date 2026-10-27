@@ -16,6 +16,7 @@ import { AccountMenu } from "@/components/layout/TopBar";
 import { useSession } from "@/components/session/SessionProvider";
 import { useNotifications } from "@/hooks/use-notifications";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
+import { formatBadgeCount } from "@/lib/format";
 
 /**
  * `/setting`'s header. The live page drops the sidebar on this one route and
@@ -104,7 +105,7 @@ export function SettingsHeader() {
             <ActivityIcon className="h-8 w-8" />
             {inbox.unreadCount > 0 && (
               <span className="absolute -top-0.5 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--tt-red)] px-1 text-[10px] leading-none font-bold text-white">
-                {inbox.unreadCount}
+                {formatBadgeCount(inbox.unreadCount)}
               </span>
             )}
           </button>
