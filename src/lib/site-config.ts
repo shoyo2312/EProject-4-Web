@@ -138,32 +138,29 @@ export const SHARE_TARGETS: ShareTarget[] = [
 ];
 
 /**
- * Explore category rail — the 21 chips of `.DivCategoryList`, in the live
- * site's own order. "All" is the default selection.
+ * Explore category rail, in the live site's order. "All" is the default selection.
+ * Only tabs the demo catalogue can fill are kept: `EXPLORE_CATEGORY_HASHTAGS` maps each
+ * one to the hashtag every clip of that category carries (seed `content.py EXPLORE_TAGS`),
+ * and the grid searches that hashtag. Comedy, Anime & Comics, Relationship, Shows,
+ * Lipsync, Games, Society, Drama and Beauty Care have no clips, so they are not listed.
  */
-export const EXPLORE_CATEGORIES = [
-  "All",
-  "Singing & Dancing",
-  "Comedy",
-  "Sports",
-  "Anime & Comics",
-  "Relationship",
-  "Shows",
-  "Lipsync",
-  "Daily Life",
-  "Beauty Care",
-  "Games",
-  "Society",
-  "Outfit",
-  "Cars",
-  "Food",
-  "Animals",
-  "Family",
-  "Drama",
-  "Fitness & Health",
-  "Education",
-  "Technology",
-] as const;
+export const EXPLORE_CATEGORY_HASHTAGS: Record<string, string> = {
+  "Singing & Dancing": "music",
+  Sports: "sports",
+  "Daily Life": "dailylife",
+  Outfit: "fashion",
+  Cars: "cars",
+  Food: "food",
+  Animals: "animals",
+  Family: "kids",
+  "Fitness & Health": "fitness",
+  Education: "study",
+  Technology: "tech",
+  "Travel & Nature": "travel",
+  Art: "art",
+};
+
+export const EXPLORE_CATEGORIES = ["All", ...Object.keys(EXPLORE_CATEGORY_HASHTAGS)] as const;
 
 /* --- /setting ------------------------------------------------------------ */
 
