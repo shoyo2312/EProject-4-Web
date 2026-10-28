@@ -74,6 +74,17 @@ const nextConfig: NextConfig = {
      * deployment serves media from the CDN and must keep the block.
      */
     dangerouslyAllowLocalIP: LOCAL_MEDIA_ORIGIN,
+
+    /**
+     * How long an optimized image stays in Next's cache and in the browser's
+     * (`Cache-Control: max-age`). The default is 4 hours, which is why every
+     * comment avatar was re-fetched from the media origin — a round trip out
+     * through Cloudflare and back into the tunnel — several times a day.
+     * Avatar URLs carry a `?v=` that changes on every upload, and a thumbnail
+     * is written once under its video id, so a long TTL never shows a stale
+     * picture.
+     */
+    minimumCacheTTL: 60 * 60 * 24 * 30,
   },
 
   /**
