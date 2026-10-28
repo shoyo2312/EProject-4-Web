@@ -89,7 +89,7 @@ export function ProfileStoryAvatar({ author, className }: { author: Author; clas
     <img src={author.avatarUrl} alt="" referrerPolicy="no-referrer" className={cn("rounded-full object-cover", className)} />
   );
   const pending = own && state !== "unseen" && stories.some((story) => story.status === "PENDING_MODERATION");
-  const ringed = state === "none" ? image : <StoryRing state={state} pending={pending}>{image}</StoryRing>;
+  const ringed = state === "none" ? image : <StoryRing state={state} spin pending={pending}>{image}</StoryRing>;
 
   const viewer = player.mounted && (
     <StoryViewer

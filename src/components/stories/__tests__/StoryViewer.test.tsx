@@ -229,6 +229,18 @@ describe("StoryViewer", () => {
       expect(progressValues()[0]).toBeGreaterThan(paused + 0.05);
     });
 
+    it("keeps a sticky pause when the pointer merely leaves the media after an earlier hold", async () => {
+      const media = await clocked();
+      fireEvent.pointerDown(media);
+      act(() => vi.advanceTimersByTime(250));
+      fireEvent.pointerUp(media);
+
+      fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+      fireEvent.pointerLeave(media);
+
+      expect(screen.getByRole("button", { name: "Play" }).getAttribute("aria-pressed")).toBe("true");
+    });
+
     it("clears the sticky pause when stepping to the next story", async () => {
       await clocked();
       fireEvent.click(screen.getByRole("button", { name: "Pause" }));
@@ -268,6 +280,19 @@ describe("StoryViewer", () => {
       fireEvent.error(await screen.findByAltText("a"));
       expect(await screen.findByText("This story can’t be shown right now.")).toBeTruthy();
       expect(document.querySelector("[data-backdrop]")).toBeNull();
+    });
+  });
+
+  describe("layout", () => {
+    it("moves only under motion-safe, and keeps the header clear of the Close button on phones", async () => {
+      renderViewer(theirs);
+      await act(async () => {});
+      const card = document.querySelector("[data-story-card]") as HTMLElement;
+
+      expect(card.className).toContain("motion-safe:starting:scale-[0.92]");
+      expect(card.className).not.toMatch(/(^|\s)starting:scale/);
+      expect(card.className).not.toMatch(/(^|\s)transition-\[transform/);
+      expect(screen.getByRole("button", { name: "Pause" }).closest("[data-story-header]")?.className).toContain("pr-12");
     });
   });
 

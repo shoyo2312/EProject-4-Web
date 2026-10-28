@@ -72,6 +72,8 @@ export function StoryViewer({
   const holdTimer = useRef<number | null>(null);
   // Set when the current press became a hold, so the click that ends it does not also step.
   const wasHold = useRef(false);
+  // The pointer is down and past the hold threshold: only then does leaving or releasing resume.
+  const holding = useRef(false);
   const [freshUrls, setFreshUrls] = useState<Record<string, string>>({});
   const [broken, setBroken] = useState<Record<string, true>>({});
   const retried = useRef(new Set<string>());
@@ -157,12 +159,15 @@ export function StoryViewer({
     clearHold();
     holdTimer.current = window.setTimeout(() => {
       wasHold.current = true;
+      holding.current = true;
       setUserPaused(true);
     }, HOLD_MS);
   };
   const pressEnd = () => {
     clearHold();
-    if (wasHold.current) setUserPaused(false);
+    if (!holding.current) return;
+    holding.current = false;
+    setUserPaused(false);
   };
   /** Steps unless the click is the tail of a hold. */
   const step = (move: () => void) => () => {
@@ -193,11 +198,13 @@ export function StoryViewer({
     onSeenRef.current = onSeen;
   });
   useEffect(() => {
-    if (!storyId || own) return;
+    // A closing player's groups may be re-sorted under it by a refresh; whatever it lands on then
+    // was never watched.
+    if (!storyId || own || closing) return;
     onSeenRef.current(storyId);
     // Counted once per viewer by the server; a failed count is not worth interrupting the story.
     recordStoryView(storyId).catch(() => {});
-  }, [storyId, own]);
+  }, [storyId, own, closing]);
 
   // `mediaUrl` is signed for an hour. A tray left open longer fails to load, so the story is read
   // again once for a fresh URL; failing twice, or no longer being visible, shows it as unavailable.
@@ -263,9 +270,11 @@ export function StoryViewer({
 
       <div
         data-story-card=""
-        className={`relative flex aspect-[9/16] h-full max-h-screen w-auto max-w-full flex-col overflow-hidden bg-[#111] transition-[transform,opacity] duration-200 ease-out starting:scale-[0.92] starting:opacity-0 sm:h-[92vh] sm:rounded-[12px] ${closing ? "scale-[0.92] opacity-0" : ""}`}
+        className={`relative flex aspect-[9/16] h-full max-h-screen w-auto max-w-full flex-col overflow-hidden bg-[#111] transition-opacity duration-200 ease-out starting:opacity-0 motion-safe:transition-[transform,opacity] motion-safe:starting:scale-[0.92] sm:h-[92vh] sm:rounded-[12px] ${closing ? "opacity-0 motion-safe:scale-[0.92]" : ""}`}
       >
-        <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/60 to-transparent px-3 pt-3 pb-6">
+        {/* On phones the card is full width and the root's Close button sits over the header's
+            right end, so the header leaves it room. */}
+        <div data-story-header="" className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/60 to-transparent px-3 pt-3 pr-12 pb-6 sm:pr-3">
           <div className="flex gap-1">
             {group.stories.map((item, index) => (
               <progress

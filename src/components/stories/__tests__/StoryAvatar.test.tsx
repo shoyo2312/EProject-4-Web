@@ -94,6 +94,17 @@ describe("StoryAvatar", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/@bob"));
   });
 
+  it("never spins a full-size list ring either: spinning is the tray's and the profile's", () => {
+    render(
+      <StoryAvatar author={bob} className="h-12 w-12">
+        <span>avatar</span>
+      </StoryAvatar>,
+    );
+    const button = screen.getByRole("button", { name: "Watch Bob's stories" });
+    expect(button.querySelector("[data-ring='unseen']")).not.toBeNull();
+    expect(button.innerHTML).not.toContain("tt-ring-spin");
+  });
+
   it("never spins a thin ring", () => {
     render(
       <StoryAvatar author={bob} thin className="h-6 w-6">

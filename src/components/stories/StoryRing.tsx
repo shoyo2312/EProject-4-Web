@@ -7,16 +7,17 @@ export type StoryRingState = "unseen" | "seen" | "none";
  * fading from one to the other instead of snapping. `thin` draws it 1px with a 1px gap, for small
  * avatars; `fill` makes it fill the box the caller sized, instead of growing around the picture.
  *
- * Motion, all of it `motion-safe`: a full-size unseen ring turns slowly (`thin` rings never do — the
- * side-nav and comment lists keep dozens of them mounted all session); `pending` adds a turning
- * dashed stroke while the owner's story waits for its verdict; `pop` plays one scale-and-glow, for
- * the bubble a story was just posted from.
+ * Motion, all of it `motion-safe`: with `spin`, an unseen ring turns slowly — asked for only by the
+ * tray bubbles and the profile header, never by the lists, which keep dozens of rings mounted all
+ * session; `pending` adds a turning dashed stroke while the owner's story waits for its verdict;
+ * `pop` plays one scale-and-glow, for the bubble a story was just posted from.
  */
 export function StoryRing({
   state,
   className,
   thin = false,
   fill = false,
+  spin = false,
   pending = false,
   pop = false,
   children,
@@ -25,6 +26,7 @@ export function StoryRing({
   className?: string;
   thin?: boolean;
   fill?: boolean;
+  spin?: boolean;
   pending?: boolean;
   pop?: boolean;
   children: React.ReactNode;
@@ -56,7 +58,7 @@ export function StoryRing({
         className={cn(
           "absolute inset-0 rounded-full bg-[conic-gradient(var(--tt-red),#ff2d55,#ff7a45,var(--tt-red))] transition-opacity duration-400",
           state === "unseen" ? "opacity-100" : "opacity-0",
-          state === "unseen" && !thin && "tt-ring-spin",
+          state === "unseen" && spin && "tt-ring-spin",
         )}
       />
       {pending && (

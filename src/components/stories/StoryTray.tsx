@@ -37,6 +37,9 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
   // Where the player was: it is still drawn, closing, after `open` is cleared.
   const [lastOpen, setLastOpen] = useState<StoryPosition | null>(null);
   if (open && open !== lastOpen) setLastOpen(open);
+  // The groups the closing frame plays: `close()` refreshes the feed, and a read landing inside the
+  // exit re-sorts the live groups under the player, onto a story that was never watched.
+  const [frozen, setFrozen] = useState<readonly StoryGroup[] | null>(null);
   const [composing, setComposing] = useState(false);
   const composer = usePresence(composing, MODAL_EXIT_MS);
   // The own bubble's one-shot pop: after a post, and when a story of theirs goes live.
@@ -99,6 +102,7 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
   // Read again on the way out: the order puts owners with nothing left unseen last, and a verdict
   // may have come in for the viewer's own story meanwhile.
   const close = () => {
+    setFrozen(groups);
     setOpen(null);
     refresh();
   };
@@ -115,7 +119,7 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
       {player.mounted && lastOpen && (
         <StoryViewer
           key={`${lastOpen.group}:${lastOpen.story}`}
-          groups={groups}
+          groups={open ? groups : (frozen ?? groups)}
           authors={authors}
           start={lastOpen}
           closing={player.closing}
@@ -179,7 +183,7 @@ export function StoryTray({
           aria-label={ownIndex === -1 ? "Create a story" : "Your story"}
           className={BUBBLE}
         >
-          <StoryRing state={ownState} pending={ownPending} pop={popping}>
+          <StoryRing state={ownState} spin pending={ownPending} pop={popping}>
             <Avatar src={user.avatarUrl} />
           </StoryRing>
         </button>
@@ -207,7 +211,7 @@ export function StoryTray({
             aria-label={`${author.nickname}'s story${group.hasUnseen ? ", new" : ""}`}
             className={`flex w-[72px] shrink-0 flex-col items-center gap-1 ${BUBBLE}`}
           >
-            <StoryRing state={group.hasUnseen ? "unseen" : "seen"}>
+            <StoryRing state={group.hasUnseen ? "unseen" : "seen"} spin>
               <Avatar src={author.avatarUrl} />
             </StoryRing>
             <span className="w-full truncate text-center text-[12px] leading-4 text-[var(--tt-text)]">

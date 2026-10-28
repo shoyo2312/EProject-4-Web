@@ -18,6 +18,15 @@ vi.mock("@/components/stories/StoriesProvider", () => ({
 const feed = { groups: [] as StoryGroup[], profiles: {}, refresh: () => {}, markSeen: () => {} };
 vi.mock("@/hooks/use-story-feed", () => ({ useStoryFeed: () => feed }));
 vi.mock("@/components/ui/toast", () => ({ toast: { success: vi.fn(), warning: vi.fn() } }));
+const recordStoryView = vi.fn<(id: string) => Promise<void>>(async () => undefined);
+vi.mock("@/lib/api/stories", () => ({
+  recordStoryView: (id: string) => recordStoryView(id),
+  getStory: async () => ({}),
+  getStoryViewers: async () => [],
+  updateStoryVisibility: async () => ({}),
+  deleteStory: async () => undefined,
+}));
+vi.mock("@/lib/api/users", () => ({ getProfiles: async () => [] }));
 
 /** The viewer's own group, holding one story at the given stage of its review. */
 function mine(status: StoryStatus, id = "mine"): StoryGroup {
@@ -203,6 +212,23 @@ describe("StoryBar's own bubble", () => {
 });
 
 describe("StoryBar's player", () => {
+  it("does not count a story that a refresh sorts under the closing player", () => {
+    const theirs = (userId: string, id: string): StoryGroup => ({
+      userId, hasUnseen: true, stories: [{ ...mine("ACTIVE").stories[0], id, userId, status: null }],
+    });
+    feed.groups = [theirs("2", "a1"), theirs("3", "b1")];
+    const { rerender } = render(<StoryBar followedIds={["2", "3"]} />);
+    fireEvent.click(screen.getAllByRole("button", { name: /story, new/ })[0]);
+    expect(recordStoryView).toHaveBeenCalledWith("a1");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    // The refresh lands inside the exit: owner 2 is all seen now and sorts after owner 3.
+    feed.groups = [theirs("3", "b1"), { ...theirs("2", "a1"), hasUnseen: false }];
+    rerender(<StoryBar followedIds={["2", "3"]} />);
+
+    expect(recordStoryView).not.toHaveBeenCalledWith("b1");
+  });
+
   it("keeps the player mounted for 200ms after it closes", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     feed.groups = [{ userId: "2", hasUnseen: true, stories: [{ ...mine("ACTIVE").stories[0], id: "t", userId: "2" }] }];
