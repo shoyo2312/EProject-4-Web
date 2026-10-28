@@ -456,7 +456,7 @@ describe("a profile header's avatar", () => {
         <ProfileStoryAvatar author={me} />
       </StoriesProvider>,
     );
-    expect(ringStateOf(await screen.findByRole("button", { name: "Watch Me's stories" }))).toBe("unseen");
+    expect(ringStateOf(await screen.findByRole("button", { name: "Me's avatar" }))).toBe("unseen");
     live.unmount();
 
     getUserStories.mockResolvedValue([story("mine", { userId: "1", status: "PENDING_MODERATION" })]);
@@ -465,6 +465,6 @@ describe("a profile header's avatar", () => {
         <ProfileStoryAvatar author={me} />
       </StoriesProvider>,
     );
-    expect(ringStateOf(await screen.findByRole("button", { name: "Watch Me's stories" }))).toBe("seen");
+    expect(ringStateOf(await screen.findByRole("button", { name: "Me's avatar" }))).toBe("seen");
   });
 });

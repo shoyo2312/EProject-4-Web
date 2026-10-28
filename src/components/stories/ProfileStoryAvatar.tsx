@@ -22,9 +22,9 @@ import { StoryViewer, VIEWER_EXIT_MS } from "./StoryViewer";
 const MENU_EXIT_MS = 150;
 
 /**
- * A profile's avatar, ringed when its owner has stories the viewer may see. The owner's own avatar
- * opens them on click; someone else's opens a small menu — view the avatar full size, and watch
- * the stories when there are any. The stories are whatever `GET /stories/users/{id}` answers for
+ * A profile's avatar, ringed when its owner has stories the viewer may see. A click opens a small
+ * menu — view the avatar full size, and watch the stories when there are any — for the owner and
+ * a visitor alike. The stories are whatever `GET /stories/users/{id}` answers for
  * this viewer — a guest sees only PUBLIC ones of public accounts, the owner all of theirs with
  * their status — and a failed read is just an avatar without a ring.
  */
@@ -103,19 +103,6 @@ export function ProfileStoryAvatar({ author, className }: { author: Author; clas
       onOwnStoryDeleted={close}
     />
   );
-
-  if (own) {
-    if (state === "none") return image;
-    return (
-      <>
-        <button type="button" onClick={() => setOpen(true)} aria-label={`Watch ${author.nickname}'s stories`}
-          className="flex-none rounded-full">
-          {ringed}
-        </button>
-        {viewer}
-      </>
-    );
-  }
 
   return (
     <div ref={rootRef} className="relative flex-none">

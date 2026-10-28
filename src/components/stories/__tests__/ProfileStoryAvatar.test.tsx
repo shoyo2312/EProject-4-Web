@@ -68,14 +68,14 @@ describe("ProfileStoryAvatar", () => {
     expect(screen.getByTestId("story-viewer")).toBeTruthy();
   });
 
-  it("the owner's own avatar plays the stories straight away", async () => {
+  it("the owner's own avatar gets the same menu", async () => {
     viewerId = "2";
     stories = [story];
     render(<ProfileStoryAvatar author={bob} />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Watch Bob's stories" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Bob's avatar" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "View story" }));
 
-    expect(screen.queryByRole("menu")).toBeNull();
     expect(screen.getByTestId("story-viewer")).toBeTruthy();
   });
 });
