@@ -235,4 +235,35 @@ describe("StoryViewer", () => {
       expect(progressValues()[1]).toBeGreaterThan(0.05);
     });
   });
+
+  describe("backdrop", () => {
+    it("blurs the image behind itself", async () => {
+      renderViewer(theirs);
+      const backdrop = document.querySelector("img[data-backdrop]");
+
+      expect(backdrop?.getAttribute("src")).toBe("https://media/a.jpg");
+      expect(backdrop?.getAttribute("aria-hidden")).toBe("true");
+    });
+
+    it("draws a gradient, not a second video, behind a video", () => {
+      vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+      vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+      const clip: StoryGroup[] = [{ userId: "2", hasUnseen: true, stories: [story("v", { mediaType: "VIDEO", durationSeconds: 5 })] }];
+      renderViewer(clip);
+
+      const backdrop = document.querySelector("[data-backdrop]");
+      expect(backdrop).not.toBeNull();
+      expect(backdrop?.tagName).not.toBe("IMG");
+      expect(document.querySelectorAll("video")).toHaveLength(1);
+    });
+
+    it("draws no backdrop image once the media is unavailable", async () => {
+      getStory.mockRejectedValue(new Error("gone"));
+      renderViewer(theirs);
+
+      fireEvent.error(await screen.findByAltText("a"));
+      expect(await screen.findByText("This story can’t be shown right now.")).toBeTruthy();
+      expect(document.querySelector("[data-backdrop]")).toBeNull();
+    });
+  });
 });

@@ -284,12 +284,23 @@ export function StoryViewer({
           onContextMenu={(event) => event.preventDefault()}
           className="relative flex min-h-0 flex-1 touch-manipulation items-center justify-center select-none"
         >
+          {/* Letterboxed media sits on a blur of itself rather than on black; a video would cost a
+              second decode, so it gets a gradient. */}
+          {mediaUrl && story.mediaType === "IMAGE" && (
+            // eslint-disable-next-line @next/next/no-img-element -- the same presigned URL as the story image
+            <img aria-hidden="true" data-backdrop="" src={mediaUrl} alt=""
+              className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover opacity-60 blur-2xl" />
+          )}
+          {mediaUrl && story.mediaType === "VIDEO" && (
+            <div aria-hidden="true" data-backdrop=""
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,#2a2a2a,#111)]" />
+          )}
           {!mediaUrl ? (
             <p className="px-6 text-center text-[15px] text-white/70">This story can’t be shown right now.</p>
           ) : story.mediaType === "IMAGE" ? (
             // eslint-disable-next-line @next/next/no-img-element -- a presigned URL that expires; the image pipeline would cache it
             <img key={mediaUrl} src={mediaUrl} alt={story.caption ?? ""} onError={() => recover(story.id)}
-              className="h-full w-full object-contain" />
+              className="relative h-full w-full object-contain" />
           ) : (
             <video
               key={mediaUrl}
@@ -306,7 +317,7 @@ export function StoryViewer({
               }}
               onEnded={forward}
               onError={() => recover(story.id)}
-              className="h-full w-full object-contain"
+              className="relative h-full w-full object-contain"
             />
           )}
 
