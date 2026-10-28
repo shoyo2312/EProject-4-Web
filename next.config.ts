@@ -53,6 +53,16 @@ const nextConfig: NextConfig = {
   output: "standalone",
 
   images: {
+    /**
+     * The optimizer would fetch every avatar from the server itself, out through Cloudflare and
+     * back in through the tunnel. In production that outbound connection to Cloudflare times out
+     * (no IPv6 route, flaky IPv4 connects), so `/_next/image` answered with 500s or took 5–16 s
+     * and avatars stayed grey. Served as-is, the browser loads them straight from Cloudflare's edge.
+     * The settings below only apply again if this is turned back off.
+     */
+    // ponytail: avatars ship at full size (~30–60 KB JPEG instead of a ~3 KB WebP); have media-worker store resized variants if that weight starts to matter.
+    unoptimized: true,
+
     remotePatterns: [
       { protocol: "https", hostname: MEDIA_CDN_HOST },
       {
