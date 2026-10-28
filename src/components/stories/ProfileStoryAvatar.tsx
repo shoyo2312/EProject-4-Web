@@ -87,7 +87,8 @@ export function ProfileStoryAvatar({ author, className }: { author: Author; clas
     // eslint-disable-next-line @next/next/no-img-element -- avatar URL comes from user-service, not the image pipeline
     <img src={author.avatarUrl} alt="" referrerPolicy="no-referrer" className={cn("rounded-full object-cover", className)} />
   );
-  const ringed = state === "none" ? image : <StoryRing state={state}>{image}</StoryRing>;
+  const pending = own && state !== "unseen" && stories.some((story) => story.status === "PENDING_MODERATION");
+  const ringed = state === "none" ? image : <StoryRing state={state} pending={pending}>{image}</StoryRing>;
 
   const viewer = open && (
     <StoryViewer

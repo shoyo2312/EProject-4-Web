@@ -111,7 +111,7 @@ describe("ActivityDrawer, a story entry", () => {
     showStoryEntry([["2", bob]]);
 
     // The ring is still drawn around the picture; it just is not a button of its own.
-    const drawn = document.querySelector("img")?.closest("[class*='tt-red']");
+    const drawn = document.querySelector("img")?.closest("[data-ring='unseen']");
     expect(drawn).not.toBeNull();
     fireEvent.click(drawn!);
 

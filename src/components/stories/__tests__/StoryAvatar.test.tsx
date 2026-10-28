@@ -93,4 +93,15 @@ describe("StoryAvatar", () => {
 
     await waitFor(() => expect(push).toHaveBeenCalledWith("/@bob"));
   });
+
+  it("never spins a thin ring", () => {
+    render(
+      <StoryAvatar author={bob} thin className="h-6 w-6">
+        <span>avatar</span>
+      </StoryAvatar>,
+    );
+    const button = screen.getByRole("button", { name: "Watch Bob's stories" });
+    expect(button.querySelector("[data-ring='unseen']")).not.toBeNull();
+    expect(button.innerHTML).not.toContain("tt-ring-spin");
+  });
 });

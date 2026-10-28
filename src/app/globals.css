@@ -366,6 +366,33 @@
   }
 }
 
+/* Story rings: the unseen gradient turns, the pending dash turns faster, a fresh post pops. */
+@keyframes tt-ring-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+@keyframes tt-ring-pop {
+  0% {
+    scale: 1;
+    box-shadow: 0 0 0 0 rgb(254 44 85 / 0.45);
+  }
+  50% {
+    scale: 1.18;
+  }
+  100% {
+    scale: 1;
+    box-shadow: 0 0 0 10px rgb(254 44 85 / 0);
+  }
+}
+
+.tt-ring-spin {
+  @media (prefers-reduced-motion: no-preference) {
+    animation: tt-ring-spin 3s linear infinite;
+  }
+}
+
 /* Follow badge icon swap — the + / tick pops in when the state flips. */
 @keyframes tt-badge-pop {
   0% {

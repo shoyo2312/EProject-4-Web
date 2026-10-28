@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 
 import { StoryBar, StoryTray } from "@/components/stories/StoryTray";
 import { toast } from "@/components/ui/toast";
@@ -45,8 +45,8 @@ const mineAll = (...groups: StoryGroup[]): StoryGroup => ({
   stories: groups.flatMap((group) => group.stories),
 });
 
-/** The classes of the ring a tray bubble draws: its colour is the state. */
-const ringOf = (bubble: HTMLElement) => bubble.firstElementChild?.className ?? "";
+/** The state of the ring a tray bubble draws. */
+const ringOf = (bubble: HTMLElement) => bubble.firstElementChild?.getAttribute("data-ring");
 
 afterEach(() => {
   cleanup();
@@ -61,7 +61,7 @@ describe("StoryTray's own bubble", () => {
   it("is red while a story of yours is live", () => {
     tray([mine("ACTIVE")]);
 
-    expect(ringOf(screen.getByRole("button", { name: "Your story" }))).toContain("tt-red");
+    expect(ringOf(screen.getByRole("button", { name: "Your story" }))).toBe("unseen");
   });
 
   it.each<StoryStatus>(["PENDING_MODERATION", "HELD", "REJECTED"])(
@@ -69,16 +69,35 @@ describe("StoryTray's own bubble", () => {
     (status) => {
       tray([mine(status)]);
 
-      expect(ringOf(screen.getByRole("button", { name: "Your story" }))).toContain("bg-white/30");
+      expect(ringOf(screen.getByRole("button", { name: "Your story" }))).toBe("seen");
     },
   );
+
+  it("spins the ring of a bubble with unseen stories, not one already seen", () => {
+    const theirs = (hasUnseen: boolean): StoryGroup => ({ userId: "2", hasUnseen, stories: [] });
+    render(<StoryTray groups={[theirs(true)]} authors={{}} onOpen={() => {}} onCreate={() => {}} />);
+    expect(screen.getByRole("button", { name: /story, new/ }).innerHTML).toContain("tt-ring-spin");
+    cleanup();
+
+    render(<StoryTray groups={[theirs(false)]} authors={{}} onOpen={() => {}} onCreate={() => {}} />);
+    expect(screen.getByRole("button", { name: /'s story$/ }).innerHTML).not.toContain("tt-ring-spin");
+  });
+
+  it("shows a pending ring on your bubble while your only story is in review", () => {
+    tray([mine("PENDING_MODERATION")]);
+    const own = screen.getByRole("button", { name: "Your story" });
+    expect(own.querySelector("[data-pending]")).not.toBeNull();
+    cleanup();
+
+    tray([mine("ACTIVE")]);
+    expect(screen.getByRole("button", { name: "Your story" }).querySelector("[data-pending]")).toBeNull();
+  });
 
   it("has no ring before you have posted anything", () => {
     tray([]);
 
     const [bubble] = screen.getAllByRole("button", { name: "Create a story" });
-    expect(ringOf(bubble)).not.toContain("tt-red");
-    expect(ringOf(bubble)).not.toContain("bg-white/30");
+    expect(ringOf(bubble)).toBe("none");
   });
 });
 
@@ -165,4 +184,21 @@ describe("StoryBar's verdict toasts", () => {
     expect(toast.success).not.toHaveBeenCalled();
     expect(toast.warning).not.toHaveBeenCalled();
   });
+
+describe("StoryBar's own bubble", () => {
+  const bar = () => <StoryBar followedIds={["2"]} />;
+
+  it("pops after a pending story goes live, then settles", () => {
+    vi.useFakeTimers();
+    feed.groups = [mine("PENDING_MODERATION")];
+    const { rerender } = render(bar());
+    feed.groups = [mine("ACTIVE")];
+    rerender(bar());
+
+    expect(screen.getByRole("button", { name: "Your story" }).querySelector("[data-pop]")).not.toBeNull();
+    act(() => vi.advanceTimersByTime(600));
+    expect(screen.getByRole("button", { name: "Your story" }).querySelector("[data-pop]")).toBeNull();
+    vi.useRealTimers();
+  });
+});
 });

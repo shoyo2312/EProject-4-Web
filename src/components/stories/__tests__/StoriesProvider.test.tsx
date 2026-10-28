@@ -73,7 +73,7 @@ function Open({ author }: { author: Author }) {
 
 const ring = (id: string) => screen.getByTestId(`ring-${id}`).textContent;
 /** The classes of the ring a `StoryRing` button draws: its colour is the state. */
-const ringClasses = (button: HTMLElement) => button.firstElementChild?.className ?? "";
+const ringStateOf = (button: HTMLElement) => button.querySelector("[data-ring]")?.getAttribute("data-ring");
 
 /** The tab going to the background or coming back, as the browser reports it. */
 function setPageHidden(hidden: boolean) {
@@ -453,7 +453,7 @@ describe("a profile header's avatar", () => {
         <ProfileStoryAvatar author={me} />
       </StoriesProvider>,
     );
-    expect(ringClasses(await screen.findByRole("button", { name: "Watch Me's stories" }))).toContain("tt-red");
+    expect(ringStateOf(await screen.findByRole("button", { name: "Watch Me's stories" }))).toBe("unseen");
     live.unmount();
 
     getUserStories.mockResolvedValue([story("mine", { userId: "1", status: "PENDING_MODERATION" })]);
@@ -462,6 +462,6 @@ describe("a profile header's avatar", () => {
         <ProfileStoryAvatar author={me} />
       </StoriesProvider>,
     );
-    expect(ringClasses(await screen.findByRole("button", { name: "Watch Me's stories" }))).toContain("bg-white/30");
+    expect(ringStateOf(await screen.findByRole("button", { name: "Watch Me's stories" }))).toBe("seen");
   });
 });
