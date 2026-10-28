@@ -27,6 +27,8 @@ const story = {
   status: "ACTIVE",
   visibility: "PUBLIC",
   mediaType: "IMAGE",
+  myReaction: null,
+  reactionCounts: null,
   mediaUrl: "/s1.jpg",
   seen: false,
   createdAt: "2026-10-28T00:00:00Z",

@@ -15,6 +15,7 @@ import type {
 } from "@/lib/api/types";
 import { getProfiles } from "@/lib/api/users";
 import { formatRelativeTime } from "@/lib/format";
+import { emojiOf, REACTIONS } from "@/lib/stories/reactions";
 
 import { useStories } from "./StoriesProvider";
 
@@ -122,6 +123,12 @@ export function StoryOwnerPanel({
           <Eye className="h-4 w-4" />
           {story.viewCount ?? 0} {story.viewCount === 1 ? "view" : "views"}
         </button>
+        {REACTIONS.filter(({ type }) => (story.reactionCounts?.[type] ?? 0) > 0).map(({ type, emoji, label }) => (
+          <span key={type} aria-label={`${story.reactionCounts?.[type]} ${label}`}
+            className="rounded-full bg-white/10 px-2 py-0.5 text-[13px]">
+            {emoji} {story.reactionCounts?.[type]}
+          </span>
+        ))}
 
         <select
           value={visibility}
@@ -166,6 +173,7 @@ export function StoryOwnerPanel({
                 <img src={author.avatarUrl} alt="" referrerPolicy="no-referrer"
                   className="h-7 w-7 rounded-full bg-[rgb(136_136_136/0.5)] object-cover" />
                 <span className="truncate">{author.nickname}</span>
+                {viewer.reaction && <span aria-label={viewer.reaction.toLowerCase()}>{emojiOf(viewer.reaction)}</span>}
                 <span className="ml-auto text-[12px] text-white/60">{formatRelativeTime(viewer.viewedAt)}</span>
               </li>
             );

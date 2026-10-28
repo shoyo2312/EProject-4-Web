@@ -573,6 +573,9 @@ export type StoryStatus = "PENDING_MODERATION" | "ACTIVE" | "HELD" | "REJECTED";
 
 export type StoryMediaType = "IMAGE" | "VIDEO";
 
+/** The five reactions a viewer can give a story, as story-service spells them. */
+export type StoryReaction = "LIKE" | "LOVE" | "WOW" | "ANGRY" | "SAD";
+
 /** The same three audiences, with the same meaning, as a video's. */
 export type StoryVisibility = VideoVisibility;
 
@@ -590,6 +593,10 @@ export interface StoryResponse {
   /** The owner's own view only. */
   viewCount: number | null;
   viewedByMe: boolean;
+  /** The viewer's reaction; null when none, and always null on their own story. */
+  myReaction: StoryReaction | null;
+  /** The owner's own view only: how many viewers reacted each way, reactions nobody gave absent. */
+  reactionCounts: Partial<Record<StoryReaction, number>> | null;
   createdAt: string;
   expiresAt: string;
 }
@@ -616,4 +623,5 @@ export interface StoryRing {
 export interface StoryViewer {
   viewerId: string;
   viewedAt: string;
+  reaction: StoryReaction | null;
 }

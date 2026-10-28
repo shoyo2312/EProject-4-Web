@@ -366,6 +366,24 @@
   }
 }
 
+/* A reaction's emoji rising from the bar and fading; `--drift` is its sideways wander. */
+@keyframes tt-reaction-float {
+  0% {
+    translate: -50% 0;
+    scale: 0.6;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+    scale: 1.1;
+  }
+  100% {
+    translate: calc(-50% + var(--drift, 0px)) -140px;
+    scale: 0.9;
+    opacity: 0;
+  }
+}
+
 /* Story rings: the unseen gradient turns, the pending dash turns faster, a fresh post pops. */
 @keyframes tt-ring-spin {
   to {

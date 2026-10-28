@@ -2,18 +2,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { StoryViewer } from "@/components/stories/StoryViewer";
+import { toast } from "@/components/ui/toast";
 import { holdPlayback } from "@/lib/playback-hold";
 import type { StoryGroup, StoryResponse } from "@/lib/api/types";
 
 vi.mock("@/components/session/SessionProvider", () => ({
-  useSession: () => ({ user: { userId: "1" } }),
+  useSession: () => ({ user: { userId: "1" }, openLogin: () => {} }),
 }));
+vi.mock("@/components/ui/toast", () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }));
 
 const recordStoryView = vi.fn();
 const getStory = vi.fn();
+const setStoryReaction = vi.fn<(id: string, reaction: string) => Promise<void>>(async () => undefined);
+const clearStoryReaction = vi.fn<(id: string) => Promise<void>>(async () => undefined);
 vi.mock("@/lib/api/stories", () => ({
   recordStoryView: (id: string) => recordStoryView(id),
   getStory: (id: string) => getStory(id),
+  setStoryReaction: (id: string, reaction: string) => setStoryReaction(id, reaction),
+  clearStoryReaction: (id: string) => clearStoryReaction(id),
   getStoryViewers: async () => [],
   updateStoryVisibility: async () => ({}),
   deleteStory: async () => undefined,
@@ -32,6 +38,8 @@ function story(id: string, overrides: Partial<StoryResponse> = {}): StoryRespons
     durationSeconds: null,
     viewCount: null,
     viewedByMe: false,
+    myReaction: null,
+    reactionCounts: null,
     createdAt: "2026-10-20T10:00:00Z",
     expiresAt: "2026-10-21T10:00:00Z",
     ...overrides,
@@ -307,6 +315,34 @@ describe("StoryViewer", () => {
       expect(dialog.querySelector("[data-story-card]")?.className).toContain("scale-[0.92]");
       act(() => vi.advanceTimersByTime(3_000));
       expect(progressValues()[0]).toBe(0);
+    });
+  });
+
+  describe("reactions", () => {
+    it("sends the reaction after showing it, and reverts when the request fails", async () => {
+      setStoryReaction.mockRejectedValueOnce(new Error("down"));
+      renderViewer(theirs);
+
+      fireEvent.click(screen.getByRole("button", { name: "Love" }));
+      expect(screen.getByRole("button", { name: "Love" }).getAttribute("aria-pressed")).toBe("true");
+
+      await waitFor(() => expect(setStoryReaction).toHaveBeenCalledWith("a", "LOVE"));
+      await waitFor(() => expect(screen.getByRole("button", { name: "Love" }).getAttribute("aria-pressed")).toBe("false"));
+      expect(toast.error).toHaveBeenCalledWith("Couldn't send your reaction");
+    });
+
+    it("clears a reaction through the API", async () => {
+      renderViewer([{ ...theirs[0], stories: [story("a", { myReaction: "WOW" }), story("b")] }]);
+
+      fireEvent.click(screen.getByRole("button", { name: "Wow" }));
+
+      await waitFor(() => expect(clearStoryReaction).toHaveBeenCalledWith("a"));
+    });
+
+    it("shows no reaction bar under your own story", () => {
+      renderViewer([{ userId: "1", hasUnseen: false, stories: [story("mine", { userId: "1", status: "ACTIVE", viewCount: 0 })] }]);
+
+      expect(screen.queryByRole("button", { name: "Love" })).toBeNull();
     });
   });
 });

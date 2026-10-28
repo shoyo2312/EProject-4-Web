@@ -5,17 +5,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useSession } from "@/components/session/SessionProvider";
+import { toast } from "@/components/ui/toast";
 import { useEscapeKey } from "@/hooks/use-escape-key";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useMounted } from "@/hooks/use-mounted";
 import { usePlaybackHeld } from "@/hooks/use-playback-held";
 import { unknownAuthor } from "@/lib/api/adapters";
-import { getStory, recordStoryView } from "@/lib/api/stories";
-import type { StoryGroup } from "@/lib/api/types";
+import { clearStoryReaction, getStory, recordStoryView, setStoryReaction } from "@/lib/api/stories";
+import type { StoryGroup, StoryReaction } from "@/lib/api/types";
 import { formatRelativeTime } from "@/lib/format";
 import { displayMs, next, previous, type StoryPosition } from "@/lib/stories/navigation";
 import type { Author } from "@/types/tiktok";
 
+import { ReactionBar } from "./ReactionBar";
 import { useStories } from "./StoriesProvider";
 import { StoryOwnerPanel } from "./StoryOwnerPanel";
 
@@ -55,7 +57,7 @@ export function StoryViewer({
   onOwnStoryChanged: () => void;
   onOwnStoryDeleted: () => void;
 }) {
-  const { user } = useSession();
+  const { user, openLogin } = useSession();
   const { syncRings } = useStories();
   const mounted = useMounted();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -75,6 +77,8 @@ export function StoryViewer({
   // The pointer is down and past the hold threshold: only then does leaving or releasing resume.
   const holding = useRef(false);
   const [freshUrls, setFreshUrls] = useState<Record<string, string>>({});
+  // Reactions given in this player, over what the stories arrived with: shown at once, sent after.
+  const [reactions, setReactions] = useState<Record<string, StoryReaction | null>>({});
   const [broken, setBroken] = useState<Record<string, true>>({});
   const retried = useRef(new Set<string>());
 
@@ -251,6 +255,18 @@ export function StoryViewer({
   if (!mounted || !group || !story) return null;
 
   const author = authors[group.userId] ?? unknownAuthor(group.userId);
+  const myReaction = story.id in reactions ? reactions[story.id] : story.myReaction;
+
+  function react(next: StoryReaction | null) {
+    if (!story) return;
+    const id = story.id;
+    const before = myReaction;
+    setReactions((current) => ({ ...current, [id]: next }));
+    (next ? setStoryReaction(id, next) : clearStoryReaction(id)).catch(() => {
+      setReactions((current) => ({ ...current, [id]: before }));
+      toast.error("Couldn't send your reaction");
+    });
+  }
 
   return createPortal(
     <div
@@ -361,9 +377,15 @@ export function StoryViewer({
           </button>
 
           {story.caption && (
-            <p className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pt-10 pb-5 text-[15px] leading-5 break-words text-white transition-opacity duration-200 ${userPaused ? "opacity-40" : ""}`}>
+            <p className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pt-10 text-[15px] leading-5 break-words text-white transition-opacity duration-200 ${own ? "pb-5" : "pb-16"} ${userPaused ? "opacity-40" : ""}`}>
               {story.caption}
             </p>
+          )}
+
+          {!own && (
+            <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center pb-4">
+              <ReactionBar value={myReaction} onChange={react} signedIn={user !== null} onRequireLogin={openLogin} />
+            </div>
           )}
 
           {userPaused && (

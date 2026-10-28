@@ -15,6 +15,8 @@ function story(id: string, userId: string, status: StoryStatus): StoryResponse {
     durationSeconds: null,
     viewCount: 0,
     viewedByMe: false,
+    myReaction: null,
+    reactionCounts: null,
     createdAt: "2026-10-20T10:00:00Z",
     expiresAt: "2026-10-21T10:00:00Z",
   };
