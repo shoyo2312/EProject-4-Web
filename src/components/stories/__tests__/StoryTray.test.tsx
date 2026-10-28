@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { StoryBar, StoryTray } from "@/components/stories/StoryTray";
 import { toast } from "@/components/ui/toast";
@@ -198,6 +198,24 @@ describe("StoryBar's own bubble", () => {
     expect(screen.getByRole("button", { name: "Your story" }).querySelector("[data-pop]")).not.toBeNull();
     act(() => vi.advanceTimersByTime(600));
     expect(screen.getByRole("button", { name: "Your story" }).querySelector("[data-pop]")).toBeNull();
+    vi.useRealTimers();
+  });
+});
+
+describe("StoryBar's player", () => {
+  it("keeps the player mounted for 200ms after it closes", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    feed.groups = [{ userId: "2", hasUnseen: true, stories: [{ ...mine("ACTIVE").stories[0], id: "t", userId: "2" }] }];
+    render(<StoryBar followedIds={["2"]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /story, new/ }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.getByRole("dialog", { hidden: true })).toBeTruthy();
+
+    act(() => vi.advanceTimersByTime(200));
+    expect(screen.queryByRole("dialog", { hidden: true })).toBeNull();
     vi.useRealTimers();
   });
 });

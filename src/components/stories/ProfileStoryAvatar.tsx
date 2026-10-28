@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import type { Author } from "@/types/tiktok";
 
 import { StoryRing } from "./StoryRing";
-import { StoryViewer } from "./StoryViewer";
+import { StoryViewer, VIEWER_EXIT_MS } from "./StoryViewer";
 
 /** How long the action menu stays mounted while it fades out. */
 const MENU_EXIT_MS = 150;
@@ -35,6 +35,7 @@ export function ProfileStoryAvatar({ author, className }: { author: Author; clas
   const own = userId === viewerId;
   const [stories, setStories] = useState<StoryResponse[]>([]);
   const [open, setOpen] = useState(false);
+  const player = usePresence(open, VIEWER_EXIT_MS);
   const [version, setVersion] = useState(0);
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -90,8 +91,9 @@ export function ProfileStoryAvatar({ author, className }: { author: Author; clas
   const pending = own && state !== "unseen" && stories.some((story) => story.status === "PENDING_MODERATION");
   const ringed = state === "none" ? image : <StoryRing state={state} pending={pending}>{image}</StoryRing>;
 
-  const viewer = open && (
+  const viewer = player.mounted && (
     <StoryViewer
+      closing={player.closing}
       groups={groups}
       authors={{ [userId]: author }}
       start={{ group: 0, story: firstUnseen(group) }}

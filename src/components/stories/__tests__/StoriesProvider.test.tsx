@@ -335,7 +335,8 @@ describe("StoriesProvider", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     await waitFor(() => expect(ring("2")).toBe("seen"));
-    expect(screen.queryByRole("dialog")).toBeNull();
+    // The player lingers for its exit, then goes.
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
   it("deleting your own story from the player asks for your ring again instead of keeping the old one", async () => {

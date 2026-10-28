@@ -24,6 +24,8 @@ const TYPING = "input, textarea, select";
 
 /** A press held this long is a pause, not a step. */
 const HOLD_MS = 200;
+/** How long a closing player stays mounted while it fades and shrinks. */
+export const VIEWER_EXIT_MS = 200;
 
 /**
  * Full-screen story player. Plays each owner's stories in order, then the next owner's; clicking
@@ -36,6 +38,7 @@ export function StoryViewer({
   groups,
   authors,
   start,
+  closing = false,
   onClose,
   onSeen,
   onOwnStoryChanged,
@@ -45,6 +48,8 @@ export function StoryViewer({
   /** Keyed by userId; an owner missing here is shown under a placeholder name. */
   authors: Readonly<Record<string, Author>>;
   start: StoryPosition;
+  /** The exit is running: inert, fading, and the clock stands still. */
+  closing?: boolean;
   onClose: () => void;
   onSeen: (storyId: string) => void;
   onOwnStoryChanged: () => void;
@@ -79,7 +84,7 @@ export function StoryViewer({
   const progress = clock.storyId === storyId ? clock.fraction : 0;
   // Held too while the daily limit's cover is up: no clock, no next story, no view counted.
   const held = usePlaybackHeld();
-  const paused = (busyStory !== null && busyStory === storyId) || hidden || held || userPaused;
+  const paused = (busyStory !== null && busyStory === storyId) || hidden || held || userPaused || closing;
 
   // Through a ref: a parent's inline `onClose` would otherwise restart the clock on every render.
   const onCloseRef = useRef(onClose);
@@ -95,8 +100,19 @@ export function StoryViewer({
   useEffect(() => {
     groupsRef.current = groups;
   });
+  // Once, at the earlier of the exit starting and the unmount: a caller reloads its stories while
+  // the exit runs, and a sync taken at unmount would read that reload instead of what was watched.
   const syncOnClose = useRef(syncRings);
-  useEffect(() => () => syncOnClose.current(groupsRef.current), []);
+  const synced = useRef(false);
+  const sync = () => {
+    if (synced.current) return;
+    synced.current = true;
+    syncOnClose.current(groupsRef.current);
+  };
+  useEffect(() => {
+    if (closing) sync();
+  }, [closing]);
+  useEffect(() => () => sync(), []);
 
   const forward = useCallback(() => {
     const following = next(groups, pos);
@@ -109,10 +125,11 @@ export function StoryViewer({
     if (earlier) setPos(earlier);
   }, [groups, pos]);
 
-  useEscapeKey(onClose);
-  useFocusTrap(dialogRef, mounted);
+  useEscapeKey(onClose, !closing);
+  useFocusTrap(dialogRef, mounted && !closing);
 
   useEffect(() => {
+    if (closing) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.target instanceof Element && event.target.closest(TYPING)) return;
       if (event.key === "ArrowRight") forward();
@@ -124,7 +141,7 @@ export function StoryViewer({
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [forward, back]);
+  }, [forward, back, closing]);
 
   // A pause belongs to the story it was made on.
   useEffect(() => {
@@ -235,15 +252,19 @@ export function StoryViewer({
       aria-modal="true"
       aria-label={`${author.nickname}'s story`}
       data-story-viewer=""
+      inert={closing || undefined}
       tabIndex={-1}
-      className="fixed inset-0 z-[3001] flex items-center justify-center bg-black outline-none"
+      className={`fixed inset-0 z-[3001] flex items-center justify-center bg-black outline-none transition-opacity duration-300 ease-out starting:opacity-0 ${closing ? "opacity-0" : ""}`}
     >
       <button type="button" onClick={onClose} aria-label="Close"
         className="absolute top-4 right-4 z-20 rounded-full p-2 text-white hover:bg-white/10">
         <X className="h-6 w-6" />
       </button>
 
-      <div className="relative flex aspect-[9/16] h-full max-h-screen w-auto max-w-full flex-col overflow-hidden bg-[#111] sm:h-[92vh] sm:rounded-[12px]">
+      <div
+        data-story-card=""
+        className={`relative flex aspect-[9/16] h-full max-h-screen w-auto max-w-full flex-col overflow-hidden bg-[#111] transition-[transform,opacity] duration-200 ease-out starting:scale-[0.92] starting:opacity-0 sm:h-[92vh] sm:rounded-[12px] ${closing ? "scale-[0.92] opacity-0" : ""}`}
+      >
         <div className="absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-black/60 to-transparent px-3 pt-3 pb-6">
           <div className="flex gap-1">
             {group.stories.map((item, index) => (

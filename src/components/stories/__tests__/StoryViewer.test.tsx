@@ -41,12 +41,16 @@ function story(id: string, overrides: Partial<StoryResponse> = {}): StoryRespons
 const theirs: StoryGroup[] = [{ userId: "2", hasUnseen: true, stories: [story("a"), story("b")] }];
 const author = { userId: "2", username: "2", nickname: "Bob", avatarUrl: "/bob.png" };
 
-function renderViewer(groups: StoryGroup[], props: { onClose?: () => void; onSeen?: () => void } = {}) {
+function renderViewer(
+  groups: StoryGroup[],
+  props: { onClose?: () => void; onSeen?: () => void; closing?: boolean } = {},
+) {
   return render(
     <StoryViewer
       groups={groups}
       authors={{ "2": author }}
       start={{ group: 0, story: 0 }}
+      closing={props.closing}
       onClose={props.onClose ?? (() => {})}
       onSeen={props.onSeen ?? (() => {})}
       onOwnStoryChanged={() => {}}
@@ -264,6 +268,20 @@ describe("StoryViewer", () => {
       fireEvent.error(await screen.findByAltText("a"));
       expect(await screen.findByText("This story can’t be shown right now.")).toBeTruthy();
       expect(document.querySelector("[data-backdrop]")).toBeNull();
+    });
+  });
+
+  describe("closing", () => {
+    it("is inert and shrinking while closing, and the clock stops", async () => {
+      vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+      renderViewer(theirs, { closing: true });
+      await act(async () => {});
+
+      const dialog = screen.getByRole("dialog", { hidden: true });
+      expect(dialog.hasAttribute("inert")).toBe(true);
+      expect(dialog.querySelector("[data-story-card]")?.className).toContain("scale-[0.92]");
+      act(() => vi.advanceTimersByTime(3_000));
+      expect(progressValues()[0]).toBe(0);
     });
   });
 });

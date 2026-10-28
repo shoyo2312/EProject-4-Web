@@ -17,6 +17,7 @@ vi.mock("@/lib/api/stories", () => ({
 
 vi.mock("@/components/stories/StoryViewer", () => ({
   StoryViewer: () => <div data-testid="story-viewer" />,
+  VIEWER_EXIT_MS: 200,
 }));
 
 const bob: Author = { userId: "2", username: "bob", nickname: "Bob", avatarUrl: "/bob.png" };

@@ -18,7 +18,7 @@ import type { Author } from "@/types/tiktok";
 import { useStories } from "./StoriesProvider";
 import { StoryComposer } from "./StoryComposer";
 import { StoryRing } from "./StoryRing";
-import { StoryViewer } from "./StoryViewer";
+import { StoryViewer, VIEWER_EXIT_MS } from "./StoryViewer";
 
 /** How long the own bubble's pop plays. */
 const POP_MS = 600;
@@ -33,6 +33,10 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
   const { user } = useSession();
   const { invalidateOwnRing } = useStories();
   const [open, setOpen] = useState<StoryPosition | null>(null);
+  const player = usePresence(open !== null, VIEWER_EXIT_MS);
+  // Where the player was: it is still drawn, closing, after `open` is cleared.
+  const [lastOpen, setLastOpen] = useState<StoryPosition | null>(null);
+  if (open && open !== lastOpen) setLastOpen(open);
   const [composing, setComposing] = useState(false);
   const composer = usePresence(composing, MODAL_EXIT_MS);
   // The own bubble's one-shot pop: after a post, and when a story of theirs goes live.
@@ -108,12 +112,13 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
         onOpen={(index) => setOpen({ group: index, story: firstUnseen(groups[index]) })}
         onCreate={() => setComposing(true)}
       />
-      {open && (
+      {player.mounted && lastOpen && (
         <StoryViewer
-          key={`${open.group}:${open.story}`}
+          key={`${lastOpen.group}:${lastOpen.story}`}
           groups={groups}
           authors={authors}
-          start={open}
+          start={lastOpen}
+          closing={player.closing}
           onClose={close}
           onSeen={markSeen}
           onOwnStoryChanged={refresh}
