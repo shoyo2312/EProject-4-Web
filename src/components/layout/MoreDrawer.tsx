@@ -1,6 +1,7 @@
 "use client";
 
 import { Keyboard, LogOut } from "lucide-react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -13,10 +14,11 @@ import { cn } from "@/lib/utils";
 
 /**
  * The sidebar's More panel, in the slot beside the rail that Activity and
- * Search use. TikTok's carries creator tools, language and theme rows the
- * clone has nothing behind; this one holds what it does: Settings, the
- * keyboard shortcuts, and Log out. A guest gets the shortcuts alone — the
- * other two are about an account they do not have.
+ * Search use. TikTok's carries language and theme rows and more creator tools
+ * than the clone has anything behind; this one holds what it does: Settings,
+ * the keyboard shortcuts, Nowa Studio under Tools — where TikTok Studio sits —
+ * and Log out. A guest gets the shortcuts alone — the rest are about an
+ * account they do not have.
  */
 export function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
@@ -82,15 +84,37 @@ export function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => vo
               label="Keyboard shortcuts"
               onClick={() => setShortcutsOpen(true)}
             />
+
             {user && (
-              <Row
-                icon={<LogOut className="h-6 w-6" strokeWidth={1.75} />}
-                label="Log out"
-                onClick={() => {
-                  onClose();
-                  confirmSignOut();
-                }}
-              />
+              <>
+                <Section label="Tools" />
+                <Row
+                  icon={
+                    <Image
+                      src="/images/brand/nowa-icon.png"
+                      alt=""
+                      width={171}
+                      height={183}
+                      className="h-6 w-auto rounded-[5px]"
+                    />
+                  }
+                  label="Nowa Studio"
+                  onClick={() => {
+                    onClose();
+                    router.push("/studio");
+                  }}
+                />
+
+                <Section label="Other" />
+                <Row
+                  icon={<LogOut className="h-6 w-6" strokeWidth={1.75} />}
+                  label="Log out"
+                  onClick={() => {
+                    onClose();
+                    confirmSignOut();
+                  }}
+                />
+              </>
             )}
           </nav>
         </div>
@@ -121,6 +145,15 @@ export function MoreDrawer({ open, onClose }: { open: boolean; onClose: () => vo
         )}
       </div>
     </>
+  );
+}
+
+/** TikTok's grey group heading, with the hairline that closes the group above it. */
+function Section({ label }: { label: string }) {
+  return (
+    <p className="mx-2 mt-2 border-t border-[var(--tt-divider)] px-0 pt-4 pb-2 text-[15px] leading-[19.5px] text-[var(--tt-text-muted)]">
+      {label}
+    </p>
   );
 }
 

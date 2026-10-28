@@ -593,3 +593,78 @@ export interface StoryViewer {
   viewerId: string;
   viewedAt: string;
 }
+
+/* --- TikTok Studio (analytics-service creator endpoints) ------------------ */
+
+/** One calendar day in Vietnam's zone. Days with nothing on them are zeros, never missing. */
+export interface CreatorDailyStats {
+  /** `YYYY-MM-DD`. */
+  day: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  followersGained: number;
+  followersLost: number;
+}
+
+/** Likes and comments are net of unlikes and deletions in the window, so they can be negative. */
+export interface CreatorTotals {
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  netFollowers: number;
+}
+
+/** `GET /analytics/creator/overview` — the window and the one of the same length just before it. */
+export interface CreatorOverviewResponse {
+  current: CreatorTotals;
+  previous: CreatorTotals;
+  daily: CreatorDailyStats[];
+}
+
+export type CreatorVideoSort = "VIEWS" | "VIEWERS" | "NEW_VIEWERS" | "LIKES" | "COMMENTS" | "SHARES";
+
+/** One row of `GET /analytics/creator/videos/top`. Ids only: titles come from `getVideosByIds`. */
+export interface CreatorVideoStats {
+  videoId: string;
+  views: number;
+  viewers: number;
+  newViewers: number;
+  likes: number;
+  comments: number;
+  shares: number;
+}
+
+/** `GET /analytics/creator/videos/{videoId}` — lifetime totals, the window's days. */
+export interface CreatorVideoDetail {
+  videoId: string;
+  views: number;
+  viewers: number;
+  totalWatchMs: number;
+  avgWatchMs: number;
+  /** 0–1. */
+  completionRate: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  /** 21 points, 0% to 100% of the video in 5% steps: the share of views still watching there. */
+  retention: number[];
+  daily: CreatorDailyStats[];
+}
+
+/** `GET /analytics/creator/viewers`. The breakdowns are null below the privacy threshold. */
+export interface CreatorViewersResponse {
+  totalViewers: number;
+  newViewers: number;
+  previousTotalViewers: number;
+  previousNewViewers: number;
+  breakdownAvailable: boolean;
+  /** 24 counts from 00:00, in Vietnam's zone. */
+  activeHours: number[] | null;
+  /** 7 counts, Monday first. */
+  activeDays: number[] | null;
+}
+
+export type StudioPostSort = "NEWEST" | "VIEWS" | "LIKES" | "COMMENTS";
