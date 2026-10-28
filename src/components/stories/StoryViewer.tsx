@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Volume2, VolumeX, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -21,6 +21,9 @@ import { StoryOwnerPanel } from "./StoryOwnerPanel";
 
 /** Where an arrow key moves the caret or the choice, not the story. */
 const TYPING = "input, textarea, select";
+
+/** A press held this long is a pause, not a step. */
+const HOLD_MS = 200;
 
 /**
  * Full-screen story player. Plays each owner's stories in order, then the next owner's; clicking
@@ -59,6 +62,11 @@ export function StoryViewer({
   // The story whose owner panel has a list or a confirmation open; stepping away releases it.
   const [busyStory, setBusyStory] = useState<string | null>(null);
   const [hidden, setHidden] = useState(false);
+  // The viewer's own pause: sticky from the button or Space, momentary while the pointer is held.
+  const [userPaused, setUserPaused] = useState(false);
+  const holdTimer = useRef<number | null>(null);
+  // Set when the current press became a hold, so the click that ends it does not also step.
+  const wasHold = useRef(false);
   const [freshUrls, setFreshUrls] = useState<Record<string, string>>({});
   const [broken, setBroken] = useState<Record<string, true>>({});
   const retried = useRef(new Set<string>());
@@ -71,7 +79,7 @@ export function StoryViewer({
   const progress = clock.storyId === storyId ? clock.fraction : 0;
   // Held too while the daily limit's cover is up: no clock, no next story, no view counted.
   const held = usePlaybackHeld();
-  const paused = (busyStory !== null && busyStory === storyId) || hidden || held;
+  const paused = (busyStory !== null && busyStory === storyId) || hidden || held || userPaused;
 
   // Through a ref: a parent's inline `onClose` would otherwise restart the clock on every render.
   const onCloseRef = useRef(onClose);
@@ -109,10 +117,41 @@ export function StoryViewer({
       if (event.target instanceof Element && event.target.closest(TYPING)) return;
       if (event.key === "ArrowRight") forward();
       if (event.key === "ArrowLeft") back();
+      if (event.key === " ") {
+        event.preventDefault();
+        setUserPaused((value) => !value);
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [forward, back]);
+
+  // A pause belongs to the story it was made on.
+  useEffect(() => {
+    setUserPaused(false);
+  }, [storyId]);
+
+  const clearHold = () => {
+    if (holdTimer.current !== null) window.clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+  };
+  const pressStart = () => {
+    wasHold.current = false;
+    clearHold();
+    holdTimer.current = window.setTimeout(() => {
+      wasHold.current = true;
+      setUserPaused(true);
+    }, HOLD_MS);
+  };
+  const pressEnd = () => {
+    clearHold();
+    if (wasHold.current) setUserPaused(false);
+  };
+  /** Steps unless the click is the tail of a hold. */
+  const step = (move: () => void) => () => {
+    if (wasHold.current) return;
+    move();
+  };
 
   // The Following feed keeps playing under an overlay; its sound would run over the story's.
   useEffect(() => {
@@ -216,22 +255,35 @@ export function StoryViewer({
               />
             ))}
           </div>
-          <div className="mt-3 flex items-center gap-2 text-white">
+          <div className={`mt-3 flex items-center gap-2 text-white transition-opacity duration-200 ${userPaused ? "opacity-40" : ""}`}>
             {/* eslint-disable-next-line @next/next/no-img-element -- avatar URL comes from user-service, not the image pipeline */}
             <img src={author.avatarUrl} alt="" referrerPolicy="no-referrer"
               className="h-8 w-8 rounded-full bg-[rgb(136_136_136/0.5)] object-cover" />
             <span className="truncate text-[15px] font-semibold">{author.nickname}</span>
             <span className="shrink-0 text-[13px] text-white/70">{formatRelativeTime(story.createdAt)}</span>
+            <button type="button" onClick={() => setUserPaused((value) => !value)}
+              aria-label={userPaused ? "Play" : "Pause"} aria-pressed={userPaused}
+              className="ml-auto rounded-full p-1 hover:bg-white/10">
+              {userPaused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
+            </button>
             {story.mediaType === "VIDEO" && mediaUrl && (
               <button type="button" onClick={() => setMuted((value) => !value)}
-                aria-label={muted ? "Unmute" : "Mute"} className="ml-auto rounded-full p-1 hover:bg-white/10">
+                aria-label={muted ? "Unmute" : "Mute"} className="rounded-full p-1 hover:bg-white/10">
                 {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
               </button>
             )}
           </div>
         </div>
 
-        <div className="relative flex min-h-0 flex-1 items-center justify-center">
+        <div
+          data-story-media=""
+          onPointerDown={pressStart}
+          onPointerUp={pressEnd}
+          onPointerCancel={pressEnd}
+          onPointerLeave={pressEnd}
+          onContextMenu={(event) => event.preventDefault()}
+          className="relative flex min-h-0 flex-1 touch-manipulation items-center justify-center select-none"
+        >
           {!mediaUrl ? (
             <p className="px-6 text-center text-[15px] text-white/70">This story can’t be shown right now.</p>
           ) : story.mediaType === "IMAGE" ? (
@@ -258,19 +310,27 @@ export function StoryViewer({
             />
           )}
 
-          <button type="button" onClick={back} aria-label="Previous story"
+          <button type="button" onClick={step(back)} aria-label="Previous story"
             className="group absolute inset-y-0 left-0 w-1/3 cursor-default">
             <ChevronLeft className="ml-2 hidden h-8 w-8 text-white/80 group-hover:inline" />
           </button>
-          <button type="button" onClick={forward} aria-label="Next story"
+          <button type="button" onClick={step(forward)} aria-label="Next story"
             className="group absolute inset-y-0 right-0 flex w-2/3 cursor-default items-center justify-end">
             <ChevronRight className="mr-2 hidden h-8 w-8 text-white/80 group-hover:inline" />
           </button>
 
           {story.caption && (
-            <p className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pt-10 pb-5 text-[15px] leading-5 break-words text-white">
+            <p className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pt-10 pb-5 text-[15px] leading-5 break-words text-white transition-opacity duration-200 ${userPaused ? "opacity-40" : ""}`}>
               {story.caption}
             </p>
+          )}
+
+          {userPaused && (
+            <div data-paused-glyph="" className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+              <span className="rounded-full bg-black/40 p-4 motion-safe:animate-[tt-badge-pop_300ms_ease-out]">
+                <Play className="h-12 w-12 text-white" fill="currentColor" />
+              </span>
+            </div>
           )}
         </div>
 

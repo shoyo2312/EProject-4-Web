@@ -154,4 +154,85 @@ describe("StoryViewer", () => {
     expect(await screen.findByText("This story can’t be shown right now.")).toBeTruthy();
     expect(getStory).toHaveBeenCalledTimes(1);
   });
+
+  describe("pausing", () => {
+    const clocked = async () => {
+      vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance", "setTimeout", "clearTimeout"] });
+      renderViewer(theirs);
+      await act(async () => {});
+      return document.querySelector("[data-story-media]") as HTMLElement;
+    };
+
+    it("holds the clock while the pointer is held past 200ms and resumes on release", async () => {
+      const media = await clocked();
+      act(() => vi.advanceTimersByTime(3_000));
+      const before = progressValues()[0];
+
+      fireEvent.pointerDown(media);
+      act(() => vi.advanceTimersByTime(250));
+      act(() => vi.advanceTimersByTime(3_000));
+      const held = progressValues()[0];
+      expect(held - before).toBeLessThan(0.02);
+
+      fireEvent.pointerUp(media);
+      act(() => vi.advanceTimersByTime(3_000));
+      expect(progressValues()[0]).toBeGreaterThan(held + 0.05);
+    });
+
+    it("still steps forward on a press shorter than 200ms", async () => {
+      const media = await clocked();
+      fireEvent.pointerDown(media);
+      act(() => vi.advanceTimersByTime(100));
+      fireEvent.pointerUp(media);
+      fireEvent.click(screen.getByRole("button", { name: "Next story" }));
+
+      expect(progressValues()[0]).toBe(1);
+    });
+
+    it("does not step on the click that ends a hold", async () => {
+      const media = await clocked();
+      fireEvent.pointerDown(media);
+      act(() => vi.advanceTimersByTime(250));
+      fireEvent.pointerUp(media);
+      fireEvent.click(screen.getByRole("button", { name: "Next story" }));
+
+      expect(progressValues()[0]).toBeLessThan(1);
+    });
+
+    it("resumes when the pointer leaves the card mid-hold", async () => {
+      const media = await clocked();
+      fireEvent.pointerDown(media);
+      act(() => vi.advanceTimersByTime(250));
+      fireEvent.pointerLeave(media);
+      const released = progressValues()[0];
+      act(() => vi.advanceTimersByTime(3_000));
+
+      expect(progressValues()[0]).toBeGreaterThan(released + 0.05);
+    });
+
+    it("toggles a sticky pause with the button and with Space", async () => {
+      await clocked();
+      fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+      expect(screen.getByRole("button", { name: "Play" }).getAttribute("aria-pressed")).toBe("true");
+      expect(document.querySelector("[data-paused-glyph]")).not.toBeNull();
+      const paused = progressValues()[0];
+      act(() => vi.advanceTimersByTime(3_000));
+      expect(progressValues()[0] - paused).toBeLessThan(0.02);
+
+      fireEvent.keyDown(document, { key: " " });
+      expect(document.querySelector("[data-paused-glyph]")).toBeNull();
+      act(() => vi.advanceTimersByTime(3_000));
+      expect(progressValues()[0]).toBeGreaterThan(paused + 0.05);
+    });
+
+    it("clears the sticky pause when stepping to the next story", async () => {
+      await clocked();
+      fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+      fireEvent.click(screen.getByRole("button", { name: "Next story" }));
+
+      expect(document.querySelector("[data-paused-glyph]")).toBeNull();
+      act(() => vi.advanceTimersByTime(3_000));
+      expect(progressValues()[1]).toBeGreaterThan(0.05);
+    });
+  });
 });
