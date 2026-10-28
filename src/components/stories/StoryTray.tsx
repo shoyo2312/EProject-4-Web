@@ -4,7 +4,9 @@ import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
+import { MODAL_EXIT_MS } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
+import { usePresence } from "@/hooks/use-presence";
 import { useStoryFeed } from "@/hooks/use-story-feed";
 import { authorFromProfile, unknownAuthor } from "@/lib/api/adapters";
 import type { StoryGroup } from "@/lib/api/types";
@@ -32,6 +34,7 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
   const { invalidateOwnRing } = useStories();
   const [open, setOpen] = useState<StoryPosition | null>(null);
   const [composing, setComposing] = useState(false);
+  const composer = usePresence(composing, MODAL_EXIT_MS);
   // The own bubble's one-shot pop: after a post, and when a story of theirs goes live.
   const [popping, setPopping] = useState(false);
   const pop = useCallback(() => setPopping(true), []);
@@ -117,11 +120,11 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
           onOwnStoryDeleted={close}
         />
       )}
-      {composing && (
+      {composer.mounted && (
         <StoryComposer
+          closing={composer.closing}
           onClose={() => setComposing(false)}
           onPosted={() => {
-            setComposing(false);
             refresh();
             pop();
           }}
