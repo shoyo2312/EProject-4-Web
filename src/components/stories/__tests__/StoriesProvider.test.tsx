@@ -356,7 +356,8 @@ describe("StoriesProvider", () => {
 
     // The server has nothing left to show for them once the story is gone.
     getStoryRings.mockResolvedValueOnce([]);
-    fireEvent.click(await screen.findByRole("button", { name: "Delete story" }));
+    fireEvent.click(await screen.findByRole("button", { name: "More" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete story" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(deleteStory).toHaveBeenCalledWith("mine"));
@@ -375,9 +376,8 @@ describe("StoriesProvider", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "open Me" }));
 
-    fireEvent.change(await screen.findByRole("combobox", { name: "Who can see this story" }), {
-      target: { value: "FRIENDS" },
-    });
+    fireEvent.click(await screen.findByRole("button", { name: "More" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Friends" }));
 
     await waitFor(() => expect(getUserStories).toHaveBeenCalledTimes(2));
     expect(screen.getByRole("dialog", { name: "Me's story" })).toBeTruthy();

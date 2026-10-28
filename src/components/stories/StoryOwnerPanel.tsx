@@ -1,23 +1,15 @@
 "use client";
 
-import { Eye, Trash2 } from "lucide-react";
+import { Eye } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { authorFromProfile, unknownAuthor } from "@/lib/api/adapters";
 import { messageFor } from "@/lib/api/errors";
-import { deleteStory, getStoryViewers, updateStoryVisibility } from "@/lib/api/stories";
-import type {
-  StoryResponse,
-  StoryStatus,
-  StoryViewer,
-  StoryVisibility,
-  UserProfileResponse,
-} from "@/lib/api/types";
+import { getStoryViewers } from "@/lib/api/stories";
+import type { StoryResponse, StoryStatus, StoryViewer, UserProfileResponse } from "@/lib/api/types";
 import { getProfiles } from "@/lib/api/users";
 import { formatRelativeTime } from "@/lib/format";
 import { emojiOf, REACTIONS } from "@/lib/stories/reactions";
-
-import { useStories } from "./StoriesProvider";
 
 /** The server's page size for viewers — a shorter page is the last. */
 const VIEWERS_PAGE = 20;
@@ -30,32 +22,25 @@ const STATUS_LABEL: Partial<Record<StoryStatus, string>> = {
 };
 
 /**
- * Under the owner's own story: where it stands in moderation, who watched it, who may see it, and
- * a way to take it down. `onBusy` pauses the player while a list or a confirmation is open.
+ * Under the owner's own story: where it stands in moderation and who watched it. Who may see it
+ * and taking it down live in `StoryOwnerMenu`, the ⋯ in the header. `onBusy` pauses the player
+ * while the viewers list is open.
  */
 export function StoryOwnerPanel({
   story,
-  onChanged,
-  onDeleted,
   onBusy,
 }: {
   story: StoryResponse;
-  onChanged: () => void;
-  onDeleted: () => void;
   onBusy: (busy: boolean) => void;
 }) {
-  const { invalidateOwnRing } = useStories();
   const [viewers, setViewers] = useState<StoryViewer[] | null>(null);
   const [profiles, setProfiles] = useState<Record<string, UserProfileResponse>>({});
   const [more, setMore] = useState(false);
-  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Shown at once; the tray's copy of the story catches up when `onChanged` reloads it.
-  const [visibility, setVisibility] = useState(story.visibility);
 
   const label = story.status ? STATUS_LABEL[story.status] : undefined;
 
-  const open = viewers !== null || confirming;
+  const open = viewers !== null;
   const onBusyRef = useRef(onBusy);
   useEffect(() => {
     onBusyRef.current = onBusy;
@@ -88,29 +73,6 @@ export function StoryOwnerPanel({
     else void loadViewers();
   }
 
-  async function changeVisibility(next: StoryVisibility) {
-    const before = visibility;
-    setVisibility(next);
-    setError(null);
-    try {
-      await updateStoryVisibility(story.id, next);
-      onChanged();
-    } catch (caught) {
-      setVisibility(before);
-      setError(messageFor(caught, "Couldn’t change who can see this story."));
-    }
-  }
-
-  async function remove() {
-    try {
-      await deleteStory(story.id);
-      invalidateOwnRing();
-      onDeleted();
-    } catch (caught) {
-      setError(messageFor(caught, "Couldn’t delete this story."));
-    }
-  }
-
   return (
     <div className="bg-black/80 px-4 py-3 text-white">
       {label && (
@@ -130,33 +92,6 @@ export function StoryOwnerPanel({
           </span>
         ))}
 
-        <select
-          value={visibility}
-          onChange={(event) => void changeVisibility(event.target.value as StoryVisibility)}
-          aria-label="Who can see this story"
-          className="ml-auto h-8 rounded-[4px] bg-white/[0.12] px-2 text-[13px] text-white outline-none"
-        >
-          <option value="PUBLIC">Everyone</option>
-          <option value="FRIENDS">Friends</option>
-          <option value="PRIVATE">Only you</option>
-        </select>
-
-        {confirming ? (
-          <span className="flex items-center gap-2 text-[13px]">
-            Delete?
-            <button type="button" onClick={() => void remove()} className="font-semibold text-[var(--tt-red)]">
-              Delete
-            </button>
-            <button type="button" onClick={() => setConfirming(false)} className="font-semibold">
-              Cancel
-            </button>
-          </span>
-        ) : (
-          <button type="button" aria-label="Delete story" onClick={() => setConfirming(true)}
-            className="rounded-full p-1.5 hover:bg-white/10">
-            <Trash2 className="h-4 w-4" />
-          </button>
-        )}
       </div>
 
       {error && <p className="mt-2 text-[13px] text-[var(--tt-red)]">{error}</p>}

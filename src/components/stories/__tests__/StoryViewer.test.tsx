@@ -380,6 +380,15 @@ describe("StoryViewer", () => {
       expect(setStoryReaction).not.toHaveBeenCalled();
     });
 
+    it("gives the owner a ⋯ menu beside mute, and nobody else", async () => {
+      renderViewer([{ userId: "1", hasUnseen: false, stories: [story("mine", { userId: "1", status: "ACTIVE", viewCount: 0 })] }]);
+      expect(screen.getByRole("button", { name: "More" }).closest("[data-story-header]")).not.toBeNull();
+      cleanup();
+
+      renderViewer(theirs);
+      expect(screen.queryByRole("button", { name: "More" })).toBeNull();
+    });
+
     it("shows no reaction bar under your own story", () => {
       renderViewer([{ userId: "1", hasUnseen: false, stories: [story("mine", { userId: "1", status: "ACTIVE", viewCount: 0 })] }]);
 

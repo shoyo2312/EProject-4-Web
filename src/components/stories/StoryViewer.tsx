@@ -19,6 +19,7 @@ import type { Author } from "@/types/tiktok";
 
 import { ReactionBar } from "./ReactionBar";
 import { useStories } from "./StoriesProvider";
+import { StoryOwnerMenu } from "./StoryOwnerMenu";
 import { StoryOwnerPanel } from "./StoryOwnerPanel";
 
 /** Where an arrow key moves the caret or the choice, not the story. */
@@ -68,8 +69,10 @@ export function StoryViewer({
   // Tagged with its story so a story never starts from where the one before it stopped.
   const [clock, setClock] = useState({ storyId: "", fraction: 0 });
   const [muted, setMuted] = useState(true);
-  // The story whose owner panel has a list or a confirmation open; stepping away releases it.
+  // The story whose owner panel has its viewers list open, and the one whose ⋯ menu or delete
+  // confirmation is open; stepping away releases both.
   const [busyStory, setBusyStory] = useState<string | null>(null);
+  const [menuStory, setMenuStory] = useState<string | null>(null);
   const [hidden, setHidden] = useState(false);
   // The viewer's own pause: sticky from the button or Space, momentary while the pointer is held.
   const [userPaused, setUserPaused] = useState(false);
@@ -135,7 +138,10 @@ export function StoryViewer({
   const progress = clock.storyId === storyId ? clock.fraction : 0;
   // Held too while the daily limit's cover is up: no clock, no next story, no view counted.
   const held = usePlaybackHeld();
-  const paused = (busyStory !== null && busyStory === storyId) || hidden || held || userPaused || closing;
+  const paused =
+    (busyStory !== null && busyStory === storyId) ||
+    (menuStory !== null && menuStory === storyId) ||
+    hidden || held || userPaused || closing;
 
   // Through a ref: a parent's inline `onClose` would otherwise restart the clock on every render.
   const onCloseRef = useRef(onClose);
@@ -352,6 +358,15 @@ export function StoryViewer({
                 {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
               </button>
             )}
+            {own && (
+              <StoryOwnerMenu
+                key={story.id}
+                story={story}
+                onBusy={(busy) => setMenuStory(busy ? story.id : null)}
+                onChanged={onOwnStoryChanged}
+                onDeleted={onOwnStoryDeleted}
+              />
+            )}
           </div>
         </div>
 
@@ -447,8 +462,6 @@ export function StoryViewer({
               key={story.id}
               story={story}
               onBusy={(busy) => setBusyStory(busy ? story.id : null)}
-              onChanged={onOwnStoryChanged}
-              onDeleted={onOwnStoryDeleted}
             />
           </div>
         )}
