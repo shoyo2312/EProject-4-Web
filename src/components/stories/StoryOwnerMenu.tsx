@@ -1,6 +1,5 @@
 "use client";
 
-import { Check } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -28,8 +27,8 @@ const AUDIENCES: readonly { value: StoryVisibility; label: string }[] = [
 ];
 
 /**
- * The ⋯ beside mute on the owner's own story: who can see it, and a way to take it down behind a
- * confirmation. `onBusy` holds the player while the menu or the confirmation is open.
+ * The ⋯ beside mute on the owner's own story: who can see it (a select showing the current
+ * audience), and a way to take it down behind a confirmation. `onBusy` holds the player while the menu or the confirmation is open.
  */
 export function StoryOwnerMenu({
   story,
@@ -66,7 +65,6 @@ export function StoryOwnerMenu({
   async function choose(next: StoryVisibility) {
     const before = visibility;
     setVisibility(next);
-    setMenuOpen(false);
     try {
       await updateStoryVisibility(story.id, next);
       onChanged();
@@ -111,20 +109,20 @@ export function StoryOwnerMenu({
             menu.closing && "scale-90 opacity-0",
           )}
         >
-          <p className="px-4 pt-2 pb-1 text-[12px] font-semibold text-white/60">Who can see this story</p>
-          {AUDIENCES.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              role="menuitemradio"
-              aria-checked={visibility === value}
-              onClick={() => void choose(value)}
-              className="flex w-full cursor-pointer items-center justify-between px-4 py-2.5 text-left text-[14px] text-[var(--tt-text)] hover:bg-white/10"
+          <label className="block px-4 pt-2 pb-2.5 text-[12px] font-semibold text-white/60">
+            Who can see this story
+            <select
+              value={visibility}
+              onChange={(event) => void choose(event.target.value as StoryVisibility)}
+              className="mt-1.5 block h-9 w-full cursor-pointer rounded-[4px] bg-white/[0.12] px-2 text-[14px] font-normal text-[var(--tt-text)] outline-none"
             >
-              {label}
-              {visibility === value && <Check className="h-4 w-4" />}
-            </button>
-          ))}
+              {AUDIENCES.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="my-1 border-t border-white/10" />
           <button
             type="button"

@@ -377,7 +377,7 @@ describe("StoriesProvider", () => {
     fireEvent.click(screen.getByRole("button", { name: "open Me" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "More" }));
-    fireEvent.click(screen.getByRole("menuitemradio", { name: "Friends" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Who can see this story" }), { target: { value: "FRIENDS" } });
 
     await waitFor(() => expect(getUserStories).toHaveBeenCalledTimes(2));
     expect(screen.getByRole("dialog", { name: "Me's story" })).toBeTruthy();

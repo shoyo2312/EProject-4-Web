@@ -59,10 +59,11 @@ describe("StoryOwnerMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: "More" }));
 
     expect(onBusy).toHaveBeenLastCalledWith(true);
-    const options = screen.getAllByRole("menuitemradio");
-    expect(options.map((option) => option.textContent)).toEqual(["Everyone", "Friends", "Only you"]);
-    expect(options.map((option) => option.getAttribute("aria-checked"))).toEqual(["true", "false", "false"]);
-    expect(options[0].className).toContain("cursor-pointer");
+    const select = screen.getByRole("combobox", { name: "Who can see this story" }) as HTMLSelectElement;
+    expect(select.value).toBe("PUBLIC");
+    expect(Array.from(select.options).map((option) => option.textContent)).toEqual(["Everyone", "Friends", "Only you"]);
+    expect(select.className).toContain("cursor-pointer");
+    expect(screen.queryAllByRole("menuitemradio")).toHaveLength(0);
     expect(screen.getByRole("menuitem", { name: "Delete story" })).toBeTruthy();
   });
 
@@ -71,9 +72,10 @@ describe("StoryOwnerMenu", () => {
     renderMenu({ onChanged });
     fireEvent.click(screen.getByRole("button", { name: "More" }));
 
-    fireEvent.click(screen.getByRole("menuitemradio", { name: "Friends" }));
+    const select = screen.getByRole("combobox", { name: "Who can see this story" }) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "FRIENDS" } });
 
-    expect(screen.getByRole("menuitemradio", { name: "Friends" }).getAttribute("aria-checked")).toBe("true");
+    expect(select.value).toBe("FRIENDS");
     await waitFor(() => expect(updateStoryVisibility).toHaveBeenCalledWith("mine", "FRIENDS"));
     await waitFor(() => expect(onChanged).toHaveBeenCalledOnce());
   });
