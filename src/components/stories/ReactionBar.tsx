@@ -65,9 +65,10 @@ export function ReactionBar({
 
   return (
     <div
+      data-reaction-bar=""
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
-      className="relative flex gap-2 rounded-full bg-white/10 px-3 py-1.5 backdrop-blur-sm"
+      className="pointer-events-auto relative flex gap-2 rounded-full bg-white/10 px-3 py-1.5 backdrop-blur-sm"
     >
       {REACTIONS.map(({ type, emoji, label }, index) => (
         <span key={type} className="relative">

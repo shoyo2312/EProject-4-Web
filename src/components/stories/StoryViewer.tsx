@@ -28,6 +28,8 @@ const TYPING = "input, textarea, select";
 const HOLD_MS = 200;
 /** How long a closing player stays mounted while it fades and shrinks. */
 export const VIEWER_EXIT_MS = 200;
+/** A burst of reaction taps settles this long before the one it lands on is sent. */
+const REACTION_SETTLE_MS = 400;
 
 /**
  * Full-screen story player. Plays each owner's stories in order, then the next owner's; clicking
@@ -77,8 +79,51 @@ export function StoryViewer({
   // The pointer is down and past the hold threshold: only then does leaving or releasing resume.
   const holding = useRef(false);
   const [freshUrls, setFreshUrls] = useState<Record<string, string>>({});
-  // Reactions given in this player, over what the stories arrived with: shown at once, sent after.
+  // Reactions given in this player, over what the stories arrived with: shown at once, sent after
+  // a burst settles (as `useLikeDebounce` does for likes), and only when they differ from what the
+  // server holds. A failure falls back to the last value the server confirmed, not a stale one.
   const [reactions, setReactions] = useState<Record<string, StoryReaction | null>>({});
+  const confirmedReactions = useRef(new Map<string, StoryReaction | null>());
+  const desiredReactions = useRef(new Map<string, StoryReaction | null>());
+  const reactionTimers = useRef(new Map<string, number>());
+
+  const flushReaction = useCallback((id: string) => {
+    reactionTimers.current.delete(id);
+    const target = desiredReactions.current.get(id) ?? null;
+    const previous = confirmedReactions.current.get(id) ?? null;
+    if (target === previous) return;
+    confirmedReactions.current.set(id, target);
+    (target ? setStoryReaction(id, target) : clearStoryReaction(id)).catch(() => {
+      confirmedReactions.current.set(id, previous);
+      desiredReactions.current.set(id, previous);
+      setReactions((current) => ({ ...current, [id]: previous }));
+      toast.error("Couldn't send your reaction");
+    });
+  }, []);
+
+  const react = useCallback(
+    (id: string, served: StoryReaction | null, next: StoryReaction | null) => {
+      if (!confirmedReactions.current.has(id)) confirmedReactions.current.set(id, served);
+      desiredReactions.current.set(id, next);
+      setReactions((current) => ({ ...current, [id]: next }));
+      const timers = reactionTimers.current;
+      const pending = timers.get(id);
+      if (pending !== undefined) window.clearTimeout(pending);
+      timers.set(id, window.setTimeout(() => flushReaction(id), REACTION_SETTLE_MS));
+    },
+    [flushReaction],
+  );
+
+  // A player closed mid-burst still sends what the viewer settled on.
+  useEffect(() => {
+    const timers = reactionTimers.current;
+    return () => {
+      for (const [id, timer] of timers) {
+        window.clearTimeout(timer);
+        flushReaction(id);
+      }
+    };
+  }, [flushReaction]);
   const [broken, setBroken] = useState<Record<string, true>>({});
   const retried = useRef(new Set<string>());
 
@@ -257,17 +302,6 @@ export function StoryViewer({
   const author = authors[group.userId] ?? unknownAuthor(group.userId);
   const myReaction = story.id in reactions ? reactions[story.id] : story.myReaction;
 
-  function react(next: StoryReaction | null) {
-    if (!story) return;
-    const id = story.id;
-    const before = myReaction;
-    setReactions((current) => ({ ...current, [id]: next }));
-    (next ? setStoryReaction(id, next) : clearStoryReaction(id)).catch(() => {
-      setReactions((current) => ({ ...current, [id]: before }));
-      toast.error("Couldn't send your reaction");
-    });
-  }
-
   return createPortal(
     <div
       ref={dialogRef}
@@ -383,8 +417,18 @@ export function StoryViewer({
           )}
 
           {!own && (
-            <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center pb-4">
-              <ReactionBar value={myReaction} onChange={react} signedIn={user !== null} onRequireLogin={openLogin} />
+            // The band takes no taps of its own: left and right of the pill still step the story.
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center pb-4">
+              <ReactionBar
+                value={myReaction}
+                onChange={(next) => react(story.id, story.myReaction, next)}
+                signedIn={user !== null}
+                onRequireLogin={() => {
+                  // The sign-in sheet opens over the player; the story waits for it.
+                  setUserPaused(true);
+                  openLogin();
+                }}
+              />
             </div>
           )}
 

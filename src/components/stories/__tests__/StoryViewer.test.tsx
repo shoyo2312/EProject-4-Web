@@ -6,8 +6,10 @@ import { toast } from "@/components/ui/toast";
 import { holdPlayback } from "@/lib/playback-hold";
 import type { StoryGroup, StoryResponse } from "@/lib/api/types";
 
+const openLogin = vi.fn();
+const session: { user: { userId: string } | null } = { user: { userId: "1" } };
 vi.mock("@/components/session/SessionProvider", () => ({
-  useSession: () => ({ user: { userId: "1" }, openLogin: () => {} }),
+  useSession: () => ({ user: session.user, openLogin }),
 }));
 vi.mock("@/components/ui/toast", () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }));
 
@@ -80,6 +82,9 @@ afterEach(() => {
   vi.useRealTimers();
   recordStoryView.mockReset();
   getStory.mockReset();
+  setStoryReaction.mockClear();
+  clearStoryReaction.mockClear();
+  session.user = { userId: "1" };
 });
 
 describe("StoryViewer", () => {
@@ -337,6 +342,42 @@ describe("StoryViewer", () => {
       fireEvent.click(screen.getByRole("button", { name: "Wow" }));
 
       await waitFor(() => expect(clearStoryReaction).toHaveBeenCalledWith("a"));
+    });
+
+    it("sends only the reaction the viewer settles on", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      renderViewer(theirs);
+
+      fireEvent.click(screen.getByRole("button", { name: "Love" }));
+      fireEvent.click(screen.getByRole("button", { name: "Love" }));
+      act(() => vi.advanceTimersByTime(600));
+      expect(setStoryReaction).not.toHaveBeenCalled();
+      expect(clearStoryReaction).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: "Wow" }));
+      fireEvent.click(screen.getByRole("button", { name: "Sad" }));
+      act(() => vi.advanceTimersByTime(600));
+      expect(setStoryReaction).toHaveBeenCalledTimes(1);
+      expect(setStoryReaction).toHaveBeenCalledWith("a", "SAD");
+    });
+
+    it("leaves the sides of the bar free for stepping", () => {
+      renderViewer(theirs);
+      const bar = screen.getByRole("button", { name: "Love" }).closest("[data-reaction-bar]") as HTMLElement;
+
+      expect(bar.parentElement?.className).toContain("pointer-events-none");
+      expect(bar.className).toContain("pointer-events-auto");
+    });
+
+    it("pauses the story while a guest is sent to sign in", () => {
+      session.user = null;
+      renderViewer(theirs);
+
+      fireEvent.click(screen.getByRole("button", { name: "Love" }));
+
+      expect(openLogin).toHaveBeenCalledOnce();
+      expect(document.querySelector("[data-paused-glyph]")).not.toBeNull();
+      expect(setStoryReaction).not.toHaveBeenCalled();
     });
 
     it("shows no reaction bar under your own story", () => {
