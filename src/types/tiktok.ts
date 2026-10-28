@@ -166,6 +166,13 @@ export interface SuggestedCreator {
   isFollowing: boolean;
 }
 
+/** A card in the profile's "Suggested accounts" row and the dialog's Suggested tab. */
+export interface SuggestedAccount {
+  author: Author;
+  /** "Follows you" / "Followed by {name}" / "Suggested for you" — see `lib/suggested-accounts.ts`. */
+  label: string;
+}
+
 /**
  * The four tabs of a profile page, in the order the live bar renders them.
  * (A fifth, "Short dramas", exists in the live DOM but stays 0×0 unless the

@@ -7,6 +7,7 @@ import type {
   FollowResponse,
   FriendshipResponse,
   PageResponse,
+  SuggestedAccountResponse,
   UserProfileResponse,
   UserSettingsPatch,
   UserSettingsResponse,
@@ -275,6 +276,19 @@ export function getFollowing(
     `/users/${userId}/following`,
     { auth: "required", query: { page, size } },
   );
+}
+
+/**
+ * People the viewer may know, viewer-only: the same list on every profile. The
+ * server already leaves out everyone the viewer follows, so the caller may
+ * write `setFollowState(id, false)` for each item instead of walking the
+ * following list once per card.
+ */
+export function getSuggestedAccounts(limit = 20): Promise<SuggestedAccountResponse[]> {
+  return apiFetch<SuggestedAccountResponse[]>(`/users/me/suggested-accounts`, {
+    auth: "required",
+    query: { limit },
+  });
 }
 
 export async function block(userId: string): Promise<void> {

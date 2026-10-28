@@ -134,6 +134,16 @@ export interface UserProfileResponse {
   displayNameChangeableAt?: string | null;
 }
 
+export type SuggestionReason = "FOLLOWS_YOU" | "FOLLOWED_BY" | "POPULAR";
+
+/** One "person you may know" from `GET /users/me/suggested-accounts`. */
+export interface SuggestedAccountResponse {
+  profile: UserProfileResponse;
+  reason: SuggestionReason;
+  /** `FOLLOWED_BY` only: one account the viewer follows that follows this one. */
+  followedBy: string | null;
+}
+
 export interface FollowResponse {
   followerId: string;
   followingId: string;
