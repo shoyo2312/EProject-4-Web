@@ -172,6 +172,17 @@ describe("StoryViewer", () => {
     expect(getStory).toHaveBeenCalledTimes(1);
   });
 
+  it("links the owner's name to their profile and closes the player on the way", async () => {
+    const onClose = vi.fn();
+    renderViewer(theirs, { onClose });
+    await act(async () => {});
+
+    const link = screen.getByRole("link", { name: "Bob" });
+    expect(link.getAttribute("href")).toBe("/@2");
+    fireEvent.click(link);
+    expect(onClose).toHaveBeenCalled();
+  });
+
   describe("pausing", () => {
     const clocked = async () => {
       vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance", "setTimeout", "clearTimeout"] });

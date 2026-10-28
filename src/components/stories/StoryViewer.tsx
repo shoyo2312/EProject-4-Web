@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX, X } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -347,7 +348,10 @@ export function StoryViewer({
             {/* eslint-disable-next-line @next/next/no-img-element -- avatar URL comes from user-service, not the image pipeline */}
             <img src={author.avatarUrl} alt="" referrerPolicy="no-referrer"
               className="h-8 w-8 rounded-full bg-[rgb(136_136_136/0.5)] object-cover" />
-            <span className="truncate text-[15px] font-semibold">{author.nickname}</span>
+            <Link href={`/@${author.username}`} onClick={onClose}
+              className="truncate text-[15px] font-semibold hover:underline">
+              {author.nickname}
+            </Link>
             <span className="shrink-0 text-[13px] text-white/70">{formatRelativeTime(story.createdAt)}</span>
             <button type="button" onClick={() => setUserPaused((value) => !value)}
               aria-label={userPaused ? "Play" : "Pause"} aria-pressed={userPaused}
