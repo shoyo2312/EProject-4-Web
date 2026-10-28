@@ -11,6 +11,7 @@ import {
   VerifiedBadgeIcon,
 } from "@/components/icons";
 import { ProfileMoreMenu } from "@/components/profile/ProfileMoreMenu";
+import { SUGGESTED_ACCOUNTS_PANEL_ID } from "@/components/profile/SuggestedAccountsPanel";
 import { ProfileStoryAvatar } from "@/components/stories/ProfileStoryAvatar";
 import { displayHandle } from "@/lib/api/adapters";
 import { formatCount } from "@/lib/format";
@@ -40,6 +41,8 @@ export function ProfileHeader({
   onToggleFollow,
   onOpenFollowers,
   onOpenFollowing,
+  suggestedOpen,
+  onToggleSuggested,
 }: {
   profile: UserProfile;
   isOwner: boolean;
@@ -59,6 +62,9 @@ export function ProfileHeader({
   /** Opens the Followers/Following dialog on that stat. */
   onOpenFollowers: () => void;
   onOpenFollowing: () => void;
+  /** Whether the "Suggested accounts" row under the header is open; the add-friend button toggles it. */
+  suggestedOpen: boolean;
+  onToggleSuggested: () => void;
 }) {
   const fromServer: FollowStatus = profile.isFollowing
     ? "FOLLOWING"
@@ -107,7 +113,8 @@ export function ProfileHeader({
   };
 
   return (
-    <header className="mt-3 mb-5 flex items-start gap-7 tt-840:gap-4">
+    // 20px under the header, 12px while the suggestions row is open — switched, not animated.
+    <header className={cn("mt-3 flex items-start gap-7 tt-840:gap-4", suggestedOpen ? "mb-3" : "mb-5")}>
       <ProfileStoryAvatar
         author={profile.author}
         className="h-[172px] w-[172px] flex-none tt-840:h-24 tt-840:w-24"
@@ -169,7 +176,14 @@ export function ProfileHeader({
                 {status === "FOLLOWING" ? "Following" : status === "REQUESTED" ? "Requested" : "Follow"}
               </PillButton>
               <PillButton onClick={requireSignIn}>Message</PillButton>
-              <IconButton label="Suggest friends" onClick={requireSignIn}>
+              <IconButton
+                label="Suggested accounts"
+                expanded={suggestedOpen}
+                controls={SUGGESTED_ACCOUNTS_PANEL_ID}
+                onClick={() => {
+                  if (requireSignIn()) onToggleSuggested();
+                }}
+              >
                 <AddFriendIcon className="h-5 w-5" />
               </IconButton>
             </>
@@ -262,10 +276,15 @@ function PillButton({
 function IconButton({
   children,
   label,
+  expanded,
+  controls,
   onClick,
 }: {
   children: React.ReactNode;
   label: string;
+  /** For a toggle: what it opens, and whether it is open now. */
+  expanded?: boolean;
+  controls?: string;
   onClick: () => void;
 }) {
   return (
@@ -274,6 +293,8 @@ function IconButton({
       onClick={onClick}
       aria-label={label}
       title={label}
+      aria-expanded={expanded}
+      aria-controls={controls}
       className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-[var(--tt-field)] text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-shape-neutral-3)]"
     >
       {children}
