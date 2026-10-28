@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { StoryOwnerMenu } from "@/components/stories/StoryOwnerMenu";
+import { toast } from "@/components/ui/toast";
 import type { StoryResponse } from "@/lib/api/types";
 
 const invalidateOwnRing = vi.fn();
@@ -110,5 +111,6 @@ describe("StoryOwnerMenu", () => {
     await waitFor(() => expect(deleteStory).toHaveBeenCalledWith("mine"));
     await waitFor(() => expect(onDeleted).toHaveBeenCalledOnce());
     expect(invalidateOwnRing).toHaveBeenCalledOnce();
+    expect(toast.success).toHaveBeenCalledWith("Story deleted");
   });
 });

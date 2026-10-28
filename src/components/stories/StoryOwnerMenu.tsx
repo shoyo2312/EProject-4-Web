@@ -80,6 +80,7 @@ export function StoryOwnerMenu({
       invalidateOwnRing();
       setConfirming(false);
       onDeleted();
+      toast.success("Story deleted");
     } catch (caught) {
       setConfirming(false);
       toast.error(messageFor(caught, "Couldn’t delete this story."));
