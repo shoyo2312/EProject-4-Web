@@ -4,11 +4,13 @@ import { Plus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
+import { toast } from "@/components/ui/toast";
 import { useStoryFeed } from "@/hooks/use-story-feed";
 import { authorFromProfile, unknownAuthor } from "@/lib/api/adapters";
 import type { StoryGroup } from "@/lib/api/types";
 import { awaitingReview, firstUnseen, type StoryPosition } from "@/lib/stories/navigation";
 import { ringStateOf } from "@/lib/stories/ring-store";
+import { decidedSince } from "@/lib/stories/verdicts";
 import type { Author } from "@/types/tiktok";
 
 import { useStories } from "./StoriesProvider";
@@ -46,6 +48,27 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
     if (wasAwaiting.current && !awaiting) invalidateOwnRing();
     wasAwaiting.current = awaiting;
   }, [awaiting, invalidateOwnRing]);
+
+  // The poster hears each verdict as it lands: compared read against read, by story id, so a second
+  // story still in review neither hides the first's verdict nor repeats it.
+  const previousGroups = useRef(groups);
+  useEffect(() => {
+    const previous = previousGroups.current;
+    previousGroups.current = groups;
+    if (!user || previous === groups) return;
+    const { live, hidden } = decidedSince(previous, groups, user.userId);
+    if (live.length > 0) toast.success("Your story is live");
+    if (hidden.length > 0) {
+      const ownIndex = groups.findIndex((group) => group.userId === user.userId);
+      const storyIndex = groups[ownIndex]?.stories.findIndex((story) => story.id === hidden[0].id) ?? -1;
+      toast.warning("Your story couldn't be shown", {
+        action: {
+          label: "See why",
+          onClick: () => setOpen({ group: ownIndex, story: Math.max(storyIndex, 0) }),
+        },
+      });
+    }
+  }, [groups, user]);
 
   if (!user) return null;
 

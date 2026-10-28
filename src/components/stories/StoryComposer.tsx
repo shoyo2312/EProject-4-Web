@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Modal } from "@/components/ui/modal";
+import { toast } from "@/components/ui/toast";
 import { FIELD } from "@/components/upload/page/Fields";
 import { isApiError, messageFor } from "@/lib/api/errors";
 import { createStory, createStoryUploadUrl } from "@/lib/api/stories";
@@ -91,6 +92,7 @@ export function StoryComposer({
       });
       invalidateOwnRing();
       onPosted(story);
+      toast.success("Story posted — it'll go live after a quick review");
     } catch (caught) {
       if (isApiError(caught) && caught.is("STORY_CAPTION_REJECTED")) {
         setCaptionError(messageFor(caught));
