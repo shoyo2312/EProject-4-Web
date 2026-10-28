@@ -234,12 +234,16 @@ export function StoryViewer({
   };
 
   // The Following feed keeps playing under an overlay; its sound would run over the story's.
+  // A video that left the page meanwhile (the owner's name is a link out of it) stays paused: a
+  // detached element plays sound that nothing on screen can stop.
   useEffect(() => {
     const silenced = Array.from(document.querySelectorAll("video")).filter(
       (video) => !video.paused && !video.closest("[data-story-viewer]"),
     );
     silenced.forEach((video) => video.pause());
-    return () => silenced.forEach((video) => void video.play().catch(() => {}));
+    return () => {
+      for (const video of silenced) if (video.isConnected) void video.play().catch(() => {});
+    };
   }, []);
 
   // A hidden tab gets no animation frames, and the clock would read the whole absence as watched.

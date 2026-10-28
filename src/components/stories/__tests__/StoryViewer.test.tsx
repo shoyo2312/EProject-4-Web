@@ -334,6 +334,31 @@ describe("StoryViewer", () => {
     });
   });
 
+  describe("other players on the page", () => {
+    it("resumes a page video it silenced only while that video is still in the page", async () => {
+      const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+      vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+      const playing = (): HTMLVideoElement => {
+        const video = document.createElement("video");
+        Object.defineProperty(video, "paused", { value: false });
+        return document.body.appendChild(video);
+      };
+      const staying = playing();
+      const leaving = playing();
+      const { unmount } = renderViewer(theirs);
+      await act(async () => {});
+
+      // The feed the viewer opened over is gone: the owner's name was a link out of the page.
+      leaving.remove();
+      play.mockClear();
+      unmount();
+
+      expect(play.mock.instances).toContain(staying);
+      expect(play.mock.instances).not.toContain(leaving);
+      staying.remove();
+    });
+  });
+
   describe("reactions", () => {
     it("sends the reaction after showing it, and reverts when the request fails", async () => {
       setStoryReaction.mockRejectedValueOnce(new Error("down"));
