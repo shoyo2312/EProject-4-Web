@@ -210,7 +210,9 @@ export function StoryViewer({
     holdTimer.current = null;
   };
   const pressStart = () => {
-    wasHold.current = false;
+    // A press while the ⋯ menu is up is what closes it (`useDismiss`, on pointerdown): the click it
+    // ends in must not also step — on the last story that would close the whole player.
+    wasHold.current = menuStory !== null && menuStory === storyId;
     clearHold();
     holdTimer.current = window.setTimeout(() => {
       wasHold.current = true;
@@ -224,7 +226,7 @@ export function StoryViewer({
     holding.current = false;
     setUserPaused(false);
   };
-  /** Steps unless the click is the tail of a hold. */
+  /** Steps unless the click is the tail of a hold, or the one that dismissed the menu. */
   const step = (move: () => void) => () => {
     if (wasHold.current) return;
     move();

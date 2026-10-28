@@ -389,6 +389,31 @@ describe("StoryViewer", () => {
       expect(screen.queryByRole("button", { name: "More" })).toBeNull();
     });
 
+    it("a tap that closes the owner's ⋯ menu does not also step the story", () => {
+      const onClose = vi.fn();
+      renderViewer(
+        [{ userId: "1", hasUnseen: false, stories: [story("mine", { userId: "1", status: "ACTIVE", viewCount: 0 })] }],
+        { onClose },
+      );
+      fireEvent.click(screen.getByRole("button", { name: "More" }));
+      expect(screen.getByRole("menu")).toBeTruthy();
+
+      const media = document.querySelector("[data-story-media]") as HTMLElement;
+      const next = screen.getByRole("button", { name: "Next story" });
+      fireEvent.pointerDown(next);
+      fireEvent.pointerUp(next);
+      fireEvent.click(next);
+
+      expect(onClose).not.toHaveBeenCalled();
+      expect(media).toBeTruthy();
+
+      // With the menu gone, the next tap steps as usual.
+      fireEvent.pointerDown(next);
+      fireEvent.pointerUp(next);
+      fireEvent.click(next);
+      expect(onClose).toHaveBeenCalledOnce();
+    });
+
     it("shows no reaction bar under your own story", () => {
       renderViewer([{ userId: "1", hasUnseen: false, stories: [story("mine", { userId: "1", status: "ACTIVE", viewCount: 0 })] }]);
 
