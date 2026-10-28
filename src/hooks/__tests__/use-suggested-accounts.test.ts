@@ -4,10 +4,11 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { useSuggestedAccounts } from "@/hooks/use-suggested-accounts";
 import type { SuggestedAccountResponse } from "@/lib/api/types";
 
-const getSuggestedAccounts = vi.fn<(limit: number) => Promise<SuggestedAccountResponse[]>>();
+const getSuggestedAccounts =
+  vi.fn<(limit: number, signal?: AbortSignal) => Promise<SuggestedAccountResponse[]>>();
 const setFollowState = vi.fn<(userId: string, value: boolean) => void>();
 vi.mock("@/lib/api/users", () => ({
-  getSuggestedAccounts: (limit: number) => getSuggestedAccounts(limit),
+  getSuggestedAccounts: (limit: number, signal?: AbortSignal) => getSuggestedAccounts(limit, signal),
   setFollowState: (userId: string, value: boolean) => setFollowState(userId, value),
 }));
 
@@ -47,7 +48,7 @@ describe("useSuggestedAccounts", () => {
     rerender({ on: true });
 
     expect(getSuggestedAccounts).toHaveBeenCalledTimes(1);
-    expect(getSuggestedAccounts).toHaveBeenCalledWith(21);
+    expect(getSuggestedAccounts).toHaveBeenCalledWith(21, expect.any(AbortSignal));
   });
 
   it("leavesOutTheExcludedAccountAndKeepsTwenty", async () => {
@@ -57,6 +58,16 @@ describe("useSuggestedAccounts", () => {
 
     expect(result.current.accounts.map((a) => a.author.userId)).not.toContain("5");
     expect(result.current.accounts[0].label).toBe("Suggested for you");
+  });
+
+  it("aborts the request when it unmounts mid-flight", () => {
+    getSuggestedAccounts.mockReturnValue(new Promise(() => {}));
+    const { unmount } = renderHook(() => useSuggestedAccounts(true));
+    const signal = getSuggestedAccounts.mock.calls[0][1];
+
+    expect(signal?.aborted).toBe(false);
+    unmount();
+    expect(signal?.aborted).toBe(true);
   });
 
   it("tells the follow cache that none of them is followed", async () => {

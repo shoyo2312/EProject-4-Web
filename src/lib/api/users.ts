@@ -284,10 +284,14 @@ export function getFollowing(
  * write `setFollowState(id, false)` for each item instead of walking the
  * following list once per card.
  */
-export function getSuggestedAccounts(limit = 20): Promise<SuggestedAccountResponse[]> {
+export function getSuggestedAccounts(
+  limit = 20,
+  signal?: AbortSignal,
+): Promise<SuggestedAccountResponse[]> {
   return apiFetch<SuggestedAccountResponse[]>(`/users/me/suggested-accounts`, {
     auth: "required",
     query: { limit },
+    signal,
   });
 }
 

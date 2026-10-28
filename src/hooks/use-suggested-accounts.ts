@@ -36,7 +36,7 @@ export function useSuggestedAccounts(
     if (!started) return;
     const controller = new AbortController();
 
-    getSuggestedAccounts(SUGGESTED_ACCOUNTS_LIMIT + 1)
+    getSuggestedAccounts(SUGGESTED_ACCOUNTS_LIMIT + 1, controller.signal)
       .then((result) => {
         if (controller.signal.aborted) return;
         // The server just said the viewer follows none of them; without this

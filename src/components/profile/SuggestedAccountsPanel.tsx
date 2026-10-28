@@ -64,7 +64,11 @@ export function SuggestedAccountsPanel({
         <div className="relative w-full pb-[15px]">
           <div className="relative z-10 flex h-10 items-center justify-between pb-2 pl-[14px]">
             <Tooltip label={TOOLTIP} variant="bubble" placement="right-start">
-              <span className="flex cursor-pointer items-center gap-2 text-[14px] leading-[18.2px] font-bold text-[rgb(255_255_255/0.6)]">
+              {/* Focusable so a keyboard user can read the explanation too; Tooltip shows on focus. */}
+              <span
+                tabIndex={0}
+                className="flex cursor-pointer items-center gap-2 text-[14px] leading-[18.2px] font-bold text-[rgb(255_255_255/0.6)]"
+              >
                 <span>Suggested accounts</span>
                 <InfoCircleIcon className="h-[14px] w-[14px]" />
               </span>

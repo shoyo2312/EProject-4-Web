@@ -66,6 +66,16 @@ describe("SuggestedAccountsPanel", () => {
     );
   });
 
+  it("reaches the explanation from the keyboard too", () => {
+    getSuggestedAccounts.mockResolvedValue([]);
+    render(<SuggestedAccountsPanel open excludeUserId="7" onViewAll={vi.fn()} />);
+    const label = screen.getByText("Suggested accounts").closest("[tabindex]");
+
+    expect(label?.getAttribute("tabindex")).toBe("0");
+    fireEvent.focus(label!);
+    expect(screen.getByRole("tooltip")).toBeTruthy();
+  });
+
   it("opens the dialog from View all, and says when there is nothing to suggest", async () => {
     getSuggestedAccounts.mockResolvedValue([]);
     const onViewAll = vi.fn();
