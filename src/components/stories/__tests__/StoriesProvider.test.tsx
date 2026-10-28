@@ -257,7 +257,8 @@ describe("StoriesProvider", () => {
     );
     const { rerender } = render(page());
     await waitFor(() => expect(ring("2")).toBe("unseen"));
-    fireEvent.click(await screen.findByRole("button", { name: "Watch Bob's stories" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Bob's avatar" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "View story" }));
     await screen.findByRole("dialog", { name: "Bob's story" });
 
     // The session ends in this tab. As a guest they cannot see the story (it was for friends), so the
@@ -437,7 +438,8 @@ describe("a profile header's avatar", () => {
     );
     await waitFor(() => expect(ring("2")).toBe("unseen"));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Watch Bob's stories" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Bob's avatar" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "View story" }));
     await screen.findByRole("dialog", { name: "Bob's story" });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
