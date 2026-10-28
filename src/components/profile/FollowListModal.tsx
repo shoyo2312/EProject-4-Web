@@ -8,7 +8,7 @@ import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { CloseIcon } from "@/components/icons";
 import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import { useFollow } from "@/hooks/use-follow";
-import { useSuggestedCreators } from "@/hooks/use-suggested-creators";
+import { useSuggestedAccounts } from "@/hooks/use-suggested-accounts";
 import {
   authorFromProfile,
   DEFAULT_AVATAR,
@@ -128,7 +128,7 @@ export function FollowListModal({
               expectedCount={Math.min(followerCount, followingCount)}
             />
           )}
-          {tab === "suggested" && <SuggestedList />}
+          {tab === "suggested" && <SuggestedList excludeUserId={targetUserId} />}
         </div>
       </div>
     </div>
@@ -299,23 +299,18 @@ async function fetchAllPages(
 }
 
 /**
- * There is no user-suggestion endpoint on the backend — recommendation-service
- * only ranks the video feed. Same derivation as the `/following` empty state:
- * the creators posting to the public feed right now.
+ * The same "people you may know" as the profile's Suggested accounts row, so
+ * "View all" opens on the same people. The profile's owner is dropped, as there.
  */
-function SuggestedList() {
-  const { creators, isLoading } = useSuggestedCreators();
+function SuggestedList({ excludeUserId }: { excludeUserId: string }) {
+  const { accounts, isLoading } = useSuggestedAccounts(true, excludeUserId);
 
   if (isLoading) return <UserRowSkeletonList count={6} />;
 
   return (
     <div className="py-2">
-      {creators.map((creator) => (
-        <UserRow
-          key={creator.id}
-          author={creator.author}
-          initialFollowing={creator.isFollowing}
-        />
+      {accounts.map((account) => (
+        <UserRow key={account.author.userId} author={account.author} />
       ))}
     </div>
   );
