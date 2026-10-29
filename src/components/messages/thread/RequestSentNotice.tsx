@@ -1,5 +1,6 @@
 import { MessagesSquare } from "lucide-react";
 
+import { ICON_DISC, NOTICE_CARD } from "@/components/messages/chat-ui";
 import { REQUEST_RETRY_DAYS } from "@/lib/chat";
 
 /**
@@ -15,17 +16,18 @@ export function RequestSentNotice({ retryAvailableAt }: { retryAvailableAt: stri
     : null;
 
   return (
-    <div
-      role="status"
-      className="flex flex-none items-center gap-3 border-t border-[var(--tt-divider)] bg-white/[0.04] px-4 py-3.5 tt-768:px-3"
-    >
-      <MessagesSquare aria-hidden className="h-9 w-9 flex-none text-[var(--tt-mention)]" strokeWidth={1.6} />
-      <div className="min-w-0">
-        <p className="text-[15px] leading-5 font-bold text-[var(--tt-text)]">Chat request sent</p>
-        <p className="mt-0.5 text-[13px] leading-[18px] text-[var(--tt-text-muted)]">
-          You can keep chatting as soon as they accept. If they haven&apos;t responded or have declined by{" "}
-          {date ?? `${REQUEST_RETRY_DAYS} days from now`}, you can send 1 more message to ask again.
-        </p>
+    <div className="flex-none px-5 pt-2 pb-4 tt-768:px-3">
+      <div role="status" className={`flex items-start gap-3 px-4 py-3.5 ${NOTICE_CARD}`}>
+        <span className={ICON_DISC}>
+          <MessagesSquare aria-hidden className="h-[18px] w-[18px]" strokeWidth={1.8} />
+        </span>
+        <div className="min-w-0">
+          <p className="text-[15px] leading-5 font-semibold text-[var(--tt-text)]">Chat request sent</p>
+          <p className="mt-0.5 text-[13px] leading-[19px] text-[var(--chat-meta)]">
+            You can keep chatting as soon as they accept. If they haven&apos;t responded or have declined by{" "}
+            {date ?? `${REQUEST_RETRY_DAYS} days from now`}, you can send 1 more message to ask again.
+          </p>
+        </div>
       </div>
     </div>
   );

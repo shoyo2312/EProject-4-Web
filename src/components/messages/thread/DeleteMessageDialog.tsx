@@ -1,5 +1,9 @@
 "use client";
 
+import { BUTTON_QUIET, DIALOG_SHEET, ICON_DISC } from "@/components/messages/chat-ui";
+import { EyeOff, Undo2 } from "lucide-react";
+
+import { cn } from "@/lib/utils";
 import { Modal } from "@/components/ui/modal";
 
 /**
@@ -21,33 +25,38 @@ export function DeleteMessageDialog({
   onCancel: () => void;
 }) {
   const option =
-    "flex w-full flex-col rounded-[8px] bg-white/[0.06] px-4 py-3 text-left transition-colors hover:bg-white/[0.12] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/60";
+    "flex w-full items-center gap-3 rounded-[var(--chat-radius-control)] bg-white/[0.05] px-3.5 py-3 text-left transition-colors hover:bg-white/[0.1] disabled:cursor-default disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70";
 
   return (
-    <Modal onClose={busy ? () => {} : onCancel} className="w-[400px] rounded-[12px] p-6">
-      <h2 className="text-center text-[18px] leading-6 font-bold text-[var(--tt-text)]">Delete message?</h2>
+    <Modal onClose={busy ? () => {} : onCancel} className={DIALOG_SHEET}>
+      <h2 className="text-center text-[19px] leading-6 font-bold text-[var(--tt-text)]">Delete message?</h2>
       <div className="mt-5 flex flex-col gap-2" aria-busy={busy}>
         {canRecall && (
           <button type="button" onClick={onRecall} disabled={busy} className={option}>
-            <span className="text-[15px] font-semibold text-[var(--tt-red)]">Recall for everyone</span>
-            <span className="mt-0.5 text-[13px] leading-4 text-[var(--tt-text-muted)]">
-              Takes the message back for everyone in this chat. They will see that it was recalled.
+            <span className={cn(ICON_DISC, "bg-[var(--chat-own)]/15 text-[#ff7a93]")}>
+              <Undo2 aria-hidden className="h-[18px] w-[18px]" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[15px] leading-5 font-semibold text-[#ff7a93]">Recall for everyone</span>
+              <span className="mt-0.5 block text-[13px] leading-[18px] text-[var(--chat-meta)]">
+                Takes the message back for everyone in this chat. They will see that it was recalled.
+              </span>
             </span>
           </button>
         )}
         <button type="button" onClick={onHide} disabled={busy} className={option}>
-          <span className="text-[15px] font-semibold text-[var(--tt-text)]">Delete for you</span>
-          <span className="mt-0.5 text-[13px] leading-4 text-[var(--tt-text-muted)]">
-            Removes the message from your view only. The other person can still see it.
+          <span className={ICON_DISC}>
+            <EyeOff aria-hidden className="h-[18px] w-[18px]" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[15px] leading-5 font-semibold text-[var(--tt-text)]">Delete for you</span>
+            <span className="mt-0.5 block text-[13px] leading-[18px] text-[var(--chat-meta)]">
+              Removes the message from your view only. The other person can still see it.
+            </span>
           </span>
         </button>
       </div>
-      <button
-        type="button"
-        onClick={onCancel}
-        disabled={busy}
-        className="mt-3 h-11 w-full rounded-[6px] bg-white/[0.08] text-[15px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-white/[0.14] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/60"
-      >
+      <button type="button" onClick={onCancel} disabled={busy} className={cn("mt-3 w-full", BUTTON_QUIET)}>
         Cancel
       </button>
     </Modal>

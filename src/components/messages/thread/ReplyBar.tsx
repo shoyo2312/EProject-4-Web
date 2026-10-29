@@ -16,15 +16,17 @@ export interface ReplyDraft {
  */
 export function ReplyBar({ draft, onCancel }: { draft: ReplyDraft; onCancel: () => void }) {
   return (
-    <div className="flex items-center gap-3 px-1 pb-2 text-[14px] leading-5 text-[var(--tt-text-muted)]">
-      <p className="min-w-0 flex-1 truncate">
-        <span className="font-semibold">{draft.author}:</span> {draft.text}
+    <div className="flex items-center gap-3 border-b border-[var(--chat-line)] py-2.5 pr-2.5 pl-4">
+      <span aria-hidden className="h-8 w-[3px] flex-none rounded-full bg-[var(--chat-own)]" />
+      <p className="min-w-0 flex-1">
+        <span className="block truncate text-[12px] leading-4 font-semibold text-[var(--tt-text-secondary)]">{draft.author}:</span>
+        <span className="block truncate text-[13.5px] leading-[19px] text-[var(--chat-meta)]">{draft.text}</span>
       </p>
       <button
         type="button"
         onClick={onCancel}
         aria-label="Cancel reply"
-        className="flex h-7 w-7 flex-none items-center justify-center rounded-full hover:bg-[var(--tt-shape-neutral-3)] hover:text-[var(--tt-text)] focus-visible:outline-2 focus-visible:outline-white/60"
+        className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-[var(--chat-meta)] transition-colors hover:bg-[var(--chat-active)] hover:text-[var(--tt-text)] focus-visible:outline-2 focus-visible:outline-white/70"
       >
         <CloseIcon className="h-4 w-4" />
       </button>

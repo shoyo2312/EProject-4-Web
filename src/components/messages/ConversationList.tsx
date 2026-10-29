@@ -36,22 +36,22 @@ export function ConversationList({ openId }: { openId: string | null }) {
 
   return (
     <>
-      <header className="flex-none px-5 pt-16 pb-3 tt-768:pt-5">
-        <h1 className="text-[24px] leading-[30px] font-bold text-[var(--tt-text)]">Messages</h1>
-        <label className="relative mt-4 flex h-9 items-center">
-          <SearchIcon className="pointer-events-none absolute left-3 h-4 w-4 text-[var(--tt-placeholder)]" />
+      <header className="flex-none px-5 pt-16 pb-2 tt-768:pt-5">
+        <h1 className="text-[22px] leading-7 font-bold tracking-[-0.01em] text-[var(--tt-text)]">Messages</h1>
+        <label className="relative mt-3.5 flex h-10 items-center">
+          <SearchIcon className="pointer-events-none absolute left-3.5 h-4 w-4 text-[var(--tt-placeholder)]" />
           <input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search"
             aria-label="Search conversations"
-            className="h-9 w-full rounded-[10px] bg-[var(--tt-field)] pr-3 pl-9 text-[15px] text-[var(--tt-text)] placeholder:text-[var(--tt-placeholder)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/60"
+            className="h-10 w-full rounded-[var(--chat-radius-control)] bg-white/[0.06] pr-3 pl-10 text-[15px] text-[var(--tt-text)] transition-colors placeholder:text-[var(--tt-placeholder)] hover:bg-white/[0.08] focus-visible:bg-white/[0.09] focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-white/40"
           />
         </label>
       </header>
 
-      <nav aria-label="Conversations" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-4">
+      <nav aria-label="Conversations" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-4">
         {requestSummary.pending > 0 && !needle && (
           <MessageRequestsEntry pending={requestSummary.pending} unread={requestSummary.unread} />
         )}
@@ -65,7 +65,7 @@ export function ConversationList({ openId }: { openId: string | null }) {
               <button
                 type="button"
                 onClick={reload}
-                className="mt-3 h-9 rounded-full bg-[var(--tt-field)] px-5 text-[14px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-shape-neutral-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60"
+                className="mt-4 h-9 rounded-full bg-white/[0.08] px-5 text-[14px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-white/[0.14] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
               >
                 Try again
               </button>
@@ -109,16 +109,16 @@ function MessageRequestsEntry({ pending, unread }: { pending: number; unread: nu
   return (
     <Link
       href="/messages/requests"
-      className="mb-1 flex items-center gap-3 rounded-[12px] px-3 py-2.5 transition-colors hover:bg-[var(--tt-field)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/60"
+      className="mb-1 flex items-center gap-3 rounded-[var(--chat-radius-control)] px-3 py-2.5 transition-colors hover:bg-[var(--chat-hover)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
     >
-      <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-[var(--tt-shape-neutral-3)] text-[var(--tt-text)]">
+      <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-white/[0.08] text-[var(--tt-text)]">
         <MessagesSquare aria-hidden className="h-5 w-5" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15px] leading-5 font-semibold text-[var(--tt-text)]">
           Message requests
         </span>
-        <span className="block truncate text-[14px] leading-[18px] text-[var(--tt-text-muted)]">
+        <span className="block truncate text-[13.5px] leading-[18px] text-[var(--chat-meta)]">
           You have {pending} {pending === 1 ? "request" : "requests"}
         </span>
       </span>
@@ -132,7 +132,7 @@ export function CountBadge({ count, label }: { count: number; label: string }) {
     <span
       role="img"
       aria-label={label}
-      className="flex h-4 min-w-4 flex-none items-center justify-center rounded-full bg-[var(--tt-red)] px-1 text-[10px] leading-none font-bold text-white"
+      className="flex h-[18px] min-w-[18px] flex-none items-center justify-center rounded-full bg-[var(--tt-red)] px-1.5 text-[11px] leading-none font-bold text-white"
     >
       {count > 99 ? "99+" : count}
     </span>
@@ -172,9 +172,11 @@ export function ConversationRow({
       href={`/messages/${item.id}`}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex items-center gap-3 rounded-[12px] px-3 py-2.5 transition-colors",
-        "hover:bg-[var(--tt-field)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/60",
-        (active || menuOpen) && "bg-[var(--tt-field)]",
+        "relative flex items-center gap-3 rounded-[var(--chat-radius-control)] px-3 py-2.5 transition-colors",
+        "hover:bg-[var(--chat-hover)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70",
+        (active || menuOpen) && "bg-[var(--chat-active)] hover:bg-[var(--chat-active)]",
+        // The open row is told apart by a slim accent edge as well as the lighter surface.
+        active && "before:absolute before:top-3 before:bottom-3 before:left-0 before:w-[3px] before:rounded-full before:bg-[var(--tt-red)]",
         withMenu && !hover && "pr-12",
       )}
     >
@@ -185,18 +187,16 @@ export function ConversationRow({
           <span
             className={cn(
               "truncate text-[15px] leading-5 text-[var(--tt-text)]",
-              item.hasUnread ? "font-bold" : "font-medium",
+              item.hasUnread ? "font-bold" : "font-semibold",
             )}
           >
             {author?.nickname ?? "…"}
           </span>
-          {pinned && <Pin aria-label="Pinned" className="h-3 w-3 flex-none -rotate-45 self-center text-[var(--tt-text-muted)]" />}
-          {muted && <BellOff aria-label="Notifications muted" className="h-3 w-3 flex-none self-center text-[var(--tt-text-muted)]" />}
           {item.lastMessageAt && (
             <time
               dateTime={item.lastMessageAt}
               className={cn(
-                "ml-auto flex-none text-[12px] leading-4 text-[var(--tt-text-muted)]",
+                "ml-auto flex-none text-[12px] leading-4 text-[var(--chat-meta)]",
                 withMenu && hover && "group-focus-within/row:invisible group-hover/row:invisible",
                 withMenu && hover && menuOpen && "invisible",
               )}
@@ -208,14 +208,16 @@ export function ConversationRow({
         <span className="flex items-center gap-2">
           <span
             className={cn(
-              "truncate text-[14px] leading-[18px]",
+              "truncate text-[13.5px] leading-[18px]",
               item.hasUnread
                 ? "font-semibold text-[var(--tt-text)]"
-                : "text-[var(--tt-text-muted)]",
+                : "text-[var(--chat-meta)]",
             )}
           >
             {preview}
           </span>
+          {pinned && <Pin aria-label="Pinned" className="ml-auto h-3 w-3 flex-none -rotate-45 text-[var(--chat-meta)]" />}
+          {muted && <BellOff aria-label="Notifications muted" className={cn("h-3 w-3 flex-none text-[var(--chat-meta)]", !pinned && "ml-auto")} />}
           {item.hasUnread &&
             (unreadAsCount ? (
               <span className="ml-auto flex-none">
@@ -225,7 +227,7 @@ export function ConversationRow({
               <span
                 role="img"
                 aria-label="Unread"
-                className="ml-auto h-2.5 w-2.5 flex-none rounded-full bg-[var(--tt-red)]"
+                className={cn("h-2.5 w-2.5 flex-none rounded-full bg-[var(--tt-red)]", !pinned && !muted && "ml-auto")}
               />
             ))}
         </span>
@@ -282,10 +284,14 @@ export function ListNotice({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center px-6 pt-16 text-center">
-      {icon && <MessagesIcon className="mb-3 h-10 w-10 text-[var(--tt-text-muted)]" />}
+    <div className="flex flex-col items-center px-8 pt-16 text-center">
+      {icon && (
+        <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.06]">
+          <MessagesIcon className="h-7 w-7 text-[var(--chat-meta)]" />
+        </span>
+      )}
       <p className="text-[16px] leading-5 font-semibold text-[var(--tt-text)]">{title}</p>
-      {body && <p className="mt-1 text-[14px] leading-5 text-[var(--tt-text-muted)]">{body}</p>}
+      {body && <p className="mt-1.5 text-[14px] leading-[21px] text-[var(--chat-meta)]">{body}</p>}
       {action}
     </div>
   );

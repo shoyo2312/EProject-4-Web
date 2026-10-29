@@ -38,7 +38,7 @@ export function JumpToLatest({
         "focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white",
         kind === "avatar"
           ? "flex h-12 w-12 items-center justify-center"
-          : "flex h-10 w-10 items-center justify-center rounded-full border border-[var(--tt-divider)] bg-[var(--tt-sheet-3)] text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-shape-neutral-3)]",
+          : "flex h-10 w-10 items-center justify-center rounded-full border border-[var(--chat-line-strong)] bg-[var(--chat-pop)] text-[var(--tt-text)] shadow-[var(--chat-shadow-soft)] transition-colors hover:bg-[var(--chat-active)]",
       )}
     >
       {kind === "avatar" ? (

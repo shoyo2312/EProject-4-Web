@@ -1,5 +1,7 @@
 "use client";
 
+import { CornerUpLeft } from "lucide-react";
+
 import type { ReplyQuote } from "@/lib/api/conversations";
 import { quoteText } from "@/lib/chat";
 import { cn } from "@/lib/utils";
@@ -24,20 +26,28 @@ export function ReplyQuoteBlock({
   const label = mine ? "You replied" : `${peerName} replied`;
 
   return (
-    <div className={cn("flex max-w-[min(70%,480px)] flex-col", mine ? "items-end" : "items-start")}>
-      <p className="px-1 text-[12px] leading-4 text-[var(--tt-text-muted)]">{label}</p>
+    <div className={cn("flex max-w-[min(72%,520px)] flex-col", mine ? "items-end" : "items-start")}>
+      <p className="flex items-center gap-1 px-1 pb-1 text-[11.5px] leading-4 text-[var(--chat-meta)]">
+        <CornerUpLeft aria-hidden className="h-3 w-3" />
+        {label}
+      </p>
       <button
         type="button"
         onClick={() => onJump(quote.messageId)}
         disabled={quote.state !== "OK"}
         aria-label={`${label}: ${describe(quote)}`}
         className={cn(
-          "mt-0.5 max-w-full rounded-[16px] bg-[var(--tt-shape-neutral-3)] px-3 py-1.5 text-left text-[14px] leading-5",
-          "focus-visible:outline-2 focus-visible:outline-white/60 disabled:cursor-default",
-          quote.state === "OK" ? "text-[var(--tt-text-muted)]" : "text-[var(--tt-text-muted)] italic",
+          // Tucked under the reply that follows it (which sits above, in front): hierarchy by depth, not by a second colour.
+          "relative -mb-3 max-w-full rounded-[var(--chat-radius-bubble)] bg-white/[0.07] px-3.5 pt-2 pb-[18px] text-left text-[13.5px] leading-[19px]",
+          mine ? "border-r-2 border-[var(--chat-line-strong)]" : "border-l-2 border-[var(--chat-line-strong)]",
+          "focus-visible:outline-2 focus-visible:outline-white/70 disabled:cursor-default",
+          quote.state === "OK" ? "text-[var(--chat-meta)]" : "text-[var(--chat-meta)] italic",
         )}
       >
-        {quote.state === "OK" && quote.sticker ? (
+        {quote.state === "OK" && quote.type === "VIDEO" && quote.video?.state === "AVAILABLE" && quote.video.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- a small thumbnail from the media store; next/image would need its host allow-listed
+          <img src={quote.video.thumbnailUrl} alt="Video" className="h-14 w-10 rounded object-cover" />
+        ) : quote.state === "OK" && quote.sticker ? (
           // eslint-disable-next-line @next/next/no-img-element -- a small public sticker image; next/image would need its host allow-listed
           <img src={quote.sticker.url} alt={quote.sticker.name} className="h-10 w-10 object-contain" />
         ) : (

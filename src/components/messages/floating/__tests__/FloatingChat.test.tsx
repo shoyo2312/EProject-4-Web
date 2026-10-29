@@ -52,6 +52,9 @@ const convo = (id: string, minute: number, over: Partial<ConversationResponse> =
   muteMode: "NONE",
   mutedUntil: null,
   inboxHidden: false,
+  blockedByViewer: false,
+  messagingBlocked: false,
+  blockVersion: 0,
   ...over,
 });
 
@@ -123,6 +126,27 @@ describe("FloatingChat bubbles", () => {
     expect(view.container.innerHTML).toBe("");
   });
 
+  it("has a cross that hides the bubble until something new arrives, without touching the others", () => {
+    setChat([convo("a", 5), convo("b", 4)]);
+    const view = render(<FloatingChat />);
+    fireEvent.click(screen.getByRole("button", { name: "Close chat with Person a" }));
+    expect(bubbles().map((b) => b.getAttribute("title"))).toEqual(["Person b"]);
+
+    setChat([convo("a", 9), convo("b", 4)]);
+    view.rerender(<FloatingChat />);
+    expect(bubbles().map((b) => b.getAttribute("title"))).toEqual(["Person a", "Person b"]);
+  });
+
+  it("the cross on the open bubble closes its panel too", () => {
+    setChat([convo("a", 5), convo("b", 4)]);
+    render(<FloatingChat />);
+    fireEvent.click(screen.getByRole("button", { name: "Person a, 2 unread" }));
+    expect(screen.getByTestId("panel")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close chat with Person a" }));
+    expect(screen.queryByTestId("panel")).toBeNull();
+    expect(bubbles().map((b) => b.getAttribute("title"))).toEqual(["Person b"]);
+  });
+
   it("keeps the unread badge on the bubble", () => {
     setChat([convo("a", 5)]);
     render(<FloatingChat />);
@@ -138,13 +162,35 @@ describe("FloatingChat panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Person b, 2 unread" }));
     expect(screen.getAllByTestId("panel")).toHaveLength(1);
     expect(screen.getByTestId("panel").getAttribute("data-id")).toBe("b");
-    // The open one is the panel, so it is no longer a bubble.
-    expect(screen.queryByRole("button", { name: /Person b/ })).toBeNull();
+    // The open one keeps its bubble, marked as expanded.
+    expect(screen.getByRole("button", { name: /^Person b/ }).getAttribute("aria-expanded")).toBe("true");
+    expect(bubbles()).toHaveLength(3);
 
     fireEvent.click(screen.getByRole("button", { name: "Person c, 2 unread" }));
     expect(screen.getAllByTestId("panel")).toHaveLength(1);
     expect(screen.getByTestId("panel").getAttribute("data-id")).toBe("c");
-    expect(screen.getByRole("button", { name: /Person b/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Person b/ }).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("pressing the open bubble again minimises the panel and keeps the bubble", () => {
+    render(<FloatingChat />);
+    fireEvent.click(screen.getByRole("button", { name: "Person a, 2 unread" }));
+    expect(screen.getByTestId("panel")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Person a, 2 unread" }));
+    expect(screen.queryByTestId("panel")).toBeNull();
+    expect(bubbles()).toHaveLength(3);
+  });
+
+  it("keeps the open bubble when newer messages from other chats push it out of the top three", () => {
+    setChat([convo("a", 5), convo("b", 4), convo("c", 3), convo("d", 2)]);
+    const view = render(<FloatingChat />);
+    fireEvent.click(screen.getByRole("button", { name: "Person c, 2 unread" }));
+    setChat([convo("a", 5), convo("b", 4), convo("c", 3), convo("d", 2), convo("e", 9), convo("f", 8)]);
+    view.rerender(<FloatingChat />);
+    const open = bubbles().filter((b) => b.getAttribute("aria-expanded") === "true");
+    expect(open.map((b) => b.getAttribute("title"))).toEqual(["Person c"]);
+    expect(bubbles()).toHaveLength(3);
+    expect(screen.getByLabelText("3 more conversations").textContent).toBe("+3");
   });
 
   it("minimising returns the panel to a bubble; closing hides it until a newer message", () => {

@@ -14,15 +14,18 @@ import {
   closeThread,
   dockConversations,
   minimizeThread,
-  openThread,
   splitDock,
+  toggleThread,
 } from "@/lib/floating-chat";
 import { cn } from "@/lib/utils";
+
+const PANEL_ID = "floating-chat-panel";
 
 /**
  * Chat while browsing. A message from anyone puts a round avatar on the right edge with the
  * unread count; it never opens a panel by itself. Clicking the avatar opens the thread as a
- * panel, minimising returns it to a bubble, closing hides it until something new arrives.
+ * panel and pressing it again minimises the panel (the bubble stays); closing hides the thread
+ * until something new arrives.
  *
  * Mounted once in the root layout, so the panel survives navigating between pages. On `/messages`
  * the full inbox takes over and the dock steps out of the way.
@@ -41,12 +44,12 @@ export function FloatingChat() {
   );
   const { expanded, shown, hidden } = splitDock(items, dock.expandedId);
 
-  // Both columns sit beside the comment sidebar, never under it: its width is 0 while it is shut.
-  const bubbleRight = "right-[calc(var(--comment-sidebar-width)+1rem)]";
-  const panelRight =
-    shown.length > 0
-      ? "right-[calc(var(--comment-sidebar-width)+4.75rem)] max-sm:right-2"
-      : "right-[calc(var(--comment-sidebar-width)+1rem)] max-sm:right-2";
+  // Two columns beside the comment sidebar, never under it (its width is 0 while shut): the bubble
+  // rail (3rem wide, 1rem from the sidebar) and, left of it, the panel (3rem + two 1rem gaps clear).
+  // The rail is never hidden, so on a phone the panel stops short of it instead of covering it.
+  // Under 640px the sidebar would push both columns beneath the side nav, so they ignore it there.
+  const bubbleRight = "right-4 sm:right-[calc(var(--comment-sidebar-width)+1rem)]";
+  const panelRight = "right-20 sm:right-[calc(var(--comment-sidebar-width)+5rem)]";
 
   return (
     <>
@@ -55,8 +58,6 @@ export function FloatingChat() {
           className={cn(
             "fixed bottom-4 z-[90] flex flex-col items-center gap-3",
             bubbleRight,
-            // The panel takes the whole width on a phone; the bubbles come back when it is minimised.
-            expanded && "max-sm:hidden",
           )}
         >
           {hidden > 0 && (
@@ -77,7 +78,12 @@ export function FloatingChat() {
                 name={author?.nickname ?? "…"}
                 avatar={author?.avatarUrl}
                 unread={unread.byConversation[conversation.id] ?? 0}
-                onOpen={() => setDock((current) => openThread(current, conversation.id))}
+                active={conversation.id === expanded?.id}
+                panelId={PANEL_ID}
+                onToggle={() => setDock((current) => toggleThread(current, conversation.id))}
+                onClose={() =>
+                  setDock((current) => closeThread(current, conversation.id, conversation.lastMessageAt))
+                }
               />
             );
           })}
@@ -87,6 +93,7 @@ export function FloatingChat() {
       {expanded && (
         <FloatingPanel
           key={expanded.id}
+          id={PANEL_ID}
           conversation={expanded}
           me={user.userId}
           rightClass={panelRight}

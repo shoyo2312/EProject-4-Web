@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConversationResponse } from "@/lib/api/conversations";
 import { ApiError } from "@/lib/api/errors";
 
-const { chat, block, replace, toast } = vi.hoisted(() => ({
+const { chat, block, unblock, replace, toast } = vi.hoisted(() => ({
   chat: {
     nowMs: Date.parse("2026-10-27T09:00:00Z"),
     pin: vi.fn(),
@@ -12,16 +12,21 @@ const { chat, block, replace, toast } = vi.hoisted(() => ({
     mute: vi.fn(),
     unmute: vi.fn(),
     deleteConversation: vi.fn(),
-    markBlocked: vi.fn(),
+    setBlockedUser: vi.fn(),
+    blockedUsers: new Set<string>(),
   },
   block: vi.fn(),
+  unblock: vi.fn(),
   replace: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock("@/components/messages/ChatUnreadProvider", () => ({ useChatUnreadContext: () => chat }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace, push: vi.fn() }) }));
-vi.mock("@/lib/api/users", () => ({ block: (...args: unknown[]) => block(...args) }));
+vi.mock("@/lib/api/users", () => ({
+  block: (...args: unknown[]) => block(...args),
+  unblock: (...args: unknown[]) => unblock(...args),
+}));
 vi.mock("@/components/ui/toast", () => ({ toast }));
 vi.mock("@/components/session/SessionProvider", () => ({ useSession: () => ({ user: { userId: "1" } }) }));
 vi.mock("@/hooks/use-hover-capable", () => ({ useHoverCapable: () => true }));
@@ -46,6 +51,9 @@ const convo = (over: Partial<ConversationResponse> = {}): ConversationResponse =
   muteMode: "NONE",
   mutedUntil: null,
   inboxHidden: false,
+  blockedByViewer: null,
+  messagingBlocked: null,
+  blockVersion: 0,
   ...over,
 });
 
@@ -59,7 +67,7 @@ const openMenu = () => fireEvent.click(screen.getByRole("button", { name: "More 
 const choose = (name: RegExp | string) => fireEvent.click(screen.getByRole("menuitem", { name }));
 
 beforeEach(() => {
-  for (const fn of [chat.pin, chat.unpin, chat.mute, chat.unmute, chat.deleteConversation, chat.markBlocked, block, replace, toast.success, toast.error]) {
+  for (const fn of [chat.pin, chat.unpin, chat.mute, chat.unmute, chat.deleteConversation, chat.setBlockedUser, block, unblock, replace, toast.success, toast.error]) {
     fn.mockReset();
   }
   chat.pin.mockResolvedValue(convo());
@@ -68,6 +76,8 @@ beforeEach(() => {
   chat.unmute.mockResolvedValue(convo());
   chat.deleteConversation.mockResolvedValue(undefined);
   block.mockResolvedValue(undefined);
+  unblock.mockResolvedValue(undefined);
+  chat.blockedUsers = new Set();
 });
 afterEach(cleanup);
 
@@ -227,7 +237,7 @@ describe("block", () => {
 
     await act(async () => fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" })));
     expect(block).not.toHaveBeenCalled();
-    expect(chat.markBlocked).not.toHaveBeenCalled();
+    expect(chat.setBlockedUser).not.toHaveBeenCalled();
   });
 
   it("blocks the other person's account and closes the composer of that conversation", async () => {
@@ -236,7 +246,7 @@ describe("block", () => {
     choose("Block");
     await act(async () => fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Block" })));
     expect(block).toHaveBeenCalledWith("2");
-    expect(chat.markBlocked).toHaveBeenCalledWith("c1");
+    expect(chat.setBlockedUser).toHaveBeenCalledWith("2", true);
     expect(toast.success).toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
@@ -249,12 +259,12 @@ describe("block", () => {
     const press = () => within(screen.getByRole("dialog")).getByRole("button", { name: "Block" });
     await act(async () => fireEvent.click(press()));
     expect(screen.getByRole("alert").textContent).toMatch(/can.t reach the server/i);
-    expect(chat.markBlocked).not.toHaveBeenCalled();
+    expect(chat.setBlockedUser).not.toHaveBeenCalled();
     expect(toast.success).not.toHaveBeenCalled();
 
     await act(async () => fireEvent.click(press()));
     expect(block).toHaveBeenCalledTimes(2);
-    expect(chat.markBlocked).toHaveBeenCalledWith("c1");
+    expect(chat.setBlockedUser).toHaveBeenCalledWith("2", true);
   });
 
   it("counts an account that was already blocked as done", async () => {
@@ -263,7 +273,7 @@ describe("block", () => {
     openMenu();
     choose("Block");
     await act(async () => fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Block" })));
-    expect(chat.markBlocked).toHaveBeenCalledWith("c1");
+    expect(chat.setBlockedUser).toHaveBeenCalledWith("2", true);
   });
 
   it("is not pressed twice while the request is out", async () => {
@@ -318,5 +328,40 @@ describe("delete", () => {
     choose("Delete");
     await act(async () => fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Delete" })));
     expect(replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("unblock from the menu", () => {
+  it("offers Unblock instead of Block for an account the viewer blocked", () => {
+    chat.blockedUsers = new Set(["2"]);
+    mount();
+    openMenu();
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
+      "Mute notifications",
+      "Pin to top",
+      "Unblock",
+      "Delete",
+    ]);
+  });
+
+  it("unblocks at once, without a question, and reopens the conversation", async () => {
+    chat.blockedUsers = new Set(["2"]);
+    mount();
+    openMenu();
+    await act(async () => choose("Unblock"));
+    expect(unblock).toHaveBeenCalledWith("2");
+    expect(chat.setBlockedUser).toHaveBeenCalledWith("2", false);
+    expect(toast.success).toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("shows the reason and changes nothing when unblocking fails", async () => {
+    chat.blockedUsers = new Set(["2"]);
+    unblock.mockRejectedValue(new ApiError(0, "NETWORK", "x"));
+    mount();
+    openMenu();
+    await act(async () => choose("Unblock"));
+    expect(chat.setBlockedUser).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith("Can't reach the server. Check your connection.");
   });
 });

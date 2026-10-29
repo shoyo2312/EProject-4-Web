@@ -26,8 +26,8 @@ const NONE: ChatUnread = {
   mute: refused,
   unmute: refused,
   deleteConversation: refused,
-  blocked: new Set(),
-  markBlocked: () => {},
+  blockedUsers: new Set(),
+  setBlockedUser: () => {},
 };
 
 const ChatUnreadContext = createContext<ChatUnread>(NONE);

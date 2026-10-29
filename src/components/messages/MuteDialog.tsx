@@ -1,5 +1,6 @@
 "use client";
 
+import { BUTTON_DANGER, BUTTON_QUIET, DIALOG_SHEET } from "@/components/messages/chat-ui";
 import { useState } from "react";
 
 import { Modal } from "@/components/ui/modal";
@@ -34,11 +35,11 @@ export function MuteDialog({
   const [length, setLength] = useState<MuteLength>("ONE_HOUR");
 
   return (
-    <Modal onClose={busy ? () => {} : onCancel} className="w-[400px] rounded-[12px] p-6">
-      <h2 className="text-center text-[18px] leading-6 font-bold text-[var(--tt-text)]">
+    <Modal onClose={busy ? () => {} : onCancel} className={DIALOG_SHEET}>
+      <h2 className="text-center text-[19px] leading-6 font-bold text-[var(--tt-text)]">
         Mute notifications from {name}?
       </h2>
-      <p className="mt-3 text-center text-[14px] leading-5 text-[var(--tt-text-muted)]">
+      <p className="mt-3 text-center text-[14px] leading-[21px] text-[var(--chat-meta)]">
         You will still receive and be able to read their messages. You just won&apos;t get alerts from this
         conversation for the time you choose.
       </p>
@@ -52,18 +53,19 @@ export function MuteDialog({
             disabled={busy}
             onClick={() => setLength(option.value)}
             className={cn(
-              "flex h-11 items-center gap-3 rounded-[8px] bg-white/[0.06] px-4 text-left text-[15px] text-[var(--tt-text)] transition-colors hover:bg-white/[0.12] disabled:opacity-50",
-              "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/60",
+              "flex h-11 items-center gap-3 rounded-[var(--chat-radius-control)] px-4 text-left text-[15px] text-[var(--tt-text)] transition-colors disabled:opacity-50",
+              "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70",
+              length === option.value ? "bg-white/[0.1] ring-1 ring-[var(--chat-line-strong)]" : "bg-white/[0.05] hover:bg-white/[0.09]",
             )}
           >
             <span
               aria-hidden
               className={cn(
                 "flex h-4 w-4 flex-none items-center justify-center rounded-full border",
-                length === option.value ? "border-[var(--tt-red)]" : "border-white/40",
+                length === option.value ? "border-[var(--chat-own)]" : "border-white/40",
               )}
             >
-              {length === option.value && <span className="h-2 w-2 rounded-full bg-[var(--tt-red)]" />}
+              {length === option.value && <span className="h-2 w-2 rounded-full bg-[var(--chat-own)]" />}
             </span>
             {option.label}
           </button>
@@ -79,7 +81,7 @@ export function MuteDialog({
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="h-11 flex-1 rounded-[6px] bg-white/[0.08] text-[15px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-white/[0.14] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/60"
+          className={cn("flex-1", BUTTON_QUIET)}
         >
           Cancel
         </button>
@@ -88,7 +90,7 @@ export function MuteDialog({
           onClick={() => onConfirm(length)}
           disabled={busy}
           aria-busy={busy}
-          className="h-11 flex-1 rounded-[6px] bg-[var(--tt-red)] text-[15px] font-semibold text-white transition-colors hover:bg-[var(--tt-red-hover)] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white"
+          className={cn("flex-1", BUTTON_DANGER)}
         >
           {busy ? "Muting…" : "Mute"}
         </button>

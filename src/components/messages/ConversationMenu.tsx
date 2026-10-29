@@ -15,14 +15,14 @@ import { useEscapeKey } from "@/hooks/use-escape-key";
 import { useMounted } from "@/hooks/use-mounted";
 import { isApiError } from "@/lib/api/errors";
 import type { ConversationResponse, MuteLength } from "@/lib/api/conversations";
-import { block } from "@/lib/api/users";
+import { block, unblock } from "@/lib/api/users";
 import { chatErrorMessage, isMuted } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 
 type Dialog = "mute" | "block" | "delete" | null;
 
 const itemClass =
-  "flex h-12 w-full items-center gap-3 px-4 text-left text-[15px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-white/[0.08] focus-visible:bg-white/[0.08] focus-visible:outline-none";
+  "flex h-11 w-full items-center gap-3 rounded-[var(--chat-radius-control)] px-3 text-left text-[14.5px] font-medium text-[var(--tt-text)] transition-colors hover:bg-[var(--chat-active)] focus-visible:bg-[var(--chat-active)] focus-visible:outline-none";
 
 /**
  * The "…" on a conversation in the inbox: mute, pin, block, delete — each one the viewer's own doing.
@@ -66,6 +66,7 @@ export function ConversationMenu({
 
   const muted = isMuted(item, chat.nowMs);
   const pinned = item.pinnedAt !== null;
+  const blockedByMe = item.blockedByViewer ?? chat.blockedUsers.has(otherId);
 
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
   const place = useAnchoredPosition(trigger, menu, open, close);
@@ -146,13 +147,26 @@ export function ConversationMenu({
         // Blocked from another tab already: the state the viewer asked for.
         if (!(isApiError(cause) && cause.is("ALREADY_BLOCKED"))) throw cause;
       }
-      chat.markBlocked(item.id);
+      chat.setBlockedUser(otherId, true);
     });
     if (done) {
       setDialog(null);
       toast.success(`Blocked ${name}. Unblock them in Settings › Privacy.`);
     }
   };
+
+  /** Unblocking needs no question: it only reopens the conversation. */
+  const unblockNow = () =>
+    quick(async () => {
+      try {
+        await unblock(otherId);
+      } catch (cause) {
+        // Already lifted from another tab: the state the viewer asked for.
+        if (!(isApiError(cause) && cause.is("NOT_BLOCKED"))) throw cause;
+      }
+      chat.setBlockedUser(otherId, false);
+      toast.success(`Unblocked ${name}.`);
+    });
 
   const confirmDelete = async () => {
     const done = await run(() => chat.deleteConversation(item.id));
@@ -204,7 +218,7 @@ export function ConversationMenu({
             onKeyDown={onMenuKeyDown}
             style={place ? { left: place.left, top: place.top } : { left: 0, top: 0 }}
             className={cn(
-              "fixed z-[3002] w-[250px] overflow-hidden rounded-[12px] border border-[var(--tt-divider)] bg-[#262626] py-1 shadow-[0_4px_24px_rgba(0,0,0,0.5)]",
+              "fixed z-[3002] w-[250px] overflow-hidden rounded-[var(--chat-radius-surface)] border border-[var(--chat-line)] bg-[var(--chat-pop)] p-1.5 shadow-[var(--chat-shadow-pop)] animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none",
               !place && "pointer-events-none opacity-0",
             )}
           >
@@ -234,9 +248,14 @@ export function ConversationMenu({
               {pinned ? <PinOff aria-hidden className="h-5 w-5" /> : <Pin aria-hidden className="h-5 w-5" />}
               {pinned ? "Unpin" : "Pin to top"}
             </button>
-            <button type="button" role="menuitem" className={itemClass} onClick={() => choose("block")}>
+            <button
+              type="button"
+              role="menuitem"
+              className={itemClass}
+              onClick={() => (blockedByMe ? void unblockNow() : choose("block"))}
+            >
               <Ban aria-hidden className="h-5 w-5" />
-              Block
+              {blockedByMe ? "Unblock" : "Block"}
             </button>
             <button
               type="button"

@@ -84,25 +84,25 @@ function OpenThread({ conversation, me }: { conversation: ConversationResponse; 
 
   return (
     <div className="flex h-full min-h-0 flex-col animate-in fade-in duration-150 motion-reduce:animate-none">
-      <header className="flex h-[72px] flex-none items-center gap-3 border-b border-[var(--tt-divider)] pr-20 pl-5 tt-768:h-14 tt-768:pr-14 tt-768:pl-2">
+      <header className="flex h-[68px] flex-none items-center gap-3 border-b border-[var(--chat-line)] pr-20 pl-5 tt-768:h-14 tt-768:pr-14 tt-768:pl-2">
         <Link
           href={request ? "/messages/requests" : "/messages"}
           aria-label={request ? "Back to message requests" : "Back to messages"}
-          className="hidden h-10 w-10 flex-none items-center justify-center rounded-full text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)] focus-visible:outline-2 focus-visible:outline-white/60 tt-768:flex"
+          className="hidden h-10 w-10 flex-none items-center justify-center rounded-full text-[var(--tt-text)] transition-colors hover:bg-[var(--chat-active)] focus-visible:outline-2 focus-visible:outline-white/70 tt-768:flex"
         >
           <ChevronLeftIcon className="h-5 w-5" />
         </Link>
         <Link
           href={`/@${otherId}`}
-          className="flex min-w-0 items-center gap-3 rounded-[10px] py-1 pr-2 focus-visible:outline-2 focus-visible:outline-white/60"
+          className="flex min-w-0 items-center gap-3 rounded-[var(--chat-radius-control)] py-1 pr-3 transition-colors hover:bg-[var(--chat-hover)] focus-visible:outline-2 focus-visible:outline-white/70"
         >
           <ChatAvatar src={avatar} className="h-10 w-10 tt-768:h-9 tt-768:w-9" />
           <span className="min-w-0">
-            <span className="block truncate text-[16px] leading-5 font-semibold text-[var(--tt-text)]">
+            <span className="block truncate text-[16px] leading-5 font-semibold tracking-[-0.005em] text-[var(--tt-text)]">
               {name}
             </span>
             {author?.handle && (
-              <span className="block truncate text-[13px] leading-4 text-[var(--tt-text-muted)]">
+              <span className="block truncate text-[12.5px] leading-4 text-[var(--chat-meta)]">
                 @{author.handle}
               </span>
             )}
@@ -121,7 +121,7 @@ function Unavailable({ text }: { text: string }) {
       <p className="text-[16px] font-semibold text-[var(--tt-text)]">{text}</p>
       <Link
         href="/messages"
-        className="mt-3 h-9 rounded-full bg-[var(--tt-field)] px-5 text-[14px] leading-9 font-semibold text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-shape-neutral-3)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/60"
+        className="mt-4 inline-flex h-9 items-center rounded-full bg-white/[0.08] px-5 text-[14px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-white/[0.14] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/70"
       >
         Back to messages
       </Link>
@@ -132,7 +132,7 @@ function Unavailable({ text }: { text: string }) {
 function ThreadSkeleton() {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-[72px] flex-none items-center gap-3 border-b border-[var(--tt-divider)] pl-5">
+      <div className="flex h-[68px] flex-none items-center gap-3 border-b border-[var(--chat-line)] pl-5">
         <Skeleton className="h-10 w-10 rounded-full" />
         <Skeleton className="h-4 w-32" />
       </div>

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 
 import { WarningIcon } from "@/components/icons";
 import { ChatAvatar } from "@/components/messages/ChatAvatar";
+import { BlockedByOtherNotice } from "@/components/messages/thread/BlockedByOtherNotice";
+import { BlockedNotice } from "@/components/messages/thread/BlockedNotice";
 import { useChatUnreadContext } from "@/components/messages/ChatUnreadProvider";
 import { Composer } from "@/components/messages/thread/Composer";
 import { DeleteMessageDialog } from "@/components/messages/thread/DeleteMessageDialog";
@@ -12,8 +14,11 @@ import { RequestPrompt } from "@/components/messages/thread/RequestPrompt";
 import type { ReplyDraft } from "@/components/messages/thread/ReplyBar";
 import { ReopenConfirm } from "@/components/messages/thread/ReopenConfirm";
 import { RequestSentNotice } from "@/components/messages/thread/RequestSentNotice";
+import { TypingRow } from "@/components/messages/thread/TypingRow";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/components/ui/toast";
 import type { ChatThread } from "@/hooks/use-chat-thread";
+import { useTypingSender } from "@/hooks/use-typing-sender";
 import {
   getConversation,
   type ConversationResponse,
@@ -24,13 +29,16 @@ import {
 import {
   canReplyTo,
   chatErrorMessage,
+  otherParticipantId,
   isPermissionChange,
   isReplyTargetGone,
   isThreadLocked,
   quoteText,
   retryAvailableAfter,
 } from "@/lib/chat";
-import { setViewing } from "@/lib/chat-viewing";
+import { isWindowActive, setViewing } from "@/lib/chat-viewing";
+import { isApiError } from "@/lib/api/errors";
+import { unblock } from "@/lib/api/users";
 
 /**
  * Everything under a conversation's header — history, send errors, and whatever stands where the
@@ -59,14 +67,49 @@ export function ThreadBody({
   avatar: string | undefined;
 }) {
   const conversationId = conversation.id;
-  const { applyConversation, blocked } = useChatUnreadContext();
+  const { applyConversation, blockedUsers, setBlockedUser } = useChatUnreadContext();
+  const otherId = otherParticipantId(conversation, me);
+  // The server's word for this conversation, the viewer's block list only while it could not tell.
+  const blockedByMe = conversation.blockedByViewer ?? blockedUsers.has(otherId);
+  const messagingBlocked = blockedByMe || conversation.messagingBlocked === true;
+  const [draft, setDraft] = useState({ conversationId, text: "" });
+  const [unblocking, setUnblocking] = useState(false);
+  const [unblockError, setUnblockError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<unknown>(null);
   const [locked, setLocked] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [replyId, setReplyId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<MessageResponse | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const { markRead } = thread;
+  const { markSeen } = thread;
+
+  /**
+   * "Seen" is a message the list has drawn and the browser reports in view, while the tab is shown and
+   * the window focused — all three. The list reports what is in view; the window's state is tracked
+   * here so that coming back to the tab (or the window gaining focus) acknowledges what is on screen
+   * without waiting for a new message to arrive.
+   */
+  const [windowActive, setWindowActive] = useState(false);
+  useEffect(() => {
+    const update = () => setWindowActive(isWindowActive());
+    update();
+    document.addEventListener("visibilitychange", update);
+    window.addEventListener("focus", update);
+    window.addEventListener("blur", update);
+    return () => {
+      document.removeEventListener("visibilitychange", update);
+      window.removeEventListener("focus", update);
+      window.removeEventListener("blur", update);
+    };
+  }, []);
+  const [visible, setVisible] = useState<{ conversationId: string; id: string | null }>({
+    conversationId,
+    id: null,
+  });
+  const visibleNewest = visible.conversationId === conversationId ? visible.id : null;
+  useEffect(() => {
+    if (windowActive && visibleNewest) markSeen(visibleNewest);
+  }, [windowActive, visibleNewest, markSeen]);
 
   /**
    * The message being answered, as it is now: one that was recalled or deleted meanwhile is no longer
@@ -84,9 +127,14 @@ export function ThreadBody({
 
   useEffect(() => {
     setViewing(conversationId, atBottom);
-    if (atBottom) markRead();
     return () => setViewing(conversationId, false);
-  }, [conversationId, atBottom, markRead]);
+  }, [conversationId, atBottom]);
+
+  /** Typing is announced only where a message could be sent: an open conversation, not blocked, not locked. */
+  const typing = useTypingSender(
+    conversationId,
+    conversation.sendPermission === "ALLOWED" && !messagingBlocked && !locked && thread.status === "ready",
+  );
 
   /** Text and stickers take the same road: the same permission checks, errors and reopen handling. */
   const send = async (payload: SendPayload) => {
@@ -132,6 +180,29 @@ export function ThreadBody({
     if (isThreadLocked(result.error)) setLocked(true);
     if (isReplyTargetGone(result.error)) setReplyId(null);
     return false;
+  };
+
+  const unblockNow = async () => {
+    if (unblocking) return;
+    setUnblocking(true);
+    setUnblockError(null);
+    try {
+      try {
+        await unblock(otherId);
+      } catch (cause) {
+        // Already lifted from another tab: the state the viewer asked for.
+        if (!(isApiError(cause) && cause.is("NOT_BLOCKED"))) throw cause;
+      }
+      setBlockedUser(otherId, false);
+      // A send that was refused for the block locked the composer; it is the viewer's to reopen now.
+      setLocked(false);
+      setSendError(null);
+      toast.success(`Unblocked ${name}.`);
+    } catch (cause) {
+      setUnblockError(chatErrorMessage(cause));
+    } finally {
+      setUnblocking(false);
+    }
   };
 
   const act = async (request: Promise<{ ok: true } | { ok: false; error: unknown }>) => {
@@ -181,14 +252,20 @@ export function ThreadBody({
           onAtBottomChange={setAtBottom}
           peerName={name}
           peerAvatar={avatar}
+          receipt={thread.receipt ?? null}
+          onVisibleNewestChange={(id) => setVisible({ conversationId, id })}
           onReact={(message, emoji) => {
             setSendError(null);
             void act(thread.react(message.id, emoji));
           }}
-          onReply={(message) => setReplyId(message.id)}
+          onReply={(message) => {
+            if (!messagingBlocked) setReplyId(message.id);
+          }}
           onDelete={setDeleting}
         />
       )}
+
+      <TypingRow active={thread.peerTyping === true && !messagingBlocked} name={name} avatar={avatar} />
 
       {sendError !== null && (
         <p
@@ -203,7 +280,15 @@ export function ThreadBody({
       <ThreadFooter
         conversation={conversation}
         name={name}
-        locked={locked || blocked.has(conversationId)}
+        locked={locked}
+        blockedByMe={blockedByMe}
+        messagingBlocked={messagingBlocked}
+        draft={draft.conversationId === conversationId ? draft.text : ""}
+        onTyping={typing.input}
+        onDraftChange={(text) => setDraft({ conversationId, text })}
+        unblocking={unblocking}
+        unblockError={unblockError}
+        onUnblock={() => void unblockNow()}
         ready={thread.status === "ready"}
         reply={reply}
         onCancelReply={() => setReplyId(null)}
@@ -228,6 +313,14 @@ function ThreadFooter({
   conversation,
   name,
   locked,
+  blockedByMe,
+  messagingBlocked,
+  draft,
+  onDraftChange,
+  onTyping,
+  unblocking,
+  unblockError,
+  onUnblock,
   ready,
   reply,
   onCancelReply,
@@ -237,12 +330,25 @@ function ThreadFooter({
   conversation: ConversationResponse;
   name: string;
   locked: boolean;
+  blockedByMe: boolean;
+  messagingBlocked: boolean;
+  draft: string;
+  onDraftChange: (text: string) => void;
+  onTyping: (typing: boolean) => void;
+  unblocking: boolean;
+  unblockError: string | null;
+  onUnblock: () => void;
   ready: boolean;
   reply: ReplyDraft | null;
   onCancelReply: () => void;
   onSend: (content: string) => Promise<boolean>;
   onSendSticker: (sticker: StickerView) => Promise<boolean>;
 }) {
+  // The viewer's own block comes first: whatever the request state, there is nothing to send into.
+  if (blockedByMe) {
+    return <BlockedNotice name={name} busy={unblocking} error={unblockError} onUnblock={onUnblock} />;
+  }
+  if (messagingBlocked) return <BlockedByOtherNotice />;
   switch (conversation.sendPermission) {
     case "REQUEST_SENT":
       return <RequestSentNotice retryAvailableAt={conversation.retryAvailableAt} />;
@@ -258,6 +364,8 @@ function ThreadFooter({
       return (
         <ReopenComposer
           name={name}
+          draft={draft}
+          onDraftChange={onDraftChange}
           disabled={locked || !ready}
           reply={reply}
           onCancelReply={onCancelReply}
@@ -268,6 +376,9 @@ function ThreadFooter({
     default:
       return (
         <Composer
+          draft={draft}
+          onDraftChange={onDraftChange}
+          onTyping={onTyping}
           disabled={locked || !ready}
           disabledReason={locked ? "You can't send messages in this conversation" : undefined}
           reply={reply}
@@ -286,6 +397,8 @@ function ThreadFooter({
  */
 function ReopenComposer({
   name,
+  draft,
+  onDraftChange,
   disabled,
   reply,
   onCancelReply,
@@ -293,6 +406,8 @@ function ReopenComposer({
   onSendSticker,
 }: {
   name: string;
+  draft: string;
+  onDraftChange: (text: string) => void;
   disabled: boolean;
   reply: ReplyDraft | null;
   onCancelReply: () => void;
@@ -322,6 +437,8 @@ function ReopenComposer({
   return (
     <>
       <Composer
+        draft={draft}
+        onDraftChange={onDraftChange}
         disabled={disabled}
         reply={reply}
         onCancelReply={onCancelReply}

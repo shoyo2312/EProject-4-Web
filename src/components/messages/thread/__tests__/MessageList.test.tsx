@@ -2,7 +2,24 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MessageList } from "@/components/messages/thread/MessageList";
+import { SHARED_NOW_TICK_MS } from "@/hooks/use-shared-now";
 import type { MessageResponse } from "@/lib/api/conversations";
+import { getOverlayCollection, getOverlayOrigin } from "@/lib/overlay-origin";
+
+vi.mock("next/link", () => ({
+  default: ({ href, children, onClick, ...rest }: { href: string; children: React.ReactNode; onClick?: () => void }) => (
+    <a
+      href={href}
+      onClick={(event) => {
+        event.preventDefault();
+        onClick?.();
+      }}
+      {...rest}
+    >
+      {children}
+    </a>
+  ),
+}));
 
 /*
  * jsdom does no layout, so there is no real scrolling here: the list's metrics are a fake the tests
@@ -474,3 +491,242 @@ describe("MessageList message actions", () => {
     expect(screen.getByRole("button", { name: "Delete message" })).toBeTruthy();
   });
 });
+
+describe("MessageList shared videos", () => {
+  const share = (n: number, videoId: string, senderId = "2", over: Partial<MessageResponse> = {}): MessageResponse => ({
+    ...msg(n, senderId),
+    type: "VIDEO",
+    content: null,
+    video: { videoId, state: "AVAILABLE", ownerId: "7", thumbnailUrl: null, title: `Video ${videoId}`, durationSeconds: 10 },
+    ...over,
+  });
+
+  it("opens a card with the conversation's shared videos, oldest share first, to step up and down through", () => {
+    // A shares 111, A shares 222, B shares 333 — arriving newest-first, as the server pages them.
+    mount([share(3, "333", ME), share(2, "222"), share(1, "111")]);
+    fireEvent.click(screen.getByRole("link", { name: "Open video: Video 222" }));
+
+    expect(getOverlayCollection()).toEqual(["111", "222", "333"]);
+    expect(getOverlayOrigin()).toBe(window.location.pathname + window.location.search);
+  });
+
+  it("leaves out recalled and unavailable videos, and lists a repeated one once", () => {
+    mount([
+      share(1, "111"),
+      share(2, "222", "2", { recalledAt: "2026-10-27T09:00:00.000Z", video: null }),
+      share(3, "333", "2", { video: { videoId: "333", state: "UNAVAILABLE", ownerId: null, thumbnailUrl: null, title: null, durationSeconds: null } }),
+      share(4, "111", ME),
+      share(5, "555"),
+    ]);
+    fireEvent.click(screen.getByRole("link", { name: "Open video: Video 555" }));
+    expect(getOverlayCollection()).toEqual(["111", "555"]);
+  });
+});
+
+describe("MessageList delivery state", () => {
+  const NOW = Date.UTC(2026, 9, 27, 12, 0, 0);
+  const mine = (n: number, over: Partial<MessageResponse> = {}): MessageResponse => ({ ...msg(n, ME), ...over });
+  const mark = (id: string, n: number, atMs = NOW) => ({
+    messageId: id,
+    sentAt: new Date(Date.UTC(2026, 9, 27, 8, n)).toISOString(),
+    at: new Date(atMs).toISOString(),
+  });
+  const receipt = (delivered: ReturnType<typeof mark> | null, read: ReturnType<typeof mark> | null = null) => ({
+    userId: "2",
+    delivered,
+    read,
+  });
+  const labels = () =>
+    Array.from(document.querySelectorAll("[data-status]")).map((el) => [
+      el.closest("[data-id]")?.getAttribute("data-id"),
+      el.getAttribute("data-status"),
+      el.textContent,
+    ]);
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("says Sent under the viewer's newest message until the other side reports", () => {
+    mount([msg(1), mine(2), mine(3)]);
+    expect(labels()).toEqual([["3", "SENT", "Sent"]]);
+  });
+
+  it("says Delivered once they have it, and Seen just now once they have looked", () => {
+    const view = render(<MessageList messages={[mine(1)]} receipt={receipt(mark("1", 1))} {...baseProps()} />);
+    expect(labels()).toEqual([["1", "DELIVERED", "Delivered"]]);
+    view.rerender(<MessageList messages={[mine(1)]} receipt={receipt(mark("1", 1), mark("1", 1))} {...baseProps()} />);
+    expect(labels()).toEqual([["1", "SEEN", "Seen just now"]]);
+  });
+
+  it("keeps the seen label under the message that was seen, and Sent under a newer one — as in the reference", () => {
+    mount([mine(1), mine(2), mine(3)], { receipt: receipt(mark("2", 2), mark("2", 2, NOW - 13 * 60_000)) });
+    expect(labels()).toEqual([
+      ["2", "SEEN", "Seen 13 min ago"],
+      ["3", "SENT", "Sent"],
+    ]);
+  });
+
+  it("the newer message does not inherit the seen state of the older one", () => {
+    // The read mark names message 2; message 3 was sent after it, whenever the mark was recorded.
+    mount([mine(2), mine(3)], { receipt: receipt(mark("2", 2, NOW + 99_000), mark("2", 2, NOW + 99_000)) });
+    expect(labels().map((l) => l[1])).toEqual(["SEEN", "SENT"]);
+  });
+
+  it("the seen label moves to the newer message when the read mark advances", () => {
+    const view = render(<MessageList messages={[mine(1), mine(2)]} receipt={receipt(mark("1", 1), mark("1", 1))} {...baseProps()} />);
+    expect(labels()).toEqual([["1", "SEEN", "Seen just now"], ["2", "SENT", "Sent"]]);
+    view.rerender(<MessageList messages={[mine(1), mine(2)]} receipt={receipt(mark("2", 2), mark("2", 2))} {...baseProps()} />);
+    expect(labels()).toEqual([["2", "SEEN", "Seen just now"]]);
+  });
+
+  it("the time under Seen changes by itself as time passes, with nothing arriving", () => {
+    mount([mine(1)], { receipt: receipt(mark("1", 1), mark("1", 1)) });
+    expect(labels()[0][2]).toBe("Seen just now");
+
+    act(() => void vi.advanceTimersByTime(2 * 60_000 + 20_000));
+    expect(labels()[0][2]).toBe("Seen 2 min ago");
+
+    act(() => void vi.advanceTimersByTime(60 * 60_000));
+    expect(labels()[0][2]).toBe("Seen 1 hr ago");
+  });
+
+  it("uses one timer for the whole list, however many messages carry a label", () => {
+    const spy = vi.spyOn(window, "setInterval");
+    mount(Array.from({ length: 30 }, (_, i) => mine(i + 1)), { receipt: receipt(mark("30", 30), mark("15", 15)) });
+    const clocks = spy.mock.calls.filter((call) => call[1] === SHARED_NOW_TICK_MS);
+    expect(clocks).toHaveLength(1);
+    spy.mockRestore();
+  });
+
+  it("a tick re-renders the seen label only: the clock is not a reason to redraw the whole list", () => {
+    mount([mine(1), mine(2)], { receipt: receipt(mark("1", 1), mark("1", 1)) });
+    const row = document.querySelector('[data-id="2"]');
+    act(() => void vi.advanceTimersByTime(SHARED_NOW_TICK_MS * 3));
+    expect(document.querySelector('[data-id="2"]')).toBe(row);
+  });
+
+  it("is late by no more than one tick: the minute turns within five seconds of being reached", () => {
+    mount([mine(1)], { receipt: receipt(mark("1", 1), mark("1", 1)) });
+    act(() => void vi.advanceTimersByTime(59_000));
+    expect(labels()[0][2]).toBe("Seen just now");
+    act(() => void vi.advanceTimersByTime(SHARED_NOW_TICK_MS + 1_000));
+    expect(labels()[0][2]).toBe("Seen 1 min ago");
+  });
+
+  it("shows only Seen when the read time is not usable", () => {
+    mount([mine(1)], { receipt: receipt(mark("1", 1), { ...mark("1", 1), at: "garbage" }) });
+    expect(labels()).toEqual([["1", "SEEN", "Seen"]]);
+  });
+
+  it("puts nothing under the other side's messages or a recalled one, and settles on what still stands", () => {
+    mount([mine(1), msg(2), mine(3, { recalledAt: "2026-10-27T09:00:00.000Z" })]);
+    expect(labels()).toEqual([["1", "SENT", "Sent"]]);
+    expect(document.querySelector('[data-id="3"] [data-status]')).toBeNull();
+  });
+
+  it("applies to stickers and videos as it does to text, without revealing anything about them", () => {
+    const sticker = { ...mine(1), type: "STICKER" as const, content: null, stickerId: "fire", sticker: null };
+    const video = {
+      ...mine(2),
+      type: "VIDEO" as const,
+      content: null,
+      video: { videoId: "70001", state: "UNAVAILABLE" as const, ownerId: null, thumbnailUrl: null, title: null, durationSeconds: null },
+    };
+    mount([sticker, video], { receipt: receipt(mark("2", 2), mark("1", 1)) });
+    expect(labels()).toEqual([["1", "SEEN", "Seen just now"], ["2", "DELIVERED", "Delivered"]]);
+  });
+
+  it("shows no state when the viewer has sent nothing", () => {
+    mount([msg(1), msg(2)]);
+    expect(labels()).toEqual([]);
+  });
+});
+
+describe("MessageList what is in view", () => {
+  type Callback = (entries: Partial<IntersectionObserverEntry>[]) => void;
+  let observed: { element: Element; callback: Callback }[] = [];
+
+  class StubObserver {
+    private readonly callback: Callback;
+    constructor(callback: Callback) {
+      this.callback = callback;
+    }
+    observe(element: Element) {
+      observed.push({ element, callback: this.callback });
+    }
+    unobserve() {}
+    disconnect() {
+      observed = observed.filter((o) => o.callback !== this.callback);
+    }
+  }
+
+  beforeEach(() => {
+    observed = [];
+    vi.stubGlobal("IntersectionObserver", StubObserver);
+  });
+
+  const enter = (id: string, ratio: number, height = 40) => {
+    const hit = observed.find((o) => (o.element as HTMLElement).dataset.id === id);
+    act(() => hit?.callback([{ target: hit.element, isIntersecting: ratio > 0, intersectionRatio: ratio, intersectionRect: { height } as DOMRectReadOnly }]));
+  };
+
+  it("watches the other side's messages only, and reports the newest one that is in view", () => {
+    const onVisibleNewestChange = vi.fn();
+    mount([msg(1), msg(2), msg(3, ME), msg(4)], { onVisibleNewestChange });
+    expect(observed.map((o) => (o.element as HTMLElement).dataset.id).sort()).toEqual(["1", "2", "4"]);
+
+    enter("1", 1);
+    enter("2", 1);
+    expect(onVisibleNewestChange).toHaveBeenLastCalledWith("2");
+
+    enter("4", 0.9);
+    expect(onVisibleNewestChange).toHaveBeenLastCalledWith("4");
+  });
+
+  it("a message that is barely at the edge of the view does not count, and one that leaves is no longer in view", () => {
+    const onVisibleNewestChange = vi.fn();
+    mount([msg(1), msg(2)], { onVisibleNewestChange });
+
+    enter("1", 1);
+    enter("2", 0.1, 20);
+    expect(onVisibleNewestChange).toHaveBeenLastCalledWith("1");
+
+    enter("1", 0);
+    expect(onVisibleNewestChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it("a tall message that fills the view counts though it never reaches half of itself", () => {
+    const onVisibleNewestChange = vi.fn();
+    mount([msg(1)], { onVisibleNewestChange });
+    enter("1", 0.3, 400);
+    expect(onVisibleNewestChange).toHaveBeenLastCalledWith("1");
+  });
+
+  it("reports nothing before anything is in view, and nothing twice", () => {
+    const onVisibleNewestChange = vi.fn();
+    mount([msg(1), msg(2)], { onVisibleNewestChange });
+    expect(onVisibleNewestChange).not.toHaveBeenCalled();
+
+    enter("2", 1);
+    enter("2", 0.8);
+    expect(onVisibleNewestChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+function baseProps() {
+  return {
+    me: ME,
+    hasMore: false,
+    loadingOlder: false,
+    onLoadOlder: vi.fn(),
+    onAtBottomChange: vi.fn(),
+    peerName: "Alice",
+    peerAvatar: undefined,
+    onReact: vi.fn(),
+    onReply: vi.fn(),
+    onDelete: vi.fn(),
+  };
+}

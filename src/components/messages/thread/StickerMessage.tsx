@@ -19,7 +19,7 @@ export function StickerMessage({ sticker }: { sticker: StickerView | null }) {
         <div
           role="img"
           aria-label="Sticker unavailable"
-          className="flex h-full w-full items-center justify-center rounded-[18px] bg-[var(--tt-field)] px-3 text-center text-[12px] leading-4 text-[var(--tt-text-muted)]"
+          className="flex h-full w-full items-center justify-center rounded-[var(--chat-radius-bubble)] border border-[var(--chat-line)] bg-[var(--chat-raised)] px-3 text-center text-[12px] leading-4 text-[var(--chat-meta)]"
         >
           Sticker unavailable
         </div>

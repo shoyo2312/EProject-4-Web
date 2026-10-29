@@ -2,14 +2,28 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { Check, CheckCheck } from "lucide-react";
+
 import { JumpToLatest } from "@/components/messages/thread/JumpToLatest";
 import { MessageActions } from "@/components/messages/thread/MessageActions";
 import { ReactionBadges } from "@/components/messages/thread/ReactionBadges";
 import { ReplyQuoteBlock } from "@/components/messages/thread/ReplyQuoteBlock";
 import { StickerMessage } from "@/components/messages/thread/StickerMessage";
+import { VideoMessage } from "@/components/messages/thread/VideoMessage";
 import { useHoverCapable } from "@/hooks/use-hover-capable";
-import type { MessageResponse } from "@/lib/api/conversations";
-import { buildThread, formatMessageTime, myReaction } from "@/lib/chat";
+import { useSharedNow } from "@/hooks/use-shared-now";
+import { useVisiblePeerMessage } from "@/hooks/use-visible-peer-message";
+import type { MessageResponse, Receipt } from "@/lib/api/conversations";
+import {
+  STATUS_LABEL,
+  buildThread,
+  formatMessageTime,
+  formatSeenAgo,
+  myReaction,
+  statusTargets,
+  sharedVideoIds,
+} from "@/lib/chat";
+import { markOverlayOrigin } from "@/lib/overlay-origin";
 import {
   STICK_PX,
   addUnseen,
@@ -44,6 +58,8 @@ function scrollBehavior(): ScrollBehavior {
  */
 export function MessageList({
   messages,
+  receipt = null,
+  onVisibleNewestChange,
   me,
   hasMore,
   loadingOlder,
@@ -56,6 +72,13 @@ export function MessageList({
   onDelete,
 }: {
   messages: MessageResponse[];
+  /** How far the other side has got; "Delivered" and "Seen" under the viewer's newest message come from it. */
+  receipt?: Receipt | null;
+  /**
+   * The newest message of the other side that is on screen changed (null: none is). The caller decides
+   * whether that makes it "seen" — this knows what is drawn and in view, not whether anyone is looking.
+   */
+  onVisibleNewestChange?: (messageId: string | null) => void;
   me: string;
   hasMore: boolean;
   loadingOlder: boolean;
@@ -82,7 +105,13 @@ export function MessageList({
   const [unseen, setUnseen] = useState<string[]>([]);
   /** Where there is no hover, the message whose actions a tap opened. */
   const [tapped, setTapped] = useState<string | null>(null);
+  /** Messages that arrived while the thread was open: only these ease in, once; history and older pages do not. */
+  const [arrived, setArrived] = useState<ReadonlySet<string>>(() => new Set());
   const hoverCapable = useHoverCapable();
+  /** The scrollbar shows only while the reader is scrolling. */
+  const [scrolling, setScrolling] = useState(false);
+  const scrollTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(scrollTimer.current), []);
 
   const onAtBottomChangeRef = useRef(onAtBottomChange);
   useEffect(() => {
@@ -90,6 +119,9 @@ export function MessageList({
   });
 
   const items = useMemo(() => buildThread(messages, me), [messages, me]);
+  /** Which of the viewer's messages carry a state: the newest one seen, and the newest one if it is not that. */
+  const targets = useMemo(() => statusTargets(messages, me, receipt), [messages, me, receipt]);
+  useVisiblePeerMessage(scroller, messages, me, onVisibleNewestChange);
 
   /**
    * The one place "where is the reader" is decided, so the ref the next update reads and the state
@@ -132,6 +164,7 @@ export function MessageList({
       }
       const appended = appendedAfter(messages, before.last);
       if (appended.length > 0) {
+        setArrived((current) => new Set([...current, ...appended.map((message) => message.id)]));
         const mine = appended.some((message) => message.senderId === me);
         if (following.current || mine) {
           el.scrollTop = el.scrollHeight;
@@ -164,6 +197,9 @@ export function MessageList({
     const el = scroller.current;
     if (!el) return;
     measure();
+    setScrolling(true);
+    clearTimeout(scrollTimer.current);
+    scrollTimer.current = setTimeout(() => setScrolling(false), 800);
     if (hasMore && !loadingOlder && el.scrollTop < LOAD_OLDER_PX) onLoadOlder();
   };
 
@@ -197,23 +233,24 @@ export function MessageList({
         onPointerDown={stopJump}
         onKeyDown={stopJump}
         tabIndex={0}
+        data-scrolling={scrolling}
+        data-above={!atBottom}
         role="log"
         aria-live="polite"
         aria-label="Messages"
-        className="h-full overflow-y-auto overscroll-contain px-4 py-3 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/30 tt-768:px-3"
+        className="h-full overflow-y-auto overscroll-contain px-3 pt-3 pb-1 [scrollbar-color:transparent_transparent] data-[above=true]:[mask-image:linear-gradient(to_bottom,#000_calc(100%-24px),transparent)] data-[scrolling=true]:[scrollbar-color:rgb(255_255_255/0.3)_transparent] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/30 "
       >
         <div ref={content}>
           {loadingOlder && (
-            <p className="py-2 text-center text-[12px] text-[var(--tt-text-muted)]">Loading earlier messages…</p>
+            <p className="py-2 text-center text-[12px] text-[var(--chat-meta)]">Loading earlier messages…</p>
           )}
 
           {items.map((item) =>
             item.kind === "day" ? (
-              <p
-                key={item.key}
-                className="my-3 text-center text-[12px] leading-4 font-medium text-[var(--tt-text-muted)]"
-              >
-                {item.label}
+              <p key={item.key} className="my-5 flex justify-center first:mt-1">
+                <span className="rounded-full bg-white/[0.06] px-3 py-1 text-[11.5px] leading-4 font-medium text-[var(--chat-meta)]">
+                  {item.label}
+                </span>
               </p>
             ) : (
               <div
@@ -221,8 +258,9 @@ export function MessageList({
                 data-id={item.message.id}
                 className={cn(
                   "flex flex-col",
+                  arrived.has(item.message.id) && "motion-safe:animate-chat-in",
                   item.mine ? "items-end" : "items-start",
-                  item.startsRun ? "mt-2.5" : "mt-0.5",
+                  item.startsRun ? "mt-3" : "mt-0.5",
                 )}
               >
                 {item.message.replyTo && (
@@ -234,29 +272,28 @@ export function MessageList({
                   />
                 )}
                 <div
-                  className="group/msg relative mt-0.5 max-w-[min(70%,480px)]"
+                  className="group/msg relative z-[1] mt-0.5 max-w-[min(78%,560px)]"
                   onClick={hoverCapable ? undefined : () => setTapped((id) => (id === item.message.id ? null : item.message.id))}
                 >
                   {item.message.recalledAt ? (
-                    <div className="rounded-[18px] border border-dashed border-[var(--tt-divider)] px-3.5 py-2 text-[14px] leading-5 text-[var(--tt-text-muted)] italic">
+                    <div className="rounded-[var(--chat-radius-bubble)] border border-[var(--chat-line)] px-3.5 py-2 text-[14px] leading-5 text-[var(--chat-meta)] italic">
                       {item.mine ? "You recalled a message" : "Message recalled"}
                     </div>
                   ) : item.message.type === "STICKER" ? (
                     <StickerMessage sticker={item.message.sticker} />
-                  ) : (
-                    <div
-                      className={cn(
-                        "rounded-[18px] px-3.5 py-2 text-[15px] leading-5 break-words whitespace-pre-wrap [overflow-wrap:anywhere]",
-                        item.mine
-                          ? "bg-[var(--tt-red)] text-white"
-                          : "bg-[var(--tt-field)] text-[var(--tt-text)]",
-                        item.mine
-                          ? [!item.startsRun && "rounded-tr-[5px]", !item.endsRun && "rounded-br-[5px]"]
-                          : [!item.startsRun && "rounded-tl-[5px]", !item.endsRun && "rounded-bl-[5px]"],
+                  ) : item.message.type === "VIDEO" ? (
+                    <div className={cn("flex flex-col gap-1", item.mine ? "items-end" : "items-start")}>
+                      <VideoMessage
+                        video={item.message.video}
+                        mine={item.mine}
+                        onOpen={() => markOverlayOrigin(window.location.pathname + window.location.search, sharedVideoIds(messages))}
+                      />
+                      {item.message.content && (
+                        <div className={bubble(item.mine, true, true)}>{item.message.content}</div>
                       )}
-                    >
-                      {item.message.content}
                     </div>
+                  ) : (
+                    <div className={bubble(item.mine, item.startsRun, item.endsRun)}>{item.message.content}</div>
                   )}
                   <MessageActions
                     mine={item.mine}
@@ -274,14 +311,18 @@ export function MessageList({
                   mine={item.mine}
                   onToggle={(emoji) => onReact(item.message, emoji)}
                 />
-                {item.endsRun && (
-                  <time
-                    dateTime={item.message.sentAt}
-                    className="mt-1 px-1 text-[11px] leading-3 text-[var(--tt-text-muted)]"
-                  >
-                    {formatMessageTime(item.message.sentAt)}
-                  </time>
-                )}
+                <MessageMeta
+                  mine={item.mine}
+                  sentAt={item.endsRun ? item.message.sentAt : null}
+                  status={
+                    item.mine && item.message.id === targets.seenId
+                      ? "SEEN"
+                      : item.mine && item.message.id === targets.latestId
+                        ? targets.latestStatus
+                        : null
+                  }
+                  readAt={receipt?.read?.at}
+                />
               </div>
             ),
           )}
@@ -291,4 +332,65 @@ export function MessageList({
       {kind !== "none" && <JumpToLatest kind={kind} name={peerName} avatar={peerAvatar} onClick={jumpToLatest} />}
     </div>
   );
+}
+
+/** Yours: the brand red; theirs: the receive surface. Inside a run the corner on the sender's side tightens. */
+function bubble(mine: boolean, startsRun: boolean, endsRun: boolean): string {
+  return cn(
+    "rounded-[var(--chat-radius-bubble)] px-3.5 py-2 text-[15px] leading-[1.6] break-words whitespace-pre-wrap [overflow-wrap:anywhere]",
+    mine
+      ? [
+          "bg-[var(--chat-own)] text-white transition-colors duration-150 group-hover/msg:bg-[var(--chat-own-pressed)]",
+          !startsRun && "rounded-tr-[var(--chat-radius-tight)]",
+          !endsRun && "rounded-br-[var(--chat-radius-tight)]",
+        ]
+      : [
+          "bg-[var(--chat-recv)] text-[var(--tt-text)]",
+          !startsRun && "rounded-tl-[var(--chat-radius-tight)]",
+          !endsRun && "rounded-bl-[var(--chat-radius-tight)]",
+        ],
+  );
+}
+
+const STATUS_ICON = { SENT: Check, DELIVERED: CheckCheck, SEEN: CheckCheck } as const;
+
+/**
+ * The quiet line under a message: its time when it closes a run, and — on the viewer's own — where the
+ * other side has got to. One row for both, so a run does not grow two lines of small print; `data-status`
+ * is what tests and styles key on.
+ */
+function MessageMeta({
+  mine,
+  sentAt,
+  status,
+  readAt,
+}: {
+  mine: boolean;
+  sentAt: string | null;
+  status: "SENT" | "DELIVERED" | "SEEN" | null;
+  readAt: string | null | undefined;
+}) {
+  if (!sentAt && !status) return null;
+  const Icon = status ? STATUS_ICON[status] : null;
+  return (
+    <div className={cn("mt-1 flex items-center gap-1.5 px-1 text-[11.5px] leading-4 text-[var(--chat-meta)]", mine ? "justify-end" : "justify-start")}>
+      {sentAt && <time dateTime={sentAt}>{formatMessageTime(sentAt)}</time>}
+      {sentAt && status && <span aria-hidden>·</span>}
+      {status && Icon && (
+        <span data-status={status} className={cn("inline-flex items-center gap-1 font-medium", status === "SEEN" && "text-[var(--tt-text-secondary)]")}>
+          <Icon aria-hidden className="h-3 w-3" strokeWidth={2.4} />
+          {status === "SEEN" ? <SeenAgo at={readAt} /> : STATUS_LABEL[status]}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * "Seen just now" / "Seen 13 min ago", counted from when the server recorded the read. Only this small
+ * component follows the shared clock, so a tick re-renders one label and not the whole list, and the
+ * clock runs only while a seen label is on screen.
+ */
+function SeenAgo({ at }: { at: string | null | undefined }) {
+  return <>{formatSeenAgo(at, useSharedNow())}</>;
 }

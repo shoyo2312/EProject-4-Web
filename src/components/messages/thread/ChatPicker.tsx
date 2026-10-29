@@ -35,8 +35,8 @@ export function ChatPicker({
   const [tab, setTab] = useState<Tab>("emoji");
 
   return (
-    <div className="flex max-h-[min(320px,60vh)] w-full flex-col overflow-hidden rounded-[12px] border border-[var(--tt-divider)] bg-[var(--tt-sheet-3)] shadow-lg animate-in fade-in slide-in-from-bottom-1 duration-150 motion-reduce:animate-none">
-      <div role="tablist" aria-label="Emoji and stickers" className="flex flex-none border-b border-[var(--tt-divider)] px-2 pt-1">
+    <div className="flex max-h-[min(340px,60vh)] w-full flex-col overflow-hidden rounded-[var(--chat-radius-surface)] border border-[var(--chat-line)] bg-[var(--chat-pop)] shadow-[var(--chat-shadow-pop)] animate-in fade-in slide-in-from-bottom-1 duration-150 motion-reduce:animate-none">
+      <div role="tablist" aria-label="Emoji and stickers" className="mx-3 mt-3 flex flex-none rounded-full bg-white/[0.06] p-1">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
@@ -48,10 +48,10 @@ export function ChatPicker({
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => setTab(id)}
             className={cn(
-              "h-9 px-4 text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-white/60",
+              "h-8 flex-1 rounded-full text-[13px] font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-white/70",
               tab === id
-                ? "border-b-2 border-[var(--tt-text)] text-[var(--tt-text)]"
-                : "border-b-2 border-transparent text-[var(--tt-text-muted)] hover:text-[var(--tt-text)]",
+                ? "bg-white/[0.14] text-[var(--tt-text)]"
+                : "text-[var(--chat-meta)] hover:text-[var(--tt-text)]",
             )}
           >
             {label}
@@ -63,7 +63,7 @@ export function ChatPicker({
         role="tabpanel"
         id={`chat-picker-panel-${tab}`}
         aria-labelledby={`chat-picker-tab-${tab}`}
-        className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-2"
+        className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain p-3"
       >
         {tab === "emoji" ? <EmojiGroups onPick={onEmoji} /> : <StickerGrid onPick={onSticker} busy={stickerBusy} />}
       </div>
@@ -78,7 +78,7 @@ function StickerGrid({ onPick, busy }: { onPick: (sticker: StickerView) => void;
     return (
       <div aria-hidden className="grid grid-cols-4 gap-2">
         {Array.from({ length: 8 }, (_, i) => (
-          <Skeleton key={i} className="aspect-square rounded-[10px]" />
+          <Skeleton key={i} className="aspect-square rounded-[var(--chat-radius-control)]" />
         ))}
       </div>
     );
@@ -115,7 +115,7 @@ function StickerGrid({ onPick, busy }: { onPick: (sticker: StickerView) => void;
           onClick={() => onPick(sticker)}
           aria-label={`Send sticker: ${sticker.name}`}
           title={sticker.name}
-          className="flex aspect-square items-center justify-center rounded-[10px] p-1 transition-colors hover:bg-[var(--tt-shape-neutral-3)] focus-visible:outline-2 focus-visible:outline-white/60 disabled:opacity-50"
+          className="flex aspect-square items-center justify-center rounded-[var(--chat-radius-control)] p-1.5 transition-colors hover:bg-[var(--chat-active)] focus-visible:outline-2 focus-visible:outline-white/70 disabled:opacity-50"
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- a fixed-size public image from the media store; next/image would need its host allow-listed */}
           <img src={sticker.url} alt="" width={sticker.width} height={sticker.height} loading="lazy" decoding="async" className="h-full w-full object-contain" />

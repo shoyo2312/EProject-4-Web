@@ -13,7 +13,7 @@ const PICKER_GAP = 8;
 const EDGE = 8;
 
 const barButton =
-  "flex h-6 w-6 flex-none items-center justify-center rounded-full text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-shape-neutral-3)] hover:text-[var(--tt-text)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/60";
+  "flex h-7 w-7 flex-none items-center justify-center rounded-full text-[var(--chat-meta)] transition-colors hover:bg-[var(--chat-active)] hover:text-[var(--tt-text)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white/70";
 
 /**
  * What can be done to one message: react, reply, delete. It sits beside the bubble and shows on
@@ -47,10 +47,12 @@ export function MessageActions({
   return (
     <div
       className={cn(
-        "absolute top-1/2 z-10 flex -translate-y-1/2 items-center",
-        mine ? "right-full pr-1" : "left-full pl-1",
-        "opacity-0 transition-opacity focus-within:opacity-100 group-hover/msg:opacity-100",
-        (pinned || pickerOpen) && "opacity-100",
+        // Beside the bubble, out of the flow: appearing moves nothing. It fades and settles in rather than snapping.
+        "absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 rounded-full border border-[var(--chat-line)] bg-[var(--chat-pop)] p-0.5 shadow-[var(--chat-shadow-soft)]",
+        mine ? "right-full mr-2" : "left-full ml-2",
+        "pointer-events-none scale-95 opacity-0 transition duration-150 ease-out motion-reduce:transition-none",
+        "focus-within:pointer-events-auto focus-within:scale-100 focus-within:opacity-100 group-hover/msg:pointer-events-auto group-hover/msg:scale-100 group-hover/msg:opacity-100",
+        (pinned || pickerOpen) && "pointer-events-auto scale-100 opacity-100",
       )}
     >
       {!recalled && (
@@ -143,7 +145,7 @@ function ReactionPicker({
       role="dialog"
       aria-label="Choose a reaction"
       style={place ? { left: place.left, top: place.top } : { left: 0, top: 0, visibility: "hidden" }}
-      className="fixed z-[3002] flex gap-0.5 rounded-full border border-[var(--tt-divider)] bg-[#1f1f1f] p-1 shadow-[0_4px_16px_rgba(0,0,0,0.5)]"
+      className="fixed z-[3002] flex gap-0.5 rounded-full border border-[var(--chat-line)] bg-[var(--chat-pop)] p-1 shadow-[var(--chat-shadow-pop)] animate-in fade-in zoom-in-95 duration-150 motion-reduce:animate-none"
     >
       {REACTION_EMOJIS.map((emoji) => (
         <button
@@ -153,8 +155,8 @@ function ReactionPicker({
           aria-label={`React ${emoji}`}
           aria-pressed={current === emoji}
           className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-full text-[22px] leading-none transition-transform hover:scale-125 focus-visible:outline-2 focus-visible:outline-white/60",
-            current === emoji && "bg-white/15",
+            "flex h-10 w-10 items-center justify-center rounded-full text-[22px] leading-none transition-transform hover:scale-125 focus-visible:outline-2 focus-visible:outline-white/70 motion-reduce:hover:scale-100",
+            current === emoji && "bg-[var(--chat-active)] ring-1 ring-[var(--chat-line-strong)]",
           )}
         >
           {emoji}

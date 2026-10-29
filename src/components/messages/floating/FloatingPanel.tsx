@@ -13,7 +13,7 @@ import type { ConversationResponse } from "@/lib/api/conversations";
 import { cn } from "@/lib/utils";
 
 const ICON_BUTTON =
-  "flex h-8 w-8 items-center justify-center rounded-full text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)] focus-visible:outline-2 focus-visible:outline-white/60";
+  "flex h-8 w-8 items-center justify-center rounded-full text-[var(--chat-meta)] transition-colors hover:bg-[var(--chat-active)] hover:text-[var(--tt-text)] focus-visible:outline-2 focus-visible:outline-white/70";
 
 /**
  * The open thread as a card in the bottom-right corner. It is not a modal: nothing dims the page,
@@ -21,12 +21,14 @@ const ICON_BUTTON =
  * column and of the comment sidebar.
  */
 export function FloatingPanel({
+  id,
   conversation,
   me,
   rightClass,
   onMinimize,
   onClose,
 }: {
+  id: string;
   conversation: ConversationResponse;
   me: string;
   rightClass: string;
@@ -42,20 +44,23 @@ export function FloatingPanel({
 
   return (
     <section
+      id={id}
       role="dialog"
       aria-label={`Chat with ${name}`}
       className={cn(
         "fixed bottom-4 z-[90] flex h-[min(560px,calc(100vh-6rem))] w-[360px] flex-col overflow-hidden",
-        "rounded-2xl border border-[var(--tt-divider)] bg-[var(--tt-page)]",
+        "rounded-[var(--chat-radius-surface)] border border-[var(--chat-line)] bg-[var(--chat-thread)] shadow-[var(--chat-shadow-pop)]",
         "animate-in fade-in slide-in-from-bottom-2 duration-150 motion-reduce:animate-none",
-        "max-sm:left-20 max-sm:w-auto",
+        // Never wider than what is left between the side nav and the rail (nav 4.5rem + margin).
+        "sm:max-w-[calc(100vw-var(--comment-sidebar-width)-10rem)]",
+        "max-sm:left-[4.75rem] max-sm:w-auto",
         rightClass,
       )}
     >
-      <header className="flex h-14 flex-none items-center gap-2 border-b border-[var(--tt-divider)] pr-2 pl-3">
+      <header className="flex h-14 flex-none items-center gap-2 border-b border-[var(--chat-line)] pr-2 pl-3">
         <Link
           href={`/@${otherId}`}
-          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[10px] py-1 focus-visible:outline-2 focus-visible:outline-white/60"
+          className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[var(--chat-radius-control)] py-1 pr-2 pl-1 transition-colors hover:bg-[var(--chat-hover)] focus-visible:outline-2 focus-visible:outline-white/70"
         >
           <ChatAvatar src={author?.avatarUrl} className="h-9 w-9" />
           <span className="min-w-0">
@@ -63,7 +68,7 @@ export function FloatingPanel({
               {name}
             </span>
             {author?.handle && (
-              <span className="block truncate text-[12px] leading-4 text-[var(--tt-text-muted)]">
+              <span className="block truncate text-[12px] leading-4 text-[var(--chat-meta)]">
                 @{author.handle}
               </span>
             )}

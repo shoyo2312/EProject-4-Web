@@ -1,5 +1,6 @@
 "use client";
 
+import { BUTTON_PRIMARY, BUTTON_QUIET, NOTICE_CARD } from "@/components/messages/chat-ui";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -54,13 +55,11 @@ export function RequestPrompt({
     }
   };
 
-  const button = "h-12 flex-1 text-[15px] font-semibold transition-colors disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/60";
-
   return (
-    <div className="flex-none border-t border-[var(--tt-divider)] bg-white/[0.04]">
-      <div className="px-5 pt-4 pb-3 text-center">
-        <h2 className="text-[16px] leading-5 font-bold text-[var(--tt-text)]">{name} wants to send you a message</h2>
-        <p className="mt-2 text-[13px] leading-[18px] text-[var(--tt-text-muted)]">
+    <div className="flex-none px-5 pt-2 pb-4 tt-768:px-3">
+      <div className={`px-5 pt-4 pb-4 ${NOTICE_CARD}`}>
+        <h2 className="text-center text-[16px] leading-5 font-bold text-[var(--tt-text)]">{name} wants to send you a message</h2>
+        <p className="mt-2 text-center text-[13px] leading-[19px] text-[var(--chat-meta)]">
           If you accept, you can chat with this user immediately. If you delete, this chat will be removed from
           your Message requests. Note that this user may send only 1 message before you accept.
           {initiatorId && (
@@ -69,7 +68,7 @@ export function RequestPrompt({
               <button
                 type="button"
                 onClick={() => setReporting(true)}
-                className="font-bold text-[var(--tt-text)] hover:underline focus-visible:outline-2 focus-visible:outline-white/60"
+                className="font-semibold text-[var(--tt-text)] underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-white/70"
               >
                 Report this user
               </button>{" "}
@@ -77,26 +76,26 @@ export function RequestPrompt({
             </>
           )}
         </p>
-      </div>
-      <div className="flex border-t border-[var(--tt-divider)]">
-        <button
-          type="button"
-          disabled={pending !== null}
-          aria-busy={pending === "decline"}
-          onClick={() => void run("decline")}
-          className={cn(button, "border-r border-[var(--tt-divider)] text-[var(--tt-text-muted)] hover:bg-[var(--tt-field)]")}
-        >
-          {pending === "decline" ? "Deleting…" : "Delete"}
-        </button>
-        <button
-          type="button"
-          disabled={pending !== null}
-          aria-busy={pending === "accept"}
-          onClick={() => void run("accept")}
-          className={cn(button, "text-[var(--tt-text)] hover:bg-[var(--tt-field)]")}
-        >
-          {pending === "accept" ? "Accepting…" : "Accept"}
-        </button>
+        <div className="mt-4 flex gap-3">
+          <button
+            type="button"
+            disabled={pending !== null}
+            aria-busy={pending === "decline"}
+            onClick={() => void run("decline")}
+            className={cn("flex-1", BUTTON_QUIET)}
+          >
+            {pending === "decline" ? "Deleting…" : "Delete"}
+          </button>
+          <button
+            type="button"
+            disabled={pending !== null}
+            aria-busy={pending === "accept"}
+            onClick={() => void run("accept")}
+            className={cn("flex-1", BUTTON_PRIMARY)}
+          >
+            {pending === "accept" ? "Accepting…" : "Accept"}
+          </button>
+        </div>
       </div>
 
       {reporting && initiatorId && (

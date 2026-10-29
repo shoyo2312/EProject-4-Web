@@ -55,7 +55,7 @@ export function MessagesShell({ children }: { children: React.ReactNode }) {
     <main className="flex h-screen min-w-0 flex-1 overflow-hidden">
       <aside
         className={cn(
-          "flex h-full w-[340px] flex-none flex-col border-r border-[var(--tt-divider)] bg-white/[0.03] tt-1024:w-[300px]",
+          "flex h-full w-[340px] flex-none flex-col border-r border-[var(--chat-line)] bg-[var(--chat-list)] tt-1024:w-[300px]",
           "tt-768:w-full tt-768:border-r-0",
           openId && "tt-768:hidden",
         )}
@@ -63,7 +63,7 @@ export function MessagesShell({ children }: { children: React.ReactNode }) {
         {showRequests ? <RequestList openId={openId} /> : <ConversationList openId={openId} />}
       </aside>
 
-      <section className={cn("flex h-full min-w-0 flex-1 flex-col", !openId && "tt-768:hidden")}>
+      <section className={cn("flex h-full min-w-0 flex-1 flex-col bg-[var(--chat-thread)]", !openId && "tt-768:hidden")}>
         {children}
       </section>
     </main>
