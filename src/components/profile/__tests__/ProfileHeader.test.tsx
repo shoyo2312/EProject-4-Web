@@ -64,4 +64,12 @@ describe("ProfileHeader", () => {
     fireEvent.click(screen.getByRole("button", { name: "Suggested accounts" }));
     expect(onToggleSuggested).not.toHaveBeenCalled();
   });
+
+  it("offers Share profile on the owner's own profile only", () => {
+    const { rerender } = render(header({ isOwner: false }));
+    expect(screen.queryByRole("button", { name: "Share profile" })).toBeNull();
+
+    rerender(header({ isOwner: true }));
+    expect(screen.getByRole("button", { name: "Share profile" })).toBeTruthy();
+  });
 });

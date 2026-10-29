@@ -35,7 +35,7 @@ import type { FollowStatus, UserProfile } from "@/types/tiktok";
  *
  * Which buttons appear is the page's only real fork: the owner gets
  * Edit profile / Promote post / settings / share, a visitor gets
- * Follow / Message / add-friend / share / more.
+ * Follow / Message / add-friend / more.
  */
 export function ProfileHeader({
   profile,
@@ -209,9 +209,11 @@ export function ProfileHeader({
             </>
           )}
 
-          <IconButton label="Share profile" onClick={requireSignIn}>
-            <ShareIcon className="h-5 w-5" />
-          </IconButton>
+          {isOwner && (
+            <IconButton label="Share profile" onClick={requireSignIn}>
+              <ShareIcon className="h-5 w-5" />
+            </IconButton>
+          )}
 
           {!isOwner && (
             <ProfileMoreMenu userId={profile.author.userId} name={profile.author.nickname} />
