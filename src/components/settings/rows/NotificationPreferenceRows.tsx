@@ -45,12 +45,13 @@ function PreferenceSwitch({
   item: NotificationSwitch;
   account: AccountSettings;
 }) {
-  const { requireSignIn } = useSession();
+  const { isSignedIn, requireSignIn } = useSession();
   /** Where the switch is headed while its save is in flight. */
   const [target, setTarget] = useState<boolean | null>(null);
   // Every switch defaults on, so until the account's answer is in this shows
-  // what the server would say.
+  // what the server would say — dimmed, since the account may have said otherwise.
   const on = target ?? account.settings?.[item.field] ?? true;
+  const loading = isSignedIn && !account.settings;
 
   const onToggle = () => {
     if (!requireSignIn() || !account.settings || target !== null) return;
@@ -64,7 +65,7 @@ function PreferenceSwitch({
   return (
     <div className="flex h-[54px] items-center justify-between gap-4 px-4">
       <span className="text-[16px] leading-[22px] text-[var(--tt-text)]">{item.label}</span>
-      <Switch on={on} label={item.label} onToggle={onToggle} />
+      <Switch on={on} label={item.label} onToggle={onToggle} disabled={loading} />
     </div>
   );
 }

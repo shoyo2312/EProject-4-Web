@@ -6,6 +6,7 @@ import { CheckIcon, InfoCircleIcon, TriangleDownIcon } from "@/components/icons"
 import { useSession } from "@/components/session/SessionProvider";
 import { ExpandRow } from "@/components/settings/rows/parts";
 import { toast } from "@/components/ui/toast";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useDismiss } from "@/hooks/use-dismiss";
 import { messageFor } from "@/lib/api/errors";
@@ -127,8 +128,43 @@ function WeekSummary({ linked }: { linked: string | null }) {
       </div>
 
       <div role="tabpanel" className="mt-5 flex">
-        <WeekChart weekStart={selected.start} days={days} />
-        <Legend days={days} />
+        {days ? (
+          <>
+            <WeekChart weekStart={selected.start} days={days} />
+            <Legend days={days} />
+          </>
+        ) : (
+          <SummarySkeleton />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Stands in for the chart and legend until the week is read. An empty chart
+ * would read as "no time at all" for as long as the server takes to answer.
+ */
+function SummarySkeleton() {
+  return (
+    <div role="status" aria-label="Loading screen time" className="flex">
+      <div
+        className="flex flex-none items-end gap-[8px] pb-[46px]"
+        style={{ width: CHART_WIDTH, height: CHART_HEIGHT, paddingLeft: PLOT_LEFT - BAR_WIDTH / 2 }}
+      >
+        {[96, 64, 144, 112, 48, 80, 128].map((height, index) => (
+          <Skeleton key={index} className="w-8" style={{ height }} />
+        ))}
+      </div>
+      <div className="ms-2.5 w-[243px] pt-[34px]">
+        {[0, 1].map((index) => (
+          <div key={index} className="h-[87px]">
+            <Skeleton className="h-[17px] w-20" />
+            <Skeleton className="my-[5px] h-1.5 w-[125px]" />
+            <Skeleton className="h-[17px] w-12" />
+          </div>
+        ))}
+        <Skeleton className="h-[17px] w-24" />
       </div>
     </div>
   );

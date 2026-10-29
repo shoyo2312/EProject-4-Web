@@ -12,6 +12,7 @@ import {
 } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
 import { Accessory, ROW_CLASS, RowBody } from "@/components/settings/rows/parts";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/toast";
 import { messageFor } from "@/lib/api/errors";
 import {
@@ -153,6 +154,24 @@ function KeywordFilters() {
           <span className="ml-1 text-[16px] leading-[20.8px] font-medium">Add keyword</span>
         </button>
       </div>
+
+      {filters === null && (
+        <div role="status" aria-label="Loading keywords" className="mt-4">
+          {[0, 1, 2].map((index) => (
+            <div
+              key={index}
+              className="flex items-center gap-2 border-b border-[var(--tt-divider)] px-6 py-3 last:border-b-0"
+            >
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-[21px] w-32" />
+                <Skeleton className="mt-1.5 h-[17px] w-48" />
+              </div>
+              <Skeleton className="h-8 w-14" />
+              <Skeleton className="h-8 w-16" />
+            </div>
+          ))}
+        </div>
+      )}
 
       {filters && filters.length > 0 && (
         <ul className="mt-4">

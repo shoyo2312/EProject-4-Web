@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import { ChevronRightIcon, TriangleDownIcon } from "@/components/icons";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { SettingsRow } from "@/types/tiktok";
 
@@ -70,8 +71,19 @@ export function RowBody({ row, note }: { row: SettingsRow; note?: string }) {
   );
 }
 
-/** `value` overrides a `value` row's static text with the account's own. */
-export function Accessory({ row, value }: { row: SettingsRow; value?: string }) {
+/**
+ * `value` overrides a `value` row's static text with the account's own;
+ * `loading` puts a placeholder there while that answer is on its way.
+ */
+export function Accessory({
+  row,
+  value,
+  loading,
+}: {
+  row: SettingsRow;
+  value?: string;
+  loading?: boolean;
+}) {
   if (row.kind === "expand") {
     return (
       <TriangleDownIcon className="h-5 w-5 flex-none text-[rgb(255_255_255/0.6)]" />
@@ -80,7 +92,8 @@ export function Accessory({ row, value }: { row: SettingsRow; value?: string }) 
 
   return (
     <div className="flex flex-none items-center gap-2">
-      {row.kind === "value" && (
+      {loading && <Skeleton className="h-4 w-14" />}
+      {!loading && row.kind === "value" && (
         <span className="text-[16px] leading-[20.8px] text-[rgb(255_255_255/0.6)]">
           {value ?? row.value}
         </span>

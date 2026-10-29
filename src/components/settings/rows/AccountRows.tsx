@@ -114,10 +114,13 @@ export function AccountSwitchRow({
   account: AccountSettings;
   field: "privateAccount" | "weeklyScreenTimeDigest";
 }) {
-  const { requireSignIn } = useSession();
+  const { isSignedIn, requireSignIn } = useSession();
   /** Where the switch is headed while its save is in flight. */
   const [target, setTarget] = useState<boolean | null>(null);
   const on = target ?? account.settings?.[field] ?? row.on;
+  // Signed in, the default shown until the answer is in may be the wrong way
+  // round; dimmed, it reads as "not yet" rather than "off".
+  const loading = isSignedIn && !account.settings;
 
   const onToggle = () => {
     if (!requireSignIn() || !account.settings || target !== null) return;
@@ -131,7 +134,7 @@ export function AccountSwitchRow({
   return (
     <div className={ROW_CLASS}>
       <RowBody row={row} />
-      <Switch on={on} label={row.title} onToggle={onToggle} />
+      <Switch on={on} label={row.title} onToggle={onToggle} disabled={loading} />
     </div>
   );
 }
@@ -139,7 +142,8 @@ export function AccountSwitchRow({
 /**
  * A row that opens a dialog or a page over the account's settings. `value` is
  * undefined until they have loaded: signed out, the row keeps its static copy;
- * signed in, it stays blank rather than flash the default before the real answer.
+ * signed in, it shows a placeholder rather than flash the default before the
+ * real answer.
  */
 export function DialogRowButton({
   row,
@@ -151,7 +155,7 @@ export function DialogRowButton({
   onOpen: () => void;
 }) {
   const { isSignedIn, isLoading, requireSignIn } = useSession();
-  const shown = value ?? (isSignedIn || isLoading ? "" : undefined);
+  const loading = value === undefined && (isSignedIn || isLoading);
 
   return (
     <button
@@ -162,7 +166,7 @@ export function DialogRowButton({
       className={cn(ROW_CLASS, "hover:bg-white/[0.03]")}
     >
       <RowBody row={row} />
-      <Accessory row={row} value={shown} />
+      <Accessory row={row} value={value} loading={loading} />
     </button>
   );
 }

@@ -75,6 +75,28 @@ it("draws seven bars from the week and refetches when another week is picked", a
   await waitFor(() => expect(getScreenTimeWeek).toHaveBeenCalledWith("2026-10-12"));
 });
 
+it("shows a placeholder, not an empty chart, until the week is read — and again for the next week", async () => {
+  let resolve: (value: ScreenTimeWeekResponse) => void = () => {};
+  vi.mocked(getScreenTimeWeek).mockImplementation(
+    (start) => new Promise((done) => (resolve = (value) => done({ ...value, weekStart: start }))),
+  );
+  const { container } = render(<ScreenTimeSummaryRow row={row} expanded onToggle={() => {}} />);
+
+  expect(screen.getByRole("status", { name: "Loading screen time" })).toBeTruthy();
+  expect(container.querySelectorAll("[data-day]")).toHaveLength(0);
+  expect(screen.queryByText("Total")).toBeNull();
+
+  resolve(week("2026-10-19", [[600, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]));
+  expect(await screen.findByText("Total")).toBeTruthy();
+  expect(screen.queryByRole("status")).toBeNull();
+  expect(container.querySelectorAll("[data-day]")).toHaveLength(7);
+
+  fireEvent.click(screen.getByRole("button", { name: /Oct 19, 2026-Oct 25, 2026/ }));
+  fireEvent.click(screen.getByRole("option", { name: /Oct 12, 2026-Oct 18, 2026/ }));
+  expect(await screen.findByRole("status", { name: "Loading screen time" })).toBeTruthy();
+  expect(screen.queryByText("Total")).toBeNull();
+});
+
 it("opens on the week a weekly update names, if it is one of the last four", async () => {
   vi.mocked(getScreenTimeWeek).mockImplementation(async (start) => week(start, []));
   render(<ScreenTimeSummaryRow row={row} expanded onToggle={() => {}} week="2026-10-12" />);
