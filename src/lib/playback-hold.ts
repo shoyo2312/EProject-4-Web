@@ -1,6 +1,6 @@
 /**
  * Holds every player still while something covers the whole app — the daily
- * screen time limit's cover. A module-level store rather than a context, so
+ * screen time limit's cover, or the Sleep hours screen. A module-level store rather than a context, so
  * the feed's cards and the story player can read it without a provider above
  * each of them; `usePlaybackHeld` subscribes to it.
  */

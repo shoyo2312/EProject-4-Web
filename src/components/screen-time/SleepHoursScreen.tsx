@@ -7,6 +7,7 @@ import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
 import { useAccountSettings } from "@/hooks/use-account-settings";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
+import { holdPlayback } from "@/lib/playback-hold";
 import { inSleepHours, SLEEP_SNOOZE_MS } from "@/lib/settings/sleep-hours";
 
 /** How often the clock is checked against the window, so the screen comes up on time. */
@@ -66,9 +67,22 @@ export function SleepHoursScreen() {
 
   useFocusTrap(dialogRef, asleep);
 
-  // Nothing keeps playing under the screen.
+  // Nothing plays under the screen: the feed's cards and the story player hold
+  // still until it lifts, and any other media that starts behind it is stopped.
+  // A one-off pause is not enough — the active card plays again on its next
+  // render (`useVideoPlayback`), so the sound came back under the screen.
   useEffect(() => {
-    if (asleep) document.querySelectorAll("video").forEach((video) => video.pause());
+    if (!asleep) return;
+    const release = holdPlayback();
+    const stop = (event: Event) => {
+      if (event.target instanceof HTMLMediaElement) event.target.pause();
+    };
+    document.querySelectorAll<HTMLMediaElement>("video, audio").forEach((media) => media.pause());
+    document.addEventListener("play", stop, true);
+    return () => {
+      release();
+      document.removeEventListener("play", stop, true);
+    };
   }, [asleep]);
 
   if (!asleep) return null;

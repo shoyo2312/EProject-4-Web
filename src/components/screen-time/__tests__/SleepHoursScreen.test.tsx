@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SleepHoursScreen } from "@/components/screen-time/SleepHoursScreen";
 import { toast } from "@/components/ui/toast";
+import { playbackHeld } from "@/lib/playback-hold";
 
 vi.mock("@/components/ui/toast", () => ({ toast: vi.fn() }));
 
@@ -79,5 +80,24 @@ describe("SleepHoursScreen", () => {
 
     act(() => vi.advanceTimersByTime(60 * 60_000));
     expect(screen.getByRole("dialog", { name: "Sleep hours" })).toBeTruthy();
+  });
+
+  it("holds every player while it covers the app, and stops media that starts behind it", () => {
+    vi.setSystemTime(at("23:00"));
+    render(<SleepHoursScreen />);
+    expect(playbackHeld()).toBe(true);
+
+    const video = document.createElement("video");
+    document.body.append(video);
+    const pause = vi.spyOn(video, "pause").mockImplementation(() => {});
+    video.dispatchEvent(new Event("play"));
+    expect(pause).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Return for now" }));
+    expect(playbackHeld()).toBe(false);
+    pause.mockClear();
+    video.dispatchEvent(new Event("play"));
+    expect(pause).not.toHaveBeenCalled();
+    video.remove();
   });
 });
