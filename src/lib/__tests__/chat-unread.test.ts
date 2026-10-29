@@ -51,6 +51,9 @@ function convo(id: string, hasUnread: boolean, lastMessageAt: string | null): Co
     muteMode: "NONE",
     mutedUntil: null,
     inboxHidden: false,
+    blockedByViewer: false,
+    messagingBlocked: false,
+    blockVersion: 0,
   };
 }
 

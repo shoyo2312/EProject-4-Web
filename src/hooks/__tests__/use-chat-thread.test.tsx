@@ -4,22 +4,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MessagePage, MessageResponse } from "@/lib/api/conversations";
 import { setViewing } from "@/lib/chat-viewing";
 
-const { listMessages, markConversationRead, sendMessage, topic, queue, reactToMessage, removeReaction, recallMessage, hideMessage } = vi.hoisted(() => ({
+const { getReceipts, listMessages, acknowledgeRead, disconnect, sendMessage, topic, queue, reactToMessage, removeReaction, recallMessage, hideMessage } = vi.hoisted(() => ({
   queue: { handler: null as ((body: string) => void) | null },
   reactToMessage: vi.fn(),
   removeReaction: vi.fn(),
   recallMessage: vi.fn(),
   hideMessage: vi.fn(),
+  getReceipts: vi.fn(),
   listMessages: vi.fn<(...args: unknown[]) => Promise<MessagePage>>(),
-  markConversationRead: vi.fn<(id: string) => Promise<null>>(),
+  acknowledgeRead: vi.fn<(conversationId: string, messageId: string) => Promise<unknown>>(),
+  disconnect: { handler: null as (() => void) | null },
   sendMessage: vi.fn(),
   topic: { handler: null as ((body: string) => void) | null },
 }));
 
 vi.mock("@/lib/api/conversations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/conversations")>()),
+  getReceipts: (...args: unknown[]) => getReceipts(...args),
   listMessages: (...args: unknown[]) => listMessages(...args),
-  markConversationRead: (id: string) => markConversationRead(id),
+  acknowledgeRead: (conversationId: string, messageId: string) => acknowledgeRead(conversationId, messageId),
   sendMessage: (...args: unknown[]) => sendMessage(...args),
   reactToMessage: (...args: unknown[]) => reactToMessage(...args),
   removeReaction: (...args: unknown[]) => removeReaction(...args),
@@ -42,6 +45,12 @@ vi.mock("@/lib/realtime/stompClient", () => ({
     };
   },
   onStompConnect: () => () => {},
+  onStompDisconnect: (listener: () => void) => {
+    disconnect.handler = listener;
+    return () => {
+      disconnect.handler = null;
+    };
+  },
 }));
 
 import { useChatThread } from "@/hooks/use-chat-thread";
@@ -74,7 +83,9 @@ const flush = () => act(async () => {});
 
 beforeEach(() => {
   listMessages.mockReset();
-  markConversationRead.mockReset().mockResolvedValue(null);
+  getReceipts.mockReset().mockResolvedValue({ userId: "2", delivered: null, read: null });
+  acknowledgeRead.mockReset().mockResolvedValue({});
+  disconnect.handler = null;
   sendMessage.mockReset();
   topic.handler = null;
   queue.handler = null;
@@ -174,35 +185,94 @@ describe("useChatThread", () => {
   });
 });
 
-describe("useChatThread mark read", () => {
-  it("does not mark a thread read that nobody is looking at", async () => {
+describe("useChatThread seen", () => {
+  it("proves nothing by opening the thread, loading its history or receiving a frame", async () => {
     const { result } = await openThread();
-
-    act(() => topic.handler?.(frame(msg(4))));
-    act(() => result.current.markRead());
-
-    expect(markConversationRead).not.toHaveBeenCalled();
-  });
-
-  it("marks it read once the thread is on screen with the newest message in view", async () => {
-    const { result, onRead } = await openThread();
     setViewing("c1", true);
 
-    act(() => result.current.markRead());
+    act(() => topic.handler?.(frame(msg(4))));
     await flush();
 
-    expect(markConversationRead).toHaveBeenCalledWith("c1");
+    expect(acknowledgeRead).not.toHaveBeenCalled();
+    expect(result.current.messages).toHaveLength(4);
+  });
+
+  it("acknowledges the message it is told is on screen, by id, and clears local unread up to its time", async () => {
+    const { result, onRead } = await openThread();
+
+    act(() => result.current.markSeen("3"));
+    await flush();
+
+    expect(acknowledgeRead).toHaveBeenCalledWith("c1", "3");
     expect(onRead).toHaveBeenCalledWith("c1", msg(3).sentAt);
   });
 
-  it("does not mark read while the window has lost focus, even if the thread is in view", async () => {
+  it("does not acknowledge while the window has lost focus or the tab is hidden", async () => {
     const { result } = await openThread();
-    setViewing("c1", true);
     vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    act(() => result.current.markSeen("3"));
+    expect(acknowledgeRead).not.toHaveBeenCalled();
 
-    act(() => result.current.markRead());
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    act(() => result.current.markSeen("3"));
+    expect(acknowledgeRead).not.toHaveBeenCalled();
+  });
 
-    expect(markConversationRead).not.toHaveBeenCalled();
+  it("sends each position once: a repeat or an older message adds nothing, a newer one goes", async () => {
+    const { result } = await openThread();
+    act(() => result.current.markSeen("2"));
+    act(() => result.current.markSeen("2"));
+    act(() => result.current.markSeen("1"));
+    await flush();
+    expect(acknowledgeRead).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.markSeen("3"));
+    await flush();
+    expect(acknowledgeRead.mock.calls.map((c) => c[1])).toEqual(["2", "3"]);
+  });
+
+  it("does not acknowledge the viewer's own message, or one it does not hold", async () => {
+    listMessages.mockReset();
+    listMessages.mockResolvedValueOnce({ items: [msg(2, ME), msg(1)], nextCursor: null, hasMore: false });
+    const hook = renderHook(() => useChatThread("c1", ME, vi.fn()));
+    await flush();
+
+    act(() => hook.result.current.markSeen("2"));
+    act(() => hook.result.current.markSeen("999"));
+
+    expect(acknowledgeRead).not.toHaveBeenCalled();
+  });
+
+  it("tries a failed acknowledgement again with the same message, and stops after a few", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    acknowledgeRead.mockRejectedValue(new Error("offline"));
+    const { result } = await openThread();
+
+    act(() => result.current.markSeen("3"));
+    await flush();
+    for (let i = 0; i < 6; i += 1) {
+      await act(async () => void vi.advanceTimersByTime(3_100));
+    }
+
+    expect(acknowledgeRead.mock.calls.every((c) => c[1] === "3")).toBe(true);
+    expect(acknowledgeRead).toHaveBeenCalledTimes(4);
+    vi.useRealTimers();
+  });
+
+  it("goes through on the retry once the request works again", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    acknowledgeRead.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({});
+    const { result, onRead } = await openThread();
+
+    act(() => result.current.markSeen("3"));
+    await flush();
+    expect(onRead).not.toHaveBeenCalled();
+    await act(async () => void vi.advanceTimersByTime(3_100));
+
+    expect(acknowledgeRead).toHaveBeenCalledTimes(2);
+    expect(onRead).toHaveBeenCalledWith("c1", msg(3).sentAt);
+    vi.useRealTimers();
   });
 });
 
@@ -299,7 +369,7 @@ describe("useChatThread reactions, replies, recall and delete", () => {
 
   it("applies a reaction update, and a recall wipes the text; neither is an unread message", async () => {
     const { result } = await openThread();
-    markConversationRead.mockClear();
+    acknowledgeRead.mockClear();
 
     act(() => queue.handler?.(update("2", { reactions: [{ userId: 1, emoji: "\u{1F44D}" }] })));
     expect(result.current.messages[1].reactions).toEqual([{ userId: "1", emoji: "\u{1F44D}" }]);
@@ -307,7 +377,7 @@ describe("useChatThread reactions, replies, recall and delete", () => {
     act(() => queue.handler?.(update("2", { revision: 2, recalledAt: "2026-10-27T09:00:00Z" })));
     expect(result.current.messages[1]).toMatchObject({ content: null, reactions: [], recalledAt: "2026-10-27T09:00:00Z" });
     expect(result.current.messages).toHaveLength(3);
-    expect(markConversationRead).not.toHaveBeenCalled();
+    expect(acknowledgeRead).not.toHaveBeenCalled();
   });
 
   it("does not let a page fetched before the recall bring the text back", async () => {
@@ -383,5 +453,116 @@ describe("useChatThread reactions, replies, recall and delete", () => {
     await act(async () => void (await result.current.recall("3")));
 
     expect(result.current.messages[2].recalledAt).toBe("2026-10-27T09:00:00Z");
+  });
+});
+
+describe("useChatThread receipts", () => {
+  const mark = (messageId: string, second: number, at = second) => ({
+    messageId,
+    sentAt: `2026-10-27T08:00:${String(second).padStart(2, "0")}.000Z`,
+    at: `2026-10-27T09:00:${String(at).padStart(2, "0")}.000Z`,
+  });
+  const receiptFrame = (delivered: ReturnType<typeof mark> | null, read: ReturnType<typeof mark> | null, conversationId = "c1") =>
+    JSON.stringify({ type: "RECEIPT", conversationId, receipt: { conversationId, userId: 2, delivered, read } });
+
+  it("starts from what the server already knows of the other side", async () => {
+    getReceipts.mockResolvedValue({ userId: "2", delivered: mark("2", 2), read: null });
+    const { result } = await openThread();
+    expect(getReceipts).toHaveBeenCalledWith("c1", expect.anything());
+    expect(result.current.receipt?.delivered?.messageId).toBe("2");
+    expect(result.current.receipt?.read).toBeNull();
+  });
+
+  it("takes pushed receipts and never lets an older, reordered or repeated one take a Seen back", async () => {
+    const { result } = await openThread();
+    act(() => queue.handler?.(receiptFrame(mark("2", 2), null)));
+    expect(result.current.receipt?.delivered?.messageId).toBe("2");
+
+    act(() => queue.handler?.(receiptFrame(mark("3", 3), mark("3", 3, 30))));
+    expect(result.current.receipt?.read?.messageId).toBe("3");
+
+    act(() => queue.handler?.(receiptFrame(mark("2", 2), null)));
+    act(() => queue.handler?.(receiptFrame(mark("3", 3, 59), mark("3", 3, 59))));
+    expect(result.current.receipt?.read?.messageId).toBe("3");
+    // The same position again keeps the time it was first recorded: "seen" does not become "just now".
+    expect(result.current.receipt?.read?.at).toBe(mark("3", 3, 30).at);
+  });
+
+  it("a REST answer that started before a pushed receipt cannot overwrite it", async () => {
+    let answer: (value: unknown) => void = () => {};
+    getReceipts.mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+    const { result } = await openThread();
+
+    act(() => queue.handler?.(receiptFrame(mark("3", 3), mark("3", 3))));
+    await act(async () => answer({ userId: "2", delivered: mark("1", 1), read: null }));
+
+    expect(result.current.receipt?.read?.messageId).toBe("3");
+    expect(result.current.receipt?.delivered?.messageId).toBe("3");
+  });
+
+  it("ignores another conversation's receipt, and a failed lookup leaves no receipt", async () => {
+    getReceipts.mockRejectedValue(new Error("offline"));
+    const { result } = await openThread();
+    expect(result.current.receipt).toBeNull();
+    act(() => queue.handler?.(receiptFrame(mark("2", 2), null, "other")));
+    expect(result.current.receipt).toBeNull();
+  });
+});
+
+describe("useChatThread typing", () => {
+  const typingFrame = (userId: number, typing: boolean, conversationId = "c1") =>
+    JSON.stringify({ type: "TYPING", conversationId, typing: { conversationId, userId, typing } });
+
+  afterEach(() => vi.useRealTimers());
+
+  it("shows the other side typing, and not the viewer's own", async () => {
+    const { result } = await openThread();
+    expect(result.current.peerTyping).toBe(false);
+
+    act(() => queue.handler?.(typingFrame(2, true)));
+    expect(result.current.peerTyping).toBe(true);
+  });
+
+  it("stops when they stop, when their message arrives, and for another conversation's frames never starts", async () => {
+    const { result } = await openThread();
+    act(() => queue.handler?.(typingFrame(2, true)));
+    act(() => queue.handler?.(typingFrame(2, false)));
+    expect(result.current.peerTyping).toBe(false);
+
+    act(() => queue.handler?.(typingFrame(2, true)));
+    act(() => topic.handler?.(frame(msg(4))));
+    expect(result.current.peerTyping).toBe(false);
+
+    act(() => queue.handler?.(typingFrame(2, true, "other")));
+    expect(result.current.peerTyping).toBe(false);
+  });
+
+  it("ignores typing that is the viewer's own", async () => {
+    const { result } = await openThread();
+    act(() => queue.handler?.(typingFrame(1, true)));
+    expect(result.current.peerTyping).toBe(false);
+  });
+
+  it("expires by itself when the frames stop coming, and a renewal holds it up", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const { result } = await openThread();
+
+    act(() => queue.handler?.(typingFrame(2, true)));
+    act(() => void vi.advanceTimersByTime(5_000));
+    act(() => queue.handler?.(typingFrame(2, true)));
+    act(() => void vi.advanceTimersByTime(5_000));
+    expect(result.current.peerTyping).toBe(true);
+
+    act(() => void vi.advanceTimersByTime(4_000));
+    expect(result.current.peerTyping).toBe(false);
+  });
+
+  it("drops the dots when the socket drops, and does not take them back from a stale frame", async () => {
+    const { result } = await openThread();
+    act(() => queue.handler?.(typingFrame(2, true)));
+
+    act(() => disconnect.handler?.());
+
+    expect(result.current.peerTyping).toBe(false);
   });
 });

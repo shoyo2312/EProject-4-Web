@@ -3,6 +3,8 @@ import type {
   MessageResponse,
   MessageUpdate,
   ReactionView,
+  Receipt,
+  ReceiptMark,
   ReplyQuote,
 } from "@/lib/api/conversations";
 import { isApiError } from "@/lib/api/errors";
@@ -27,12 +29,134 @@ export function messagePreview(
   const mine = conversation.lastMessageSenderId === me;
   if (conversation.lastMessageRecalled) return mine ? "You recalled a message" : "Message recalled";
   if (conversation.lastMessageType === "STICKER") return mine ? "You sent a sticker" : "Sent a sticker";
+  if (conversation.lastMessageType === "VIDEO") return mine ? "You shared a video" : "Shared a video";
   if (!conversation.lastMessageContent) return "No messages yet";
   return `${mine ? "You: " : ""}${conversation.lastMessageContent}`;
 }
 
 /** chat-service's `@Size(max = 2000)` on `content`. */
 export const MAX_MESSAGE_LENGTH = 2000;
+
+/**
+ * The videos shared in a conversation, oldest share first, for the video page to step through: up is
+ * the share before the one opened, down the one after. Only cards the viewer can open count — a
+ * recalled message or a video that is gone is skipped, not a stop that leads nowhere — and a video
+ * shared twice is listed once, at its first share, since the page finds its place by id.
+ */
+export function sharedVideoIds(messages: readonly MessageResponse[]): string[] {
+  const ordered = messages
+    .filter((m) => m.type === "VIDEO" && m.recalledAt === null && m.video?.state === "AVAILABLE")
+    .sort((a, b) => {
+      const delta = Date.parse(a.sentAt) - Date.parse(b.sentAt);
+      if (delta !== 0 && Number.isFinite(delta)) return delta;
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+  return [...new Set(ordered.map((m) => m.video?.videoId).filter((id): id is string => !!id))];
+}
+
+export type MessageStatus = "SENT" | "DELIVERED" | "SEEN";
+
+/** What the sender reads under their messages. */
+export const STATUS_LABEL: Record<Exclude<MessageStatus, "SEEN">, string> = {
+  SENT: "Sent",
+  DELIVERED: "Delivered",
+};
+
+/**
+ * Where a message is in the thread: by time, and by id for two sent in the same millisecond — the order
+ * the server keeps them in. Ids are Snowflakes as strings: compared by length, then by digits, which is
+ * numeric order without ever turning one into a (rounding) number.
+ */
+export function comparePosition(
+  a: { sentAt: string; messageId: string },
+  b: { sentAt: string; messageId: string },
+): number {
+  const byTime = Date.parse(a.sentAt) - Date.parse(b.sentAt);
+  if (byTime !== 0 && Number.isFinite(byTime)) return byTime < 0 ? -1 : 1;
+  if (a.messageId.length !== b.messageId.length) return a.messageId.length < b.messageId.length ? -1 : 1;
+  return a.messageId < b.messageId ? -1 : a.messageId > b.messageId ? 1 : 0;
+}
+
+const positionOf = (message: Pick<MessageResponse, "id" | "sentAt">) => ({
+  sentAt: message.sentAt,
+  messageId: message.id,
+});
+
+/**
+ * A message of the viewer's as the other side has got to it, by position and never by time: seen when
+ * their read mark reaches it, received when their delivered mark does, sent otherwise — which is also
+ * the answer while nothing is known of them. A mark recorded later says nothing about the messages
+ * sent after the one it names, so a newer message never inherits an older one's state.
+ */
+export function messageStatus(
+  message: Pick<MessageResponse, "id" | "sentAt">,
+  receipt: Receipt | null | undefined,
+): MessageStatus {
+  if (receipt?.read && comparePosition(positionOf(message), receipt.read) <= 0) return "SEEN";
+  if (receipt?.delivered && comparePosition(positionOf(message), receipt.delivered) <= 0) return "DELIVERED";
+  return "SENT";
+}
+
+/**
+ * Marks only move forward: each takes the later position, so a late, repeated or reordered frame can
+ * never take a state back, and a repeat of the same position keeps the time it was first recorded.
+ * Seeing implies receiving, so the delivered mark is never left behind the read one.
+ */
+export function mergeReceipt(current: Receipt | null, next: Receipt): Receipt {
+  const later = (a: ReceiptMark | null, b: ReceiptMark | null): ReceiptMark | null =>
+    a === null ? b : b === null ? a : comparePosition(b, a) > 0 ? b : a;
+  const read = later(current?.read ?? null, next.read);
+  let delivered = later(current?.delivered ?? null, next.delivered);
+  if (read && (!delivered || comparePosition(read, delivered) > 0)) delivered = read;
+  return { userId: next.userId, delivered, read };
+}
+
+/**
+ * Which of the viewer's messages carry a state, as the apps this mirrors do it: the newest one the
+ * other side has seen keeps "seen", and the newest message overall says "sent" or "received" when it
+ * is not that one. A recalled message has no state of its own — the label settles on the newest one
+ * that still stands, so nothing is revealed or restored.
+ */
+export function statusTargets(
+  messages: readonly MessageResponse[],
+  me: string,
+  receipt: Receipt | null | undefined,
+): { seenId: string | null; latestId: string | null; latestStatus: Exclude<MessageStatus, "SEEN"> | null } {
+  let latest: MessageResponse | null = null;
+  let seen: MessageResponse | null = null;
+  for (const message of messages) {
+    if (message.senderId !== me || message.recalledAt !== null) continue;
+    const later = (than: MessageResponse | null) =>
+      than === null || comparePosition(positionOf(message), positionOf(than)) >= 0;
+    if (later(latest)) latest = message;
+    if (messageStatus(message, receipt) === "SEEN" && later(seen)) seen = message;
+  }
+  const latestStatus = latest ? messageStatus(latest, receipt) : null;
+  return {
+    seenId: seen?.id ?? null,
+    latestId: latest && latest.id !== seen?.id ? latest.id : null,
+    latestStatus: latestStatus && latestStatus !== "SEEN" ? latestStatus : null,
+  };
+}
+
+/**
+ * "Seen just now" within the first minute, then minutes, hours and days — worked out from when the server
+ * recorded the read, against `nowMs`. With no usable time it says only "Seen": never an invented one.
+ */
+export function formatSeenAgo(at: string | null | undefined, nowMs: number): string {
+  const recorded = at ? Date.parse(at) : Number.NaN;
+  if (!Number.isFinite(recorded)) return "Seen";
+  const seconds = Math.max(0, Math.floor((nowMs - recorded) / 1000));
+  if (seconds < 60) return "Seen just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `Seen ${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Seen ${hours} hr ago`;
+  return `Seen ${Math.floor(hours / 24)} d ago`;
+}
+
+/** The longest note that goes with a shared video; chat-service's `MessagePayload.MAX_NOTE`. */
+export const MAX_VIDEO_NOTE = 300;
 
 /** A run of one sender's messages closer together than this reads as one burst. */
 const RUN_GAP_MS = 5 * 60 * 1000;
@@ -191,6 +315,7 @@ export function canReplyTo(message: MessageResponse): boolean {
 /** One line for the reply bar and for a quote, whatever the original was. */
 export function quoteText(content: string | null, type: MessageResponse["type"] | null): string {
   if (type === "STICKER") return "Sticker";
+  if (type === "VIDEO") return (content ?? "").trim() ? `Video · ${content?.trim()}` : "Video";
   return (content ?? "").replace(/\s+/g, " ").trim();
 }
 
@@ -247,6 +372,7 @@ export function nextMuteExpiry(conversations: readonly ConversationResponse[], n
 export function noticeBody(message: Pick<MessageResponse, "type" | "content" | "recalledAt">): string {
   if (message.recalledAt) return "Sent a message";
   if (message.type === "STICKER") return "Sent a sticker";
+  if (message.type === "VIDEO") return "Shared a video";
   const text = (message.content ?? "").replace(/\s+/g, " ").trim();
   return text.length > 120 ? `${text.slice(0, 119)}…` : text || "Sent a message";
 }
@@ -469,6 +595,34 @@ export interface InboxLists {
 
 
 /**
+ * `next` with the block fields of `prev` when `prev` is newer: a response that was in flight while a
+ * block or unblock landed, a late resync or a replayed event must not bring the old state back.
+ * Equal versions take `next`, so an answer that only adds what was unknown still applies.
+ */
+export function keepNewerBlock(
+  prev: ConversationResponse | undefined,
+  next: ConversationResponse,
+): ConversationResponse {
+  if (!prev || prev.blockVersion <= next.blockVersion) return next;
+  return {
+    ...next,
+    blockedByViewer: prev.blockedByViewer,
+    messagingBlocked: prev.messagingBlocked,
+    blockVersion: prev.blockVersion,
+  };
+}
+
+/** The viewer's own block, when the server says so; `null` when it could not tell. */
+export function isBlockedByViewer(conversation: ConversationResponse): boolean | null {
+  return conversation.blockedByViewer;
+}
+
+/** Nothing can be sent into it (a block either way). Unknown counts as open: the server still enforces. */
+export function isMessagingBlocked(conversation: ConversationResponse): boolean {
+  return conversation.messagingBlocked === true || conversation.blockedByViewer === true;
+}
+
+/**
  * Puts a conversation where the viewer's state says it belongs, removing it from wherever it was:
  * a request that arrives joins the request box, one that is accepted moves to the inbox, one the
  * viewer deleted disappears. The same conversation is never in both lists.
@@ -478,6 +632,10 @@ export function placeConversation(
   conversation: ConversationResponse,
   me: string,
 ): InboxLists {
+  conversation = keepNewerBlock(
+    lists.inbox.find((c) => c.id === conversation.id) ?? lists.requests.find((c) => c.id === conversation.id),
+    conversation,
+  );
   const inbox = lists.inbox.filter((c) => c.id !== conversation.id);
   const requests = lists.requests.filter((c) => c.id !== conversation.id);
 

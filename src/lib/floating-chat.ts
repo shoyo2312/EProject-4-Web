@@ -27,6 +27,11 @@ export function minimizeThread(state: DockState): DockState {
   return state.expandedId === null ? state : { ...state, expandedId: null };
 }
 
+/** A bubble press: the open conversation folds back to its bubble (not a close), any other opens. */
+export function toggleThread(state: DockState, id: string): DockState {
+  return state.expandedId === id ? minimizeThread(state) : openThread(state, id);
+}
+
 export function closeThread(state: DockState, id: string, lastMessageAt: string | null): DockState {
   return {
     expandedId: state.expandedId === id ? null : state.expandedId,
@@ -76,18 +81,16 @@ export function dockConversations(
 export const MAX_BUBBLES = 3;
 
 /**
- * Splits the dock into the open panel and its bubbles. The open conversation is a panel, not a
- * bubble, so it takes no one of the three places; the bubbles are the newest ones (the input is
- * newest first), and `hidden` is how many more there are.
+ * Splits the dock into its bubbles and the open panel. The open conversation keeps its bubble
+ * (pressing it again minimises the panel), so it counts as one of the three places: if it is not
+ * among the newest, it takes the last place and the newest one it displaces folds into "+N".
  */
 export function splitDock(
   items: readonly ConversationResponse[],
   expandedId: string | null,
 ): { expanded: ConversationResponse | undefined; shown: ConversationResponse[]; hidden: number } {
-  const bubbles = items.filter((item) => item.id !== expandedId);
-  return {
-    expanded: items.find((item) => item.id === expandedId),
-    shown: bubbles.slice(0, MAX_BUBBLES),
-    hidden: Math.max(0, bubbles.length - MAX_BUBBLES),
-  };
+  const expanded = items.find((item) => item.id === expandedId);
+  let shown = items.slice(0, MAX_BUBBLES);
+  if (expanded && !shown.includes(expanded)) shown = [...shown.slice(0, MAX_BUBBLES - 1), expanded];
+  return { expanded, shown, hidden: items.length - shown.length };
 }

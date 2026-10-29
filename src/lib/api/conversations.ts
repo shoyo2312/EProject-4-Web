@@ -36,7 +36,22 @@ export type MuteMode = "NONE" | "TIMED" | "INDEFINITE";
 export type MuteLength = "ONE_HOUR" | "EIGHT_HOURS" | "TWENTY_FOUR_HOURS" | "INDEFINITE";
 
 /** Emoji are not a type: they are characters inside a TEXT message's content. */
-export type MessageType = "TEXT" | "STICKER";
+export type MessageType = "TEXT" | "STICKER" | "VIDEO";
+
+/**
+ * A shared video as the viewer may see it right now, read by the server on every load — never a
+ * snapshot from the moment of sending. AVAILABLE carries the card's content; UNAVAILABLE (deleted,
+ * private, moderated, blocked) and UNKNOWN (the video service could not answer, not a deletion)
+ * carry the id and the state alone.
+ */
+export interface VideoCard {
+  videoId: string;
+  state: "AVAILABLE" | "UNAVAILABLE" | "UNKNOWN";
+  ownerId: string | null;
+  thumbnailUrl: string | null;
+  title: string | null;
+  durationSeconds: number | null;
+}
 
 /** A sticker as it is drawn. `url` is public and unsigned, so it keeps working in old history. */
 export interface StickerView {
@@ -82,6 +97,40 @@ export interface ConversationResponse {
    * lists, and opening its URL shows an empty thread.
    */
   inboxHidden: boolean;
+  /**
+   * The viewer has blocked the other account. Null: the server could not tell right now (an outage,
+   * not a block). Only the viewer's own block is ever named; the other side's is not.
+   */
+  blockedByViewer: boolean | null;
+  /** Messaging is closed because of a block in either direction. Null as above. */
+  messagingBlocked: boolean | null;
+  /** Grows with every block and unblock of this pair: an older answer never replaces a newer one. */
+  blockVersion: number;
+}
+
+/**
+ * A position in a conversation the other participant has reached: `messageId` and `sentAt` name the
+ * newest of the viewer's messages it covers, `at` is when the server recorded it. The position is what
+ * proves anything — a message is received or seen when it is at or before the mark — and `at` is only
+ * what "seen 13 minutes ago" is read from.
+ */
+export interface ReceiptMark {
+  messageId: string;
+  sentAt: string;
+  at: string;
+}
+
+/** How far one participant has got: what they received, and what they actually looked at. */
+export interface Receipt {
+  userId: string;
+  delivered: ReceiptMark | null;
+  read: ReceiptMark | null;
+}
+
+type RawReceipt = { userId: string | number; delivered?: ReceiptMark | null; read?: ReceiptMark | null };
+
+export function normalizeReceipt(raw: RawReceipt): Receipt {
+  return { userId: String(raw.userId), delivered: raw.delivered ?? null, read: raw.read ?? null };
 }
 
 /** One person's reaction on a message. */
@@ -103,6 +152,8 @@ export interface ReplyQuote {
   type: MessageType | null;
   content: string | null;
   sticker: StickerView | null;
+  /** On a quoted video: its card, with only the id and state when it cannot be shown. */
+  video?: VideoCard | null;
 }
 
 export interface MessageResponse {
@@ -116,6 +167,8 @@ export interface MessageResponse {
   stickerId: string | null;
   /** The catalog entry for `stickerId`; null on text, and on a sticker the catalog no longer knows. */
   sticker: StickerView | null;
+  /** Present only on a video; `content` is then its optional note. */
+  video?: VideoCard | null;
   sentAt: string;
   replyToMessageId: string | null;
   replyTo: ReplyQuote | null;
@@ -135,10 +188,15 @@ export interface MessageUpdate {
   reactions: ReactionView[];
 }
 
-/** What a send asks for: text, or a sticker by id; either may reply to a message by its id. */
+/**
+ * What a send asks for: text, a sticker by id, or a video by id with an optional note; any may reply to
+ * a message by its id. A video is never described by the client — the server reads it. Its
+ * `clientRequestId` makes a repeated request return the first message instead of a second one.
+ */
 export type SendPayload = (
   | { type: "TEXT"; content: string }
   | { type: "STICKER"; stickerId: string }
+  | { type: "VIDEO"; videoId: string; content?: string; clientRequestId: string }
 ) & { replyToMessageId?: string };
 
 export interface MessagePage {
@@ -158,6 +216,8 @@ export type ChatEvent =
   | { type: "CONVERSATION"; conversationId: string; conversation: ConversationResponse }
   | { type: "MESSAGE_UPDATED"; conversationId: string; update: MessageUpdate }
   | { type: "MESSAGE_HIDDEN"; conversationId: string; messageId: string }
+  | { type: "RECEIPT"; conversationId: string; receipt: Receipt }
+  | { type: "TYPING"; conversationId: string; userId: string; typing: boolean }
   | { type: "CONVERSATION_REMOVED"; conversationId: string };
 
 type RawConversation = Omit<
@@ -174,6 +234,9 @@ type RawConversation = Omit<
   | "muteMode"
   | "mutedUntil"
   | "inboxHidden"
+  | "blockedByViewer"
+  | "messagingBlocked"
+  | "blockVersion"
 > & {
   participantIds: (string | number)[];
   lastMessageType?: MessageType | null;
@@ -187,10 +250,22 @@ type RawConversation = Omit<
   muteMode?: MuteMode;
   mutedUntil?: string | null;
   inboxHidden?: boolean;
+  blockedByViewer?: boolean | null;
+  messagingBlocked?: boolean | null;
+  blockVersion?: number | null;
 };
 /** Messages stored before types existed arrive with no `type`, and are text. */
 type RawReaction = { userId: string | number; emoji: string };
-type RawQuote = Omit<ReplyQuote, "senderId"> & { senderId?: string | number | null };
+type RawVideo = Omit<VideoCard, "ownerId" | "thumbnailUrl" | "title" | "durationSeconds"> & {
+  ownerId?: string | number | null;
+  thumbnailUrl?: string | null;
+  title?: string | null;
+  durationSeconds?: number | null;
+};
+type RawQuote = Omit<ReplyQuote, "senderId" | "video"> & {
+  senderId?: string | number | null;
+  video?: RawVideo | null;
+};
 type RawUpdate = Omit<MessageUpdate, "reactions" | "recalledAt"> & {
   recalledAt?: string | null;
   reactions?: RawReaction[] | null;
@@ -202,12 +277,14 @@ type RawMessage = Omit<
   | "content"
   | "stickerId"
   | "sticker"
+  | "video"
   | "replyToMessageId"
   | "replyTo"
   | "recalledAt"
   | "reactions"
   | "revision"
 > & {
+  video?: RawVideo | null;
   senderId: string | number;
   replyToMessageId?: string | null;
   replyTo?: RawQuote | null;
@@ -237,6 +314,9 @@ export function normalizeConversation(raw: RawConversation): ConversationRespons
     muteMode: raw.muteMode ?? "NONE",
     mutedUntil: raw.mutedUntil ?? null,
     inboxHidden: raw.inboxHidden ?? false,
+    blockedByViewer: raw.blockedByViewer ?? null,
+    messagingBlocked: raw.messagingBlocked ?? null,
+    blockVersion: raw.blockVersion ?? 0,
   };
 }
 
@@ -252,6 +332,19 @@ function normalizeQuote(raw: RawQuote | null | undefined): ReplyQuote | null {
     type: raw.type ?? null,
     content: raw.content ?? null,
     sticker: raw.sticker ?? null,
+    video: normalizeVideo(raw.video),
+  };
+}
+
+function normalizeVideo(raw: RawVideo | null | undefined): VideoCard | null {
+  if (!raw) return null;
+  return {
+    videoId: String(raw.videoId),
+    state: raw.state,
+    ownerId: raw.ownerId == null ? null : String(raw.ownerId),
+    thumbnailUrl: raw.thumbnailUrl ?? null,
+    title: raw.title ?? null,
+    durationSeconds: raw.durationSeconds ?? null,
   };
 }
 
@@ -267,6 +360,7 @@ export function normalizeMessage(raw: RawMessage): MessageResponse {
     content: raw.content ?? null,
     stickerId: raw.stickerId ?? null,
     sticker: raw.sticker ?? null,
+    video: normalizeVideo(raw.video),
     replyToMessageId: raw.replyToMessageId ?? null,
     replyTo: normalizeQuote(raw.replyTo),
     recalledAt: raw.recalledAt ?? null,
@@ -303,6 +397,16 @@ export function parseChatEvent(body: string): ChatEvent | null {
     const update = frame.update as RawUpdate;
     if (typeof update.messageId !== "string" || typeof update.conversationId !== "string") return null;
     return { type: "MESSAGE_UPDATED", conversationId: update.conversationId, update: normalizeUpdate(update) };
+  }
+  if (frame.type === "RECEIPT" && typeof frame.receipt === "object" && frame.receipt !== null) {
+    const raw = frame.receipt as RawReceipt & { conversationId?: string };
+    if (typeof raw.conversationId !== "string" || raw.userId == null) return null;
+    return { type: "RECEIPT", conversationId: raw.conversationId, receipt: normalizeReceipt(raw) };
+  }
+  if (frame.type === "TYPING" && typeof frame.typing === "object" && frame.typing !== null) {
+    const raw = frame.typing as { conversationId?: unknown; userId?: string | number; typing?: unknown };
+    if (typeof raw.conversationId !== "string" || raw.userId == null || typeof raw.typing !== "boolean") return null;
+    return { type: "TYPING", conversationId: raw.conversationId, userId: String(raw.userId), typing: raw.typing };
   }
   if (frame.type === "CONVERSATION_REMOVED" && typeof frame.conversationId === "string") {
     return { type: "CONVERSATION_REMOVED", conversationId: frame.conversationId };
@@ -420,11 +524,39 @@ export function listStickerPacks(): Promise<StickerPack[]> {
   return apiFetch<StickerPack[]>("/conversations/stickers", { auth: "required" });
 }
 
-export function markConversationRead(conversationId: string): Promise<null> {
-  return apiFetch<null>(`/conversations/${conversationId}/messages/read`, {
+/** The other participant's markers, for a sender to show "Delivered" and "Seen". */
+export async function getReceipts(conversationId: string, signal?: AbortSignal): Promise<Receipt> {
+  const raw = await apiFetch<RawReceipt>(`/conversations/${conversationId}/messages/receipts`, {
+    auth: "required",
+    signal,
+  });
+  return normalizeReceipt(raw);
+}
+
+/**
+ * This client now holds these messages of the other side. The server moves the delivered mark only
+ * across a run of messages that are all named, and answers with the viewer's own marks.
+ */
+export async function acknowledgeDelivered(conversationId: string, messageIds: string[]): Promise<Receipt> {
+  const raw = await apiFetch<RawReceipt>(`/conversations/${conversationId}/messages/delivered`, {
     method: "POST",
+    body: { messageIds },
     auth: "required",
   });
+  return normalizeReceipt(raw);
+}
+
+/**
+ * The viewer has looked at the thread up to `messageId`, a message of the other side that is on screen.
+ * Answers with the viewer's own marks.
+ */
+export async function acknowledgeRead(conversationId: string, messageId: string): Promise<Receipt> {
+  const raw = await apiFetch<RawReceipt>(`/conversations/${conversationId}/messages/read`, {
+    method: "POST",
+    body: { messageId },
+    auth: "required",
+  });
+  return normalizeReceipt(raw);
 }
 
 export async function reactToMessage(

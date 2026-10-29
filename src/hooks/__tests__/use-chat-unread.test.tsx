@@ -13,6 +13,15 @@ const api = vi.hoisted(() => ({
   deleteConversationForMe: vi.fn(),
   queue: { handler: null as ((body: string) => void) | null },
   notify: vi.fn(),
+  getBlocked: vi.fn(),
+  acknowledgeDelivered: vi.fn(),
+  setFollowState: vi.fn(),
+  setFollowRequested: vi.fn(),
+}));
+vi.mock("@/lib/api/users", () => ({
+  getBlocked: (...a: unknown[]) => api.getBlocked(...a),
+  setFollowState: (...a: unknown[]) => api.setFollowState(...a),
+  setFollowRequested: (...a: unknown[]) => api.setFollowRequested(...a),
 }));
 
 vi.mock("@/lib/api/conversations", async (importOriginal) => ({
@@ -20,6 +29,7 @@ vi.mock("@/lib/api/conversations", async (importOriginal) => ({
   listConversations: (...a: unknown[]) => api.listConversations(...a),
   listMessageRequests: (...a: unknown[]) => api.listMessageRequests(...a),
   listMessages: (...a: unknown[]) => api.listMessages(...a),
+  acknowledgeDelivered: (...a: unknown[]) => api.acknowledgeDelivered(...a),
   pinConversation: (...a: unknown[]) => api.pinConversation(...a),
   muteConversation: (...a: unknown[]) => api.muteConversation(...a),
   deleteConversationForMe: (...a: unknown[]) => api.deleteConversationForMe(...a),
@@ -56,6 +66,9 @@ const convo = (id: string, over: Partial<ConversationResponse> = {}): Conversati
   muteMode: "NONE",
   mutedUntil: null,
   inboxHidden: false,
+  blockedByViewer: false,
+  messagingBlocked: false,
+  blockVersion: 0,
   ...over,
 });
 
@@ -86,6 +99,12 @@ beforeEach(() => {
   for (const fn of Object.values(api)) if (typeof fn === "function" && "mockReset" in fn) fn.mockReset();
   api.queue.handler = null;
   api.listMessageRequests.mockResolvedValue([]);
+  api.acknowledgeDelivered.mockImplementation(async (_id: string, ids: string[]) => ({
+    userId: "1",
+    delivered: { messageId: ids[ids.length - 1], sentAt: "2999-01-01T00:00:00.000Z", at: "2999-01-01T00:00:00.000Z" },
+    read: null,
+  }));
+  api.getBlocked.mockResolvedValue({ content: [], page: { size: 100, number: 0, totalElements: 0, totalPages: 1 } });
   api.listMessages.mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
   setViewing("a", false);
   window.localStorage.clear();
@@ -199,9 +218,174 @@ describe("the viewer's own pin, mute and delete", () => {
     expect(result.current.conversations[0].muteMode).toBe("INDEFINITE");
   });
 
-  it("remembers a block for the conversation so its composer can close", async () => {
+  it("knows who the viewer blocked from the server, so it survives a reload", async () => {
+    api.getBlocked.mockResolvedValue({
+      content: [{ userId: 9002 }],
+      page: { size: 100, number: 0, totalElements: 1, totalPages: 1 },
+    });
     const { result } = await open([convo("a")]);
-    act(() => result.current.markBlocked("a"));
-    expect(result.current.blocked.has("a")).toBe(true);
+    expect(result.current.blockedUsers.has("9002")).toBe(true);
+    expect(result.current.blockedUsers.has("9003")).toBe(false);
+  });
+
+  it("follows the viewer's own block and unblock at once", async () => {
+    const { result } = await open([convo("a")]);
+    act(() => result.current.setBlockedUser("9002", true));
+    expect(result.current.blockedUsers.has("9002")).toBe(true);
+    act(() => result.current.setBlockedUser("9002", false));
+    expect(result.current.blockedUsers.has("9002")).toBe(false);
+  });
+
+  it("keeps the last known blocked list when it cannot be read", async () => {
+    api.getBlocked.mockResolvedValueOnce({
+      content: [{ userId: 9002 }],
+      page: { size: 100, number: 0, totalElements: 1, totalPages: 1 },
+    });
+    const { result } = await open([convo("a")]);
+    api.getBlocked.mockRejectedValue(new Error("offline"));
+    await act(async () => result.current.reload());
+    expect(result.current.blockedUsers.has("9002")).toBe(true);
+  });
+
+  const frame = (conversation: ConversationResponse) =>
+    JSON.stringify({ type: "CONVERSATION", conversation: { ...conversation, participantIds: [1, 9002] } });
+  const blockedBy = (version: number, mine: boolean, closed = true) =>
+    convo("a", { participantIds: ["1", "9002"], blockedByViewer: mine, messagingBlocked: closed, blockVersion: version });
+
+  it("closes an open conversation for both sides from a pushed frame, with no send attempted", async () => {
+    const { result } = await open([convo("a", { participantIds: ["1", "9002"] })]);
+    act(() => api.queue.handler?.(frame(blockedBy(5, false))));
+    expect(result.current.conversations[0].messagingBlocked).toBe(true);
+    expect(result.current.conversations[0].blockedByViewer).toBe(false);
+    // The follow cache of the side that was blocked is cleared too.
+    expect(api.setFollowState).toHaveBeenCalledWith("9002", false);
+    expect(api.setFollowRequested).toHaveBeenCalledWith("9002", false);
+  });
+
+  it("a duplicate or older frame cannot bring a block back or take it away", async () => {
+    const { result } = await open([convo("a", { participantIds: ["1", "9002"] })]);
+    act(() => api.queue.handler?.(frame(blockedBy(6, true))));
+    act(() => api.queue.handler?.(frame(blockedBy(6, true))));
+    act(() => api.queue.handler?.(frame(blockedBy(5, false, false))));
+    expect(result.current.conversations[0].blockedByViewer).toBe(true);
+    expect(result.current.conversations[0].blockVersion).toBe(6);
+    act(() => api.queue.handler?.(frame(blockedBy(7, false, false))));
+    expect(result.current.conversations[0].blockedByViewer).toBe(false);
+  });
+
+  it("a resync that answers with an older state keeps the newer block", async () => {
+    const { result } = await open([convo("a", { participantIds: ["1", "9002"] })]);
+    act(() => api.queue.handler?.(frame(blockedBy(6, true))));
+    api.listConversations.mockResolvedValue([blockedBy(5, false, false)]);
+    await act(async () => result.current.reload());
+    expect(result.current.conversations[0].blockedByViewer).toBe(true);
+  });
+
+  it("an unblock that leaves the other side's block in place keeps messaging closed", async () => {
+    const { result } = await open([convo("a", { participantIds: ["1", "9002"] })]);
+    act(() => api.queue.handler?.(frame(blockedBy(6, true))));
+    act(() => api.queue.handler?.(frame(blockedBy(7, false, true))));
+    expect(result.current.conversations[0].blockedByViewer).toBe(false);
+    expect(result.current.conversations[0].messagingBlocked).toBe(true);
+  });
+});
+
+describe("telling the sender a message arrived", () => {
+  const sentAt = (second: number) => new Date(Date.UTC(2026, 9, 28, 8, 0, second)).toISOString();
+  const frameAt = (id: string, second: number, senderId = 2, conversationId = "a") =>
+    JSON.stringify({
+      type: "MESSAGE",
+      conversationId,
+      message: { id, conversationId, senderId, type: "TEXT", content: "hi", sentAt: sentAt(second) },
+    });
+
+  beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }));
+
+  it("names the message it received, once, however many times the frame comes", async () => {
+    await open([convo("a")]);
+    act(() => api.queue.handler?.(frameAt("m1", 1)));
+    act(() => api.queue.handler?.(frameAt("m1", 1)));
+    expect(api.acknowledgeDelivered).not.toHaveBeenCalled();
+
+    await act(async () => void vi.advanceTimersByTime(400));
+
+    expect(api.acknowledgeDelivered).toHaveBeenCalledTimes(1);
+    expect(api.acknowledgeDelivered).toHaveBeenCalledWith("a", ["m1"]);
+  });
+
+  it("answers a burst with one request that names every message in order", async () => {
+    await open([convo("a")]);
+    for (let i = 1; i <= 4; i += 1) {
+      act(() => api.queue.handler?.(frameAt(`m${i}`, i)));
+      await act(async () => void vi.advanceTimersByTime(100));
+    }
+    await act(async () => void vi.advanceTimersByTime(400));
+
+    expect(api.acknowledgeDelivered).toHaveBeenCalledTimes(1);
+    expect(api.acknowledgeDelivered).toHaveBeenCalledWith("a", ["m1", "m2", "m3", "m4"]);
+  });
+
+  it("never acknowledges the viewer's own message", async () => {
+    await open([convo("a")]);
+    act(() => api.queue.handler?.(frameAt("m9", 1, 1)));
+    await act(async () => void vi.advanceTimersByTime(2_000));
+    expect(api.acknowledgeDelivered).not.toHaveBeenCalled();
+  });
+
+  it("is not a read: the unread count is untouched by receiving", async () => {
+    const { result } = await open([convo("a")]);
+    const before = result.current.total;
+    act(() => api.queue.handler?.(frameAt("m1", 1)));
+    await act(async () => void vi.advanceTimersByTime(400));
+    expect(result.current.total).toBe(before + 1);
+  });
+
+  it("what arrived while away is acknowledged only after it has been read from the server", async () => {
+    api.listMessages.mockResolvedValue({
+      items: [
+        { id: "m2", conversationId: "a", senderId: 2, type: "TEXT", content: "b", sentAt: sentAt(2) },
+        { id: "m1", conversationId: "a", senderId: 2, type: "TEXT", content: "a", sentAt: sentAt(1) },
+      ],
+      nextCursor: null,
+      hasMore: false,
+    });
+    await open([convo("a", { hasUnread: true, lastMessageSenderId: "pa", lastMessageAt: sentAt(2) })]);
+    expect(api.acknowledgeDelivered).not.toHaveBeenCalled();
+
+    await act(async () => void vi.advanceTimersByTime(400));
+
+    expect(api.listMessages).toHaveBeenCalled();
+    expect(api.acknowledgeDelivered).toHaveBeenCalledWith("a", ["m1", "m2"]);
+  });
+
+  it("a conversation that merely appears in the list, with nothing unread, is not acknowledged", async () => {
+    await open([convo("read", { hasUnread: false, lastMessageSenderId: "pb" }), convo("mine", { hasUnread: true, lastMessageSenderId: "1" })]);
+    await act(async () => void vi.advanceTimersByTime(2_000));
+    expect(api.acknowledgeDelivered).not.toHaveBeenCalled();
+  });
+
+  it("signing out cancels what is waiting: nothing is sent for the account that left", async () => {
+    api.listConversations.mockResolvedValue([convo("a")]);
+    const view = renderHook(({ me }: { me: string | null }) => useChatUnread(me), { initialProps: { me: "1" as string | null } });
+    await flush();
+    act(() => api.queue.handler?.(frameAt("m1", 1)));
+
+    view.rerender({ me: null });
+    await act(async () => void vi.advanceTimersByTime(5_000));
+
+    expect(api.acknowledgeDelivered).not.toHaveBeenCalled();
+  });
+
+  it("switching accounts does not carry the first account's messages to the second", async () => {
+    api.listConversations.mockResolvedValue([convo("a")]);
+    const view = renderHook(({ me }: { me: string | null }) => useChatUnread(me), { initialProps: { me: "1" as string | null } });
+    await flush();
+    act(() => api.queue.handler?.(frameAt("m1", 1)));
+
+    view.rerender({ me: "9" });
+    await flush();
+    await act(async () => void vi.advanceTimersByTime(5_000));
+
+    expect(api.acknowledgeDelivered).not.toHaveBeenCalledWith("a", ["m1"]);
   });
 });

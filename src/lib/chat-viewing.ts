@@ -21,3 +21,12 @@ export function isViewing(conversationId: string): boolean {
     document.hasFocus()
   );
 }
+
+/**
+ * The tab is shown and the window has focus — what "looking at the screen" needs besides the thread
+ * being open. Nothing else about the conversation: a thread scrolled up through history is still looked
+ * at, just not at its newest message, and which messages are in view is the list's own answer.
+ */
+export function isWindowActive(): boolean {
+  return document.visibilityState === "visible" && document.hasFocus();
+}

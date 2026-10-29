@@ -31,6 +31,9 @@ function convo(id: string, over: Partial<ConversationResponse> = {}): Conversati
     muteMode: "NONE",
     mutedUntil: null,
     inboxHidden: false,
+    blockedByViewer: false,
+    messagingBlocked: false,
+    blockVersion: 0,
     ...over,
   };
 }

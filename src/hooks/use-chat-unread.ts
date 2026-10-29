@@ -5,8 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveAuthors } from "@/lib/api/authors";
 import {
   acceptMessageRequest,
+  acknowledgeDelivered,
   declineMessageRequest,
   deleteConversationForMe,
+  getConversation,
   listConversations,
   listMessageRequests,
   listMessages,
@@ -23,6 +25,7 @@ import {
 import {
   applyIncoming,
   isMuted,
+  keepNewerBlock,
   nextMuteExpiry,
   noticeBody,
   otherParticipantId,
@@ -31,6 +34,7 @@ import {
   type InboxLists,
 } from "@/lib/chat";
 import { isViewing } from "@/lib/chat-viewing";
+import { DeliveryAcker } from "@/lib/delivery-acker";
 import {
   EMPTY_UNREAD,
   addUnread,
@@ -43,6 +47,8 @@ import {
   unreadTotal,
   type UnreadState,
 } from "@/lib/chat-unread";
+import { isLastPage } from "@/lib/api/types";
+import { getBlocked, setFollowRequested, setFollowState } from "@/lib/api/users";
 import { onStompConnect, subscribeTopic } from "@/lib/realtime/stompClient";
 import { showBrowserNotification } from "@/lib/settings/browser-notifications";
 import type { Author } from "@/types/tiktok";
@@ -86,14 +92,36 @@ export interface ChatUnread {
   unmute: (conversationId: string) => Promise<ConversationResponse>;
   /** From this account only; the other person keeps their copy. */
   deleteConversation: (conversationId: string) => Promise<void>;
-  /** Conversations whose other side the viewer blocked in this session: their composer is closed. */
-  blocked: ReadonlySet<string>;
-  markBlocked: (conversationId: string) => void;
+  /**
+   * The accounts the viewer has blocked, from the server and kept in step with their own block and
+   * unblock. A conversation with one of them has no composer, only a way to unblock.
+   */
+  blockedUsers: ReadonlySet<string>;
+  setBlockedUser: (userId: string, blocked: boolean) => void;
 }
 
 /** How often to look again, which also finds anything the socket missed. */
 const RESYNC_MS = 30_000;
 const TAIL_PAGE = 100;
+/** How much of a conversation is read to hold what arrived while this client was away. */
+const ACK_PAGE = 100;
+const BLOCKED_PAGE = 100;
+const BLOCKED_PAGES_MAX = 10;
+
+/** Every account the viewer blocked, or null when the list cannot be read right now. */
+async function loadBlockedUsers(): Promise<Set<string> | null> {
+  const ids = new Set<string>();
+  try {
+    for (let page = 0; page < BLOCKED_PAGES_MAX; page += 1) {
+      const answer = await getBlocked(page, BLOCKED_PAGE);
+      for (const profile of answer.content) ids.add(String(profile.userId));
+      if (isLastPage(answer.page)) break;
+    }
+  } catch {
+    return null;
+  }
+  return ids;
+}
 const EMPTY_LISTS: InboxLists = { inbox: [], requests: [] };
 
 /**
@@ -114,7 +142,7 @@ export function useChatUnread(me: string | null): ChatUnread {
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [authors, setAuthors] = useState<ReadonlyMap<string, Author>>(new Map());
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [blocked, setBlocked] = useState<ReadonlySet<string>>(new Set());
+  const [blockedUsers, setBlockedUsers] = useState<ReadonlySet<string>>(new Set());
   /**
    * Counts the viewer's own changes (pin, mute, delete) as they start and finish. A resync that began
    * before one finished carries the old answer, so it is thrown away and asked again.
@@ -146,16 +174,38 @@ export function useChatUnread(me: string | null): ChatUnread {
     if (me && loadedFor.current === me) saveUnread(me, state);
   }, [me, state]);
 
+  /**
+   * Tells the server which messages of the other side this client holds, so their sender can say
+   * "received" — from the app, not from a thread: the person need not have opened anything. Belongs to
+   * the signed-in account; replaced, with every pending timer and request cancelled, when it changes.
+   */
+  const acker = useRef<DeliveryAcker | null>(null);
+  useEffect(() => {
+    if (!me) return;
+    const mine = new DeliveryAcker({
+      me,
+      acknowledge: acknowledgeDelivered,
+      fetchNewest: async (conversationId) => (await listMessages(conversationId, null, undefined, ACK_PAGE)).items,
+    });
+    acker.current = mine;
+    return () => {
+      mine.dispose();
+      if (acker.current === mine) acker.current = null;
+    };
+  }, [me]);
+
   const sync = useCallback(async () => {
     if (!me) return;
     const epoch = mutationEpoch.current;
     let rows: ConversationResponse[];
     let requests: ConversationResponse[] | null;
+    let blockedNow: Set<string> | null;
     try {
-      [rows, requests] = await Promise.all([
+      [rows, requests, blockedNow] = await Promise.all([
         listConversations(),
         // A box that cannot be read keeps what it had: the inbox is not held up by it.
         listMessageRequests().catch(() => null),
+        loadBlockedUsers(),
       ]);
     } catch {
       setStatus((current) => (current === "ready" ? current : "error"));
@@ -165,9 +215,15 @@ export function useChatUnread(me: string | null): ChatUnread {
       void sync();
       return;
     }
-    setLists((current) => ({ inbox: rows, requests: requests ?? current.requests }));
+    // A block that landed while this was in flight is newer than these rows: keep it.
+    const known = (list: ConversationResponse[], current: InboxLists) =>
+      list.map((row) => keepNewerBlock([...current.inbox, ...current.requests].find((c) => c.id === row.id), row));
+    setLists((current) => ({
+      inbox: known(rows, current),
+      requests: requests ? known(requests, current) : current.requests,
+    }));
+    if (blockedNow) setBlockedUsers(blockedNow);
     setStatus("ready");
-
     const tails: Record<string, MessageResponse[]> = {};
     await Promise.all(
       rows
@@ -181,6 +237,18 @@ export function useChatUnread(me: string | null): ChatUnread {
         }),
     );
     setState((current) => reconcile(current, rows, tails, me));
+
+    // What arrived while this client was away is only "received" once it has actually been read from
+    // the server, so the ones that were just fetched are held as they are and the rest are caught up.
+    const mine = acker.current;
+    if (mine) {
+      for (const [conversationId, items] of Object.entries(tails)) mine.hold(conversationId, items);
+      for (const row of [...rows, ...(requests ?? [])]) {
+        if (row.hasUnread && row.lastMessageSenderId !== me && !row.inboxHidden && !(row.id in tails)) {
+          void mine.catchUp(row.id, row.lastMessageAt);
+        }
+      }
+    }
   }, [me]);
 
   /** Takes a conversation out of every list and out of the saved unread counts. */
@@ -232,6 +300,7 @@ export function useChatUnread(me: string | null): ChatUnread {
 
     const onMessage = (message: MessageResponse) => {
       if (message.senderId === me) return;
+      acker.current?.hold(message.conversationId, [message]);
       const known = listsRef.current;
       const viewed = isViewing(message.conversationId) ? message.conversationId : null;
       if (!viewed) {
@@ -261,6 +330,12 @@ export function useChatUnread(me: string | null): ChatUnread {
 
     const onConversation = (conversation: ConversationResponse) => {
       setLists((current) => placeConversation(current, conversation, me));
+      if (conversation.messagingBlocked === true) {
+        // A block ends the follows both ways, including on the side that did not place it.
+        const other = otherParticipantId(conversation, me);
+        setFollowState(other, false);
+        setFollowRequested(other, false);
+      }
       if (conversation.hasUnread && conversation.requestState === null) void sync();
     };
 
@@ -372,10 +447,36 @@ export function useChatUnread(me: string | null): ChatUnread {
     },
     [own, forget],
   );
-  const markBlocked = useCallback(
-    (conversationId: string) => setBlocked((current) => new Set(current).add(conversationId)),
-    [],
-  );
+  const setBlockedUser = useCallback((userId: string, isBlocked: boolean) => {
+    // Counts as the viewer's own change: a list that was already being fetched is stale now.
+    mutationEpoch.current += 2;
+    // The conversation with them shows it at once; the server's answer (below, or the block event)
+    // carries the version that settles it. Unblocking cannot say whether they blocked back, so that
+    // part is left to the server rather than guessed.
+    const patch = (list: ConversationResponse[]) =>
+      list.map((c) =>
+        me && otherParticipantId(c, me) === userId
+          ? { ...c, blockedByViewer: isBlocked, messagingBlocked: isBlocked ? true : c.messagingBlocked }
+          : c,
+      );
+    setLists((current) => ({ inbox: patch(current.inbox), requests: patch(current.requests) }));
+    if (!isBlocked) {
+      for (const c of [...listsRef.current.inbox, ...listsRef.current.requests]) {
+        if (me && otherParticipantId(c, me) === userId) {
+          getConversation(c.id).then(
+            (fresh) => setLists((current) => placeConversation(current, fresh, me)),
+            () => {},
+          );
+        }
+      }
+    }
+    setBlockedUsers((current) => {
+      const next = new Set(current);
+      if (isBlocked) next.add(userId);
+      else next.delete(userId);
+      return next;
+    });
+  }, [me]);
 
   // Wakes the UI when the soonest timed mute ends, so a bell that should be gone is not left on screen.
   const expiry = useMemo(
@@ -422,8 +523,8 @@ export function useChatUnread(me: string | null): ChatUnread {
       mute,
       unmute,
       deleteConversation,
-      blocked,
-      markBlocked,
+      blockedUsers,
+      setBlockedUser,
     }),
     [
       total,
@@ -443,8 +544,8 @@ export function useChatUnread(me: string | null): ChatUnread {
       mute,
       unmute,
       deleteConversation,
-      blocked,
-      markBlocked,
+      blockedUsers,
+      setBlockedUser,
     ],
   );
 }

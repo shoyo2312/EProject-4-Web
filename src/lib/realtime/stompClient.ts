@@ -19,6 +19,8 @@ interface Topic {
 const topics = new Set<Topic>();
 /** Callers that need to know the socket (re)connected, to refetch what the broker did not replay. */
 const connectListeners = new Set<() => void>();
+/** Callers that need to know the socket dropped, to stop what only makes sense while it is up. */
+const disconnectListeners = new Set<() => void>();
 let client: Client | null = null;
 
 /**
@@ -55,6 +57,12 @@ function connection(): Client {
   next.onConnect = () => {
     for (const topic of topics) attach(next, topic);
     for (const listener of connectListeners) listener();
+  };
+
+  // A drop is told to whoever holds state that dies with the socket (a typing indicator). stompjs
+  // reconnects on its own and `onConnect` above then announces it.
+  next.onWebSocketClose = () => {
+    for (const listener of disconnectListeners) listener();
   };
 
   client = next;
@@ -112,6 +120,29 @@ export function onStompConnect(listener: () => void): () => void {
   return () => {
     connectListeners.delete(listener);
   };
+}
+
+/**
+ * Calls `listener` whenever the shared connection is lost. Not called for a connection that never
+ * opened, and not replayed after the reconnect. Returns the function that stops listening.
+ */
+export function onStompDisconnect(listener: () => void): () => void {
+  disconnectListeners.add(listener);
+  return () => {
+    disconnectListeners.delete(listener);
+  };
+}
+
+/**
+ * Sends one frame on the shared connection, if it is up right now: returns false, and sends nothing,
+ * when it is not. Deliberately never queued — what goes through here (typing) is only true for a
+ * moment, and a frame delivered after a reconnect would say something that stopped being so.
+ */
+export function publishStomp(destination: string, body: unknown): boolean {
+  const stomp = client;
+  if (!stomp || !stomp.connected) return false;
+  stomp.publish({ destination, body: JSON.stringify(body) });
+  return true;
 }
 
 /**

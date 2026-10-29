@@ -133,3 +133,42 @@ describe("stickers on the wire", () => {
     expect(conversation.lastMessageType).toBe("TEXT");
   });
 });
+
+describe("parseChatEvent RECEIPT", () => {
+  const mark = '{"messageId":"372385978751229952","sentAt":"2026-10-28T08:00:00Z","at":"2026-10-28T08:05:00Z"}';
+
+  it("reads the other side's marks, with ids kept exact", () => {
+    const event = parseChatEvent(
+      '{"type":"RECEIPT","conversationId":"c1","receipt":{"conversationId":"c1","userId":365050354607333376,' +
+        `"delivered":${mark},"read":null}}`,
+    );
+    expect(event).toEqual({
+      type: "RECEIPT",
+      conversationId: "c1",
+      receipt: {
+        userId: "365050354607333376",
+        delivered: { messageId: "372385978751229952", sentAt: "2026-10-28T08:00:00Z", at: "2026-10-28T08:05:00Z" },
+        read: null,
+      },
+    });
+  });
+
+  it("drops a frame that does not say whose marks they are", () => {
+    expect(parseChatEvent(JSON.stringify({ type: "RECEIPT", conversationId: "c1", receipt: { delivered: null } }))).toBeNull();
+  });
+});
+
+describe("parseChatEvent TYPING", () => {
+  it("reads who is typing where, with an exact user id", () => {
+    const event = parseChatEvent(
+      '{"type":"TYPING","conversationId":"c1","typing":{"conversationId":"c1","userId":365050354607333376,"typing":true}}',
+    );
+    expect(event).toEqual({ type: "TYPING", conversationId: "c1", userId: "365050354607333376", typing: true });
+  });
+
+  it("drops a frame with no flag, no user or no conversation", () => {
+    expect(parseChatEvent('{"type":"TYPING","conversationId":"c1","typing":{"conversationId":"c1","userId":2}}')).toBeNull();
+    expect(parseChatEvent('{"type":"TYPING","conversationId":"c1","typing":{"conversationId":"c1","typing":true}}')).toBeNull();
+    expect(parseChatEvent('{"type":"TYPING","conversationId":"c1","typing":{"userId":2,"typing":true}}')).toBeNull();
+  });
+});

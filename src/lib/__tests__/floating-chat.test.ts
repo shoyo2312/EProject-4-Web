@@ -9,6 +9,7 @@ import {
   MAX_BUBBLES,
   openThread,
   splitDock,
+  toggleThread,
 } from "../floating-chat";
 
 function convo(id: string, minute: number): ConversationResponse {
@@ -30,6 +31,9 @@ function convo(id: string, minute: number): ConversationResponse {
     muteMode: "NONE",
     mutedUntil: null,
     inboxHidden: false,
+    blockedByViewer: false,
+    messagingBlocked: false,
+    blockVersion: 0,
   };
 }
 
@@ -94,6 +98,18 @@ describe("dockConversations ordering", () => {
   });
 });
 
+describe("toggleThread", () => {
+  it("opens a conversation, minimises it on the second press, and switches on another", () => {
+    const opened = toggleThread(EMPTY_DOCK, "a");
+    expect(opened.expandedId).toBe("a");
+    expect(toggleThread(opened, "b").expandedId).toBe("b");
+    const minimised = toggleThread(opened, "a");
+    expect(minimised.expandedId).toBeNull();
+    expect(minimised.pinned).toEqual(["a"]);
+    expect(minimised.dismissed).toEqual({});
+  });
+});
+
 describe("splitDock", () => {
   const five = ["a", "b", "c", "d", "e"].map((id, i) => convo(id, 50 - i));
 
@@ -110,11 +126,18 @@ describe("splitDock", () => {
     expect(ids(splitDock(five.slice(0, 2), null).shown)).toEqual(["a", "b"]);
   });
 
-  it("the open conversation is the panel, not one of the three bubbles", () => {
+  it("the open conversation keeps its bubble and takes one of the three places", () => {
     const { shown, expanded, hidden } = splitDock(five, "b");
     expect(expanded?.id).toBe("b");
-    expect(ids(shown)).toEqual(["a", "c", "d"]);
-    expect(hidden).toBe(1);
+    expect(ids(shown)).toEqual(["a", "b", "c"]);
+    expect(hidden).toBe(2);
+  });
+
+  it("an open conversation outside the newest three takes the last place; none is counted twice", () => {
+    const { shown, hidden } = splitDock(five, "e");
+    expect(ids(shown)).toEqual(["a", "b", "e"]);
+    expect(hidden).toBe(2);
+    expect(shown.length + hidden).toBe(five.length);
   });
 
   it("a conversation outside the three comes in at its place when a newer message arrives", () => {

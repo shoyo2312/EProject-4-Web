@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  acknowledgeRead,
+  getReceipts,
   hideMessage,
   listMessages,
-  markConversationRead,
   parseChatEvent,
   parseMessageFrame,
   reactToMessage,
@@ -14,17 +15,31 @@ import {
   sendMessage,
   type MessageResponse,
   type MessageUpdate,
+  type Receipt,
   type SendPayload,
 } from "@/lib/api/conversations";
-import { applyUpdate, mergeMessages, myReaction, reconcileWindow, removeMessage } from "@/lib/chat";
-import { isViewing } from "@/lib/chat-viewing";
-import { onStompConnect, subscribeTopic } from "@/lib/realtime/stompClient";
+import {
+  applyUpdate,
+  comparePosition,
+  mergeMessages,
+  mergeReceipt,
+  myReaction,
+  reconcileWindow,
+  removeMessage,
+} from "@/lib/chat";
+import { isWindowActive } from "@/lib/chat-viewing";
+import { onStompConnect, onStompDisconnect, subscribeTopic } from "@/lib/realtime/stompClient";
+import { TYPING_PEER_TTL_MS } from "@/lib/typing";
 
 export type ThreadStatus = "loading" | "ready" | "error";
 
 export type SendResult = { ok: true; message: MessageResponse } | { ok: false; error: unknown };
 
 export type ActionResult = { ok: true } | { ok: false; error: unknown };
+
+/** A read acknowledgement that fails is tried again this many times, this long after the last attempt. */
+const READ_RETRIES = 3;
+const READ_RETRY_MS = 3_000;
 
 /** The newest page is refetched this large (at most) to catch changes to messages already on screen. */
 const RESYNC_MIN = 30;
@@ -38,8 +53,15 @@ export interface ChatThread {
   loadingOlder: boolean;
   loadOlder: () => void;
   retry: () => void;
-  /** Tells the server this thread is read — a no-op unless it is being looked at. */
-  markRead: () => void;
+  /** How far the other participant has got: what "Delivered" and "Seen" are read from. Null until known. */
+  receipt?: Receipt | null;
+  /** The other participant is typing here right now; false the moment they stop, send, or the dots time out. */
+  peerTyping?: boolean;
+  /**
+   * `messageId`, a message of the other side, is on screen in a thread being looked at: tells the
+   * server so, once per position, and retries a failure. A no-op while the tab is hidden or unfocused.
+   */
+  markSeen: (messageId: string) => void;
   send: (payload: SendPayload) => Promise<SendResult>;
   /** Sets, changes or — when it is the viewer's current one — takes back a reaction. */
   react: (messageId: string, emoji: string) => Promise<ActionResult>;
@@ -66,6 +88,9 @@ export function useChatThread(
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [peerTyping, setPeerTyping] = useState(false);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursor = useRef<string | null>(null);
   const olderInFlight = useRef(false);
 
@@ -93,56 +118,90 @@ export function useChatThread(
   }, [messages]);
 
   /**
-   * Read means seen: the thread is on screen with its newest message in view, the tab is shown
-   * and the window focused (see `chat-viewing`). A thread in a background tab, a minimised panel
-   * or scrolled up keeps collecting unread messages until the viewer is back at the bottom.
+   * Read means seen: the message is in the thread's scroll area, in view, in a tab that is shown and a
+   * window that has focus — decided by the list after it has rendered, and handed here by id. Opening
+   * the thread, loading its history or a frame arriving prove nothing of the kind. The server moves the
+   * read mark to that message's position; messages after it stay unread.
+   *
+   * `acknowledged` is the furthest position already sent (or on its way), so scrolling about does not
+   * repeat it; a failure puts it back and tries again a little later, the same position each time.
    */
-  const markRead = useCallback(() => {
-    if (!isViewing(conversationId)) return;
-    markConversationRead(conversationId).then(
-      () => onReadRef.current(conversationId, newestSentAt.current ?? new Date().toISOString()),
-      () => {
-        // The dot stays; the next message or visit tries again.
-      },
-    );
-  }, [conversationId]);
+  const acknowledged = useRef<{ sentAt: string; messageId: string } | null>(null);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seenImpl = useRef<(messageId: string, attempt: number) => void>(() => {});
+  useEffect(() => {
+    seenImpl.current = (messageId, attempt) => {
+      if (!isWindowActive()) return;
+      const message = messagesRef.current.find((m) => m.id === messageId);
+      if (!message || message.senderId === me) return;
+      const position = { sentAt: message.sentAt, messageId };
+      const before = acknowledged.current;
+      if (before && comparePosition(position, before) <= 0) return;
+      acknowledged.current = position;
+      acknowledgeRead(conversationId, messageId).then(
+        () => onReadRef.current(conversationId, message.sentAt),
+        () => {
+          if (acknowledged.current !== position) return;
+          acknowledged.current = before;
+          if (attempt < READ_RETRIES) {
+            retryTimer.current = setTimeout(() => seenImpl.current(messageId, attempt + 1), READ_RETRY_MS);
+          }
+        },
+      );
+    };
+  }, [conversationId, me]);
+  const markSeen = useCallback((messageId: string) => seenImpl.current(messageId, 0), []);
 
   useEffect(() => {
     const controller = new AbortController();
     cursor.current = null;
     olderInFlight.current = false;
     hidden.current = new Set();
+    acknowledged.current = null;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- a new thread starts from an empty list, not the previous one's
     setMessages([]);
+    setReceipt(null);
+    setPeerTyping(false);
     setHasMore(false);
     setLoadingOlder(false);
     setStatus("loading");
 
+    getReceipts(conversationId, controller.signal).then(
+      (answer) => setReceipt((current) => mergeReceipt(current, answer)),
+      () => {
+        // No state shown beyond "Sent"; the next frame or resync fills it in.
+      },
+    );
     listMessages(conversationId, null, controller.signal).then(
       (page) => {
         cursor.current = page.nextCursor;
         setMessages(mergeMessages([], page.items));
         setHasMore(page.hasMore);
         setStatus("ready");
-        markRead();
       },
       () => {
         if (!controller.signal.aborted) setStatus("error");
       },
     );
-    return () => controller.abort();
-  }, [conversationId, attempt, markRead]);
+    return () => {
+      controller.abort();
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+    };
+  }, [conversationId, attempt]);
 
   useEffect(() => {
     const refetchNewest = () => {
       if (document.visibilityState !== "visible") return;
       const size = Math.min(RESYNC_MAX, Math.max(RESYNC_MIN, messagesRef.current.length));
+      getReceipts(conversationId).then(
+        (answer) => setReceipt((current) => mergeReceipt(current, answer)),
+        () => {},
+      );
       listMessages(conversationId, null, undefined, size).then(
         (page) => {
           const items = page.items.filter((message) => !hidden.current.has(message.id));
           // Also what changed on messages already shown — reactions, recalls, deletes made elsewhere.
           setMessages((current) => reconcileWindow(current, items, !page.hasMore));
-          markRead();
         },
         () => {
           // Offline still; the next event retries.
@@ -160,7 +219,24 @@ export function useChatThread(
       window.removeEventListener("online", refetchNewest);
       window.removeEventListener("focus", refetchNewest);
     };
-  }, [conversationId, markRead]);
+  }, [conversationId]);
+
+  /** A typing frame that stops arriving must not leave the dots up: they expire on their own. */
+  const showPeerTyping = useCallback((on: boolean) => {
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    typingTimer.current = null;
+    setPeerTyping(on);
+    if (on) typingTimer.current = setTimeout(() => setPeerTyping(false), TYPING_PEER_TTL_MS);
+  }, []);
+
+  useEffect(() => {
+    // The socket dropping means whatever was said about typing can no longer be trusted.
+    const stop = onStompDisconnect(() => showPeerTyping(false));
+    return () => {
+      stop();
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+    };
+  }, [conversationId, showPeerTyping]);
 
   useEffect(
     () =>
@@ -169,9 +245,10 @@ export function useChatThread(
         const message = parseMessageFrame(body);
         if (!message) return;
         setMessages((current) => mergeIn(current, [message]));
-        if (message.senderId !== me) markRead();
+        // They sent it, so they are not typing it any more.
+        if (message.senderId !== me) showPeerTyping(false);
       }),
-    [conversationId, me, markRead, mergeIn],
+    [conversationId, me, mergeIn, showPeerTyping],
   );
 
   /**
@@ -186,15 +263,19 @@ export function useChatThread(
         if (!event || event.conversationId !== conversationId) return;
         if (event.type === "MESSAGE") {
           setMessages((current) => mergeIn(current, [event.message]));
-          if (event.message.senderId !== me) markRead();
+          if (event.message.senderId !== me) showPeerTyping(false);
         } else if (event.type === "MESSAGE_UPDATED") {
           setMessages((current) => applyUpdate(current, event.update));
+        } else if (event.type === "RECEIPT") {
+          if (event.receipt.userId !== me) setReceipt((current) => mergeReceipt(current, event.receipt));
+        } else if (event.type === "TYPING") {
+          if (event.userId !== me) showPeerTyping(event.typing);
         } else if (event.type === "MESSAGE_HIDDEN") {
           hidden.current.add(event.messageId);
           setMessages((current) => removeMessage(current, event.messageId));
         }
       }),
-    [conversationId, me, markRead, mergeIn],
+    [conversationId, me, mergeIn, showPeerTyping],
   );
 
   const loadOlder = useCallback(() => {
@@ -272,5 +353,19 @@ export function useChatThread(
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
-  return { messages, status, hasMore, loadingOlder, loadOlder, retry, markRead, send, react, recall, hide };
+  return {
+    messages,
+    status,
+    hasMore,
+    loadingOlder,
+    loadOlder,
+    retry,
+    receipt,
+    peerTyping,
+    markSeen,
+    send,
+    react,
+    recall,
+    hide,
+  };
 }

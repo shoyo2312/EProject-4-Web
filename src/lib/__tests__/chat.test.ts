@@ -18,6 +18,13 @@ import {
   retryAvailableAfter,
   mergeMessages,
   otherParticipantId,
+  comparePosition,
+  formatSeenAgo,
+  keepNewerBlock,
+  mergeReceipt,
+  messageStatus,
+  statusTargets,
+  sharedVideoIds,
 } from "../chat";
 
 function msg(id: string, senderId: string, sentAt: string, conversationId = "c1"): MessageResponse {
@@ -43,6 +50,9 @@ function convo(id: string, lastMessageAt: string | null, hasUnread = false): Con
     muteMode: "NONE",
     mutedUntil: null,
     inboxHidden: false,
+    blockedByViewer: false,
+    messagingBlocked: false,
+    blockVersion: 0,
   };
 }
 
@@ -257,5 +267,213 @@ describe("sticker previews", () => {
     const merged = mergeMessages(mergeMessages([], [sticker]), [{ ...sticker }]);
     expect(merged).toHaveLength(1);
     expect(merged[0].type).toBe("STICKER");
+  });
+});
+
+describe("keepNewerBlock", () => {
+  const at = (version: number, blocked: boolean) =>
+    ({ ...convo("c1", "2026-10-24T08:00:00.000Z", false), blockedByViewer: blocked, messagingBlocked: blocked, blockVersion: version }) as ConversationResponse;
+
+  it("keeps the newer block state when an older answer arrives late", () => {
+    const merged = keepNewerBlock(at(7, true), at(6, false));
+    expect(merged.blockedByViewer).toBe(true);
+    expect(merged.blockVersion).toBe(7);
+  });
+
+  it("takes a newer or equal answer, and anything when nothing is known", () => {
+    expect(keepNewerBlock(at(7, true), at(8, false)).blockedByViewer).toBe(false);
+    expect(keepNewerBlock(at(7, true), at(7, false)).blockedByViewer).toBe(false);
+    expect(keepNewerBlock(undefined, at(1, true)).blockedByViewer).toBe(true);
+  });
+
+  it("placeConversation does not let a stale event undo a newer block", () => {
+    const lists = { inbox: [at(9, true)], requests: [] };
+    const placed = placeConversation(lists, at(8, false), "1");
+    expect(placed.inbox[0].blockedByViewer).toBe(true);
+  });
+});
+
+describe("sharedVideoIds", () => {
+  const video = (id: string, minute: number, videoId: string, over: Partial<MessageResponse> = {}): MessageResponse =>
+    ({
+      id,
+      conversationId: "c",
+      senderId: "2",
+      type: "VIDEO",
+      content: null,
+      sentAt: new Date(Date.UTC(2026, 9, 28, 8, minute)).toISOString(),
+      recalledAt: null,
+      video: { videoId, state: "AVAILABLE", ownerId: null, thumbnailUrl: null, title: null, durationSeconds: null },
+      ...over,
+    }) as MessageResponse;
+
+  it("lists the shares oldest first whichever order they are given in", () => {
+    const shares = [video("m3", 30, "v3"), video("m1", 10, "v1"), video("m2", 20, "v2")];
+    expect(sharedVideoIds(shares)).toEqual(["v1", "v2", "v3"]);
+    expect(sharedVideoIds([...shares].reverse())).toEqual(["v1", "v2", "v3"]);
+  });
+
+  it("ignores text, recalled shares and videos that cannot be opened", () => {
+    const list = [
+      video("a", 1, "v1"),
+      { ...video("b", 2, "x"), type: "TEXT", video: null } as MessageResponse,
+      video("c", 3, "v3", { recalledAt: "2026-10-28T09:00:00.000Z" }),
+      video("d", 4, "v4", { video: { videoId: "v4", state: "UNKNOWN", ownerId: null, thumbnailUrl: null, title: null, durationSeconds: null } }),
+    ];
+    expect(sharedVideoIds(list)).toEqual(["v1"]);
+  });
+
+  it("keeps the first share of a video shared twice, and is empty with none", () => {
+    expect(sharedVideoIds([video("a", 1, "v1"), video("b", 2, "v2"), video("c", 3, "v1")])).toEqual(["v1", "v2"]);
+    expect(sharedVideoIds([])).toEqual([]);
+  });
+});
+
+describe("message status", () => {
+  const T = Date.UTC(2026, 9, 28, 8, 0, 0);
+  const sec = (s: number) => new Date(T + s * 1000).toISOString();
+  const m = (id: string, s: number, senderId = "1", recalledAt: string | null = null) =>
+    ({ id, senderId, sentAt: sec(s), recalledAt }) as MessageResponse;
+  const mark = (messageId: string, s: number, at = 100) => ({ messageId, sentAt: sec(s), at: sec(at) });
+  const receipt = (delivered: ReturnType<typeof mark> | null, read: ReturnType<typeof mark> | null = null) => ({
+    userId: "2",
+    delivered,
+    read,
+  });
+
+  describe("comparePosition", () => {
+    it("orders by time, then by id for messages sent in the same moment", () => {
+      expect(comparePosition(mark("5", 1), mark("5", 2))).toBeLessThan(0);
+      expect(comparePosition(mark("200", 1), mark("100", 1))).toBeGreaterThan(0);
+      expect(comparePosition(mark("100", 1), mark("100", 1))).toBe(0);
+    });
+
+    it("compares 18-digit ids as numbers without ever turning them into one", () => {
+      const a = mark("372385859884797952", 1);
+      const b = mark("372385859884797953", 1);
+      expect(comparePosition(a, b)).toBeLessThan(0);
+      expect(comparePosition(mark("99", 1), mark("100", 1))).toBeLessThan(0);
+    });
+  });
+
+  describe("messageStatus", () => {
+    it("is Sent until the other side reports, and when nothing is known of them", () => {
+      expect(messageStatus(m("m1", 1), null)).toBe("SENT");
+      expect(messageStatus(m("m1", 1), receipt(null))).toBe("SENT");
+    });
+
+    it("is decided by position: received once the delivered mark reaches it, seen once the read mark does", () => {
+      expect(messageStatus(m("m1", 1), receipt(mark("m1", 1)))).toBe("DELIVERED");
+      expect(messageStatus(m("m1", 1), receipt(mark("m2", 2)))).toBe("DELIVERED");
+      expect(messageStatus(m("m1", 1), receipt(mark("m2", 2), mark("m1", 1)))).toBe("SEEN");
+      expect(messageStatus(m("m1", 1), receipt(null, mark("m2", 2)))).toBe("SEEN");
+    });
+
+    it("a message sent after the mark is Sent, however recently the mark was recorded", () => {
+      // The mark names m1 and was recorded long after m2 was sent: m2 is not covered.
+      const r = receipt(mark("m1", 1, 500), mark("m1", 1, 500));
+      expect(messageStatus(m("m1", 1), r)).toBe("SEEN");
+      expect(messageStatus(m("m2", 2), r)).toBe("SENT");
+    });
+
+    it("tells two messages of the same moment apart by id", () => {
+      const r = receipt(mark("100", 5), mark("100", 5));
+      expect(messageStatus(m("100", 5), r)).toBe("SEEN");
+      expect(messageStatus(m("101", 5), r)).toBe("SENT");
+    });
+  });
+
+  describe("mergeReceipt", () => {
+    it("takes the later position of each mark, so nothing goes back", () => {
+      const merged = mergeReceipt(receipt(mark("m5", 5), mark("m5", 5)), receipt(mark("m2", 2), null));
+      expect(merged.delivered?.messageId).toBe("m5");
+      expect(merged.read?.messageId).toBe("m5");
+    });
+
+    it("a repeat of the same position keeps the time it was first recorded", () => {
+      const merged = mergeReceipt(receipt(mark("m5", 5, 100), mark("m5", 5, 100)), receipt(mark("m5", 5, 900), mark("m5", 5, 900)));
+      expect(merged.read?.at).toBe(sec(100));
+    });
+
+    it("seeing implies receiving: delivered is never left behind read", () => {
+      const merged = mergeReceipt(null, receipt(mark("m1", 1), mark("m3", 3)));
+      expect(merged.delivered?.messageId).toBe("m3");
+    });
+
+    it("a later position replaces it, with its own time", () => {
+      const merged = mergeReceipt(receipt(null, mark("m1", 1, 100)), receipt(null, mark("m3", 3, 300)));
+      expect(merged.read).toEqual(mark("m3", 3, 300));
+    });
+  });
+
+  describe("statusTargets", () => {
+    it("the newest seen message keeps Seen, and a newer one that is not seen says Sent", () => {
+      // Like the reference: "seen 13 minutes ago" under an earlier message, a newer one unseen.
+      const list = [m("a", 1), m("b", 2), m("c", 3)];
+      const t = statusTargets(list, "1", receipt(mark("b", 2), mark("b", 2)));
+      expect(t).toEqual({ seenId: "b", latestId: "c", latestStatus: "SENT" });
+    });
+
+    it("says Received on the newest when the other side has it but has not looked", () => {
+      const list = [m("a", 1), m("b", 2)];
+      expect(statusTargets(list, "1", receipt(mark("b", 2), mark("a", 1)))).toEqual({
+        seenId: "a",
+        latestId: "b",
+        latestStatus: "DELIVERED",
+      });
+    });
+
+    it("when the newest is the seen one there is a single label", () => {
+      const list = [m("a", 1), m("b", 2)];
+      expect(statusTargets(list, "1", receipt(mark("b", 2), mark("b", 2)))).toEqual({
+        seenId: "b",
+        latestId: null,
+        latestStatus: null,
+      });
+    });
+
+    it("the label moves to the newer message when the read mark advances", () => {
+      const list = [m("a", 1), m("b", 2), m("c", 3)];
+      expect(statusTargets(list, "1", receipt(mark("a", 1), mark("a", 1))).seenId).toBe("a");
+      expect(statusTargets(list, "1", receipt(mark("c", 3), mark("c", 3))).seenId).toBe("c");
+    });
+
+    it("skips the other side's messages and recalled ones, and settles on what still stands", () => {
+      const list = [m("a", 1), m("x", 2, "2"), m("b", 3, "1", sec(9))];
+      const t = statusTargets(list, "1", receipt(mark("b", 3), mark("b", 3)));
+      expect(t.seenId).toBe("a");
+      expect(t.latestId).toBeNull();
+    });
+
+    it("is empty when the viewer has sent nothing, whatever the order of the list", () => {
+      expect(statusTargets([m("x", 1, "2")], "1", null)).toEqual({ seenId: null, latestId: null, latestStatus: null });
+      const t = statusTargets([m("c", 3), m("a", 1)], "1", null);
+      expect(t.latestId).toBe("c");
+    });
+  });
+
+  describe("formatSeenAgo", () => {
+    const at = sec(0);
+    const after = (seconds: number) => Date.parse(at) + seconds * 1000;
+
+    it("is Seen just now for the first minute, then minutes, hours and days", () => {
+      expect(formatSeenAgo(at, after(0))).toBe("Seen just now");
+      expect(formatSeenAgo(at, after(59))).toBe("Seen just now");
+      expect(formatSeenAgo(at, after(60))).toBe("Seen 1 min ago");
+      expect(formatSeenAgo(at, after(13 * 60 + 5))).toBe("Seen 13 min ago");
+      expect(formatSeenAgo(at, after(3600))).toBe("Seen 1 hr ago");
+      expect(formatSeenAgo(at, after(5 * 3600))).toBe("Seen 5 hr ago");
+      expect(formatSeenAgo(at, after(2 * 86400 + 10))).toBe("Seen 2 d ago");
+    });
+
+    it("never invents a time: with none, or an unreadable one, it says only Seen", () => {
+      expect(formatSeenAgo(null, after(100))).toBe("Seen");
+      expect(formatSeenAgo(undefined, after(100))).toBe("Seen");
+      expect(formatSeenAgo("not a time", after(100))).toBe("Seen");
+    });
+
+    it("a clock a little behind the server's does not make a negative time", () => {
+      expect(formatSeenAgo(at, after(-30))).toBe("Seen just now");
+    });
   });
 });
