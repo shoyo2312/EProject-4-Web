@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 
 import { TopBar } from "@/components/layout/TopBar";
+import { ChatUnreadProvider } from "@/components/messages/ChatUnreadProvider";
+import { FloatingChat } from "@/components/messages/floating/FloatingChat";
 import { PlayerSettingsProvider } from "@/components/player/PlayerSettingsProvider";
 import { ScreenTimeGuard } from "@/components/screen-time/ScreenTimeGuard";
 import { SleepHoursScreen } from "@/components/screen-time/SleepHoursScreen";
@@ -70,13 +72,18 @@ export default function RootLayout({
               {/* Story rings, and the player a ring opens. Avatars on /video/[id] and on every
                   shell page ask it, so it sits above the routes. */}
               <StoriesProvider>
-                <div className="flex min-h-screen flex-col">
-                  <div className="flex h-screen justify-between bg-[var(--tt-page)]">
-                    {children}
-                  </div>
+                {/* One unread tally and one floating chat for every route, so a message counts, and
+                    the panel stays open, while the viewer moves between pages. */}
+                <ChatUnreadProvider>
+                  <div className="flex min-h-screen flex-col">
+                    <div className="flex h-screen justify-between bg-[var(--tt-page)]">
+                      {children}
+                    </div>
 
-                  <TopBar />
-                </div>
+                    <TopBar />
+                  </div>
+                  <FloatingChat />
+                </ChatUnreadProvider>
               </StoriesProvider>
             </PlayerSettingsProvider>
             <SleepHoursScreen />

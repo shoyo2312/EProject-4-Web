@@ -201,6 +201,78 @@
 }
 
 /*
+ * Chat. Surfaces step up from the page black in four layers — list, thread, raised (composer, notices,
+ * quotes), pop (menus, picker, dialogs) — so what sits above what is read from brightness and a hairline,
+ * not from heavy borders. Text stays on the --tt-text scale. Corners come from four steps (tight within a
+ * group of bubbles, control, bubble, surface) plus full-round, so no component invents its own.
+ *
+ * --chat-own is the brand red taken a step deeper: white 15px text on --tt-red is 3.7:1, on this 4.7:1.
+ */
+:root {
+  --chat-list: #0b0b0c;
+  --chat-thread: #050506;
+  --chat-raised: #151518;
+  --chat-pop: #1c1c20;
+  --chat-recv: #1d1d21;
+  --chat-own: #e11d48;
+  --chat-own-pressed: #be123c;
+  --chat-hover: rgb(255 255 255 / 0.05);
+  --chat-active: rgb(255 255 255 / 0.08);
+  --chat-line: rgb(255 255 255 / 0.08);
+  --chat-line-strong: rgb(255 255 255 / 0.16);
+  --chat-meta: rgb(255 255 255 / 0.58);
+  --chat-radius-tight: 6px;
+  --chat-radius-control: 12px;
+  --chat-radius-bubble: 20px;
+  --chat-radius-surface: 24px;
+  --chat-shadow-pop: 0 0 0 1px rgb(255 255 255 / 0.07), 0 12px 32px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.4);
+  --chat-shadow-soft: 0 0 0 1px rgb(255 255 255 / 0.06), 0 6px 18px rgb(0 0 0 / 0.4);
+}
+
+.high-contrast {
+  --chat-recv: #2a2a30;
+  --chat-raised: #202025;
+  --chat-pop: #26262c;
+  --chat-line: rgb(255 255 255 / 0.28);
+  --chat-line-strong: rgb(255 255 255 / 0.4);
+  --chat-meta: rgb(255 255 255 / 0.85);
+  --chat-hover: rgb(255 255 255 / 0.1);
+  --chat-active: rgb(255 255 255 / 0.16);
+}
+
+/* A message that arrives while the thread is open eases in once; no motion under reduced motion. */
+@theme {
+  --animate-chat-in: chat-in 200ms ease-out both;
+  @keyframes chat-in {
+    from {
+      opacity: 0;
+      transform: translateY(5px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* The typing dots: each rises a few pixels and brightens in turn, then settles. Still under reduced motion. */
+@theme {
+  --animate-chat-typing: chat-typing 1.3s ease-in-out infinite;
+  @keyframes chat-typing {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-3px);
+      opacity: 1;
+    }
+  }
+}
+
+/*
  * Accessibility -> "Increase color contrast", written on <html> by
  * `HighContrastSync`.
  *

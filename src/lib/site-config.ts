@@ -43,8 +43,7 @@ export const SIGNUP_OPTIONS: LoginOption[] = [
 
 /**
  * Sidebar navigation — order, labels and hrefs are taken verbatim from the live
- * site's `.DivMainNavContainer` (10 children, in order). "Messages", "Activity"
- * and "More" render as buttons, not links. Profile has no href of its own:
+ * site's `.DivMainNavContainer` (10 children, in order). "Activity" and "More" render as buttons, not links ("Messages" is a link: it has a page). Profile has no href of its own:
  * `SideNav` points it at the signed-in viewer, and a guest gets the login modal.
  */
 export const NAV_ITEMS: NavItem[] = [
@@ -52,7 +51,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Explore", kind: "link", href: "/explore" },
   { label: "Following", kind: "link", href: "/following" },
   { label: "Friends", kind: "link", href: "/friends", authOnly: true },
-  { label: "Messages", kind: "button", authOnly: true },
+  { label: "Messages", kind: "link", href: "/messages", authOnly: true },
   { label: "Activity", kind: "button", authOnly: true },
   { label: "Upload", kind: "link", href: "/nowastudio/upload" },
   { label: "Profile", kind: "link" },

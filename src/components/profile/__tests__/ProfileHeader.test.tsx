@@ -5,6 +5,7 @@ import type { ComponentProps } from "react";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import type { UserProfile } from "@/types/tiktok";
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/components/stories/ProfileStoryAvatar", () => ({
   ProfileStoryAvatar: () => null,
 }));

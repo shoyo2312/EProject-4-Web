@@ -15,6 +15,7 @@ import { FollowingAccounts } from "@/components/layout/side-nav/FollowingAccount
 import { NavRow } from "@/components/layout/side-nav/NavRow";
 import { SearchField } from "@/components/layout/side-nav/SearchField";
 import { SidebarFooter } from "@/components/layout/side-nav/SidebarFooter";
+import { useChatUnreadContext } from "@/components/messages/ChatUnreadProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useFollowingAccounts } from "@/hooks/use-following-accounts";
@@ -59,6 +60,7 @@ export function SideNav({
   navItems: NavItem[];
   footerSections: FooterSection[];
 }) {
+  const chatUnread = useChatUnreadContext();
   const [activityOpen, setActivityOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -143,6 +145,11 @@ export function SideNav({
       // Zero drops the badge entirely rather than painting a "0".
       if (item.label === "Activity") {
         return { ...item, badgeCount: inbox.unreadCount || undefined };
+      }
+      if (item.label === "Messages") {
+        return { ...item, // Unread messages in the inbox plus message requests nobody has opened: two counters
+        // kept apart, added only here so a request is noticed from any page.
+        badgeCount: chatUnread.total + chatUnread.requestSummary.unread || undefined };
       }
       return item;
     });
@@ -313,7 +320,10 @@ export function SideNav({
               avatarUrl={user?.avatarUrl ?? DEFAULT_AVATAR}
               collapsed={narrow}
               iconOnly={iconOnly}
-              active={item.href === pathname}
+              active={
+                item.href === pathname ||
+                (item.href === "/messages" && pathname.startsWith("/messages/"))
+              }
               selected={
                 (item.label === "Activity" && activityOpen) ||
                 (item.label === "More" && moreOpen)

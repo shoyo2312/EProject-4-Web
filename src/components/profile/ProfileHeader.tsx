@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import {
@@ -13,7 +14,10 @@ import {
 import { ProfileMoreMenu } from "@/components/profile/ProfileMoreMenu";
 import { SUGGESTED_ACCOUNTS_PANEL_ID } from "@/components/profile/SuggestedAccountsPanel";
 import { ProfileStoryAvatar } from "@/components/stories/ProfileStoryAvatar";
+import { toast } from "@/components/ui/toast";
 import { displayHandle } from "@/lib/api/adapters";
+import { openConversation } from "@/lib/api/conversations";
+import { chatErrorMessage } from "@/lib/chat";
 import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { FollowStatus, UserProfile } from "@/types/tiktok";
@@ -73,6 +77,22 @@ export function ProfileHeader({
       : "NONE";
   const [status, setStatus] = useState(fromServer);
   const [followPending, setFollowPending] = useState(false);
+  const [messagePending, setMessagePending] = useState(false);
+  const router = useRouter();
+
+  /** Get-or-create the thread, then land in it; refusals (blocked, DMs off) surface as a toast. */
+  const openMessages = async () => {
+    if (!requireSignIn() || messagePending) return;
+    setMessagePending(true);
+    try {
+      const conversation = await openConversation(profile.author.userId);
+      router.push(`/messages/${conversation.id}`);
+    } catch (error) {
+      toast.error(chatErrorMessage(error));
+    } finally {
+      setMessagePending(false);
+    }
+  };
 
   /**
    * The button owns its state so a click responds instantly, but the server's
@@ -175,7 +195,7 @@ export function ProfileHeader({
               <PillButton primary={status === "NONE"} onClick={toggleFollow}>
                 {status === "FOLLOWING" ? "Following" : status === "REQUESTED" ? "Requested" : "Follow"}
               </PillButton>
-              <PillButton onClick={requireSignIn}>Message</PillButton>
+              <PillButton onClick={openMessages}>Message</PillButton>
               <IconButton
                 label="Suggested accounts"
                 expanded={suggestedOpen}

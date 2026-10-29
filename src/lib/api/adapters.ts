@@ -39,14 +39,15 @@ export function isBackendHandle(handle: string): boolean {
 }
 
 /**
- * True when a video id is shaped like video-service's: a 19-digit Snowflake.
- * Anything else ("1", "x7") cannot be a video, so it 404s without a request.
- * Length matters — any run of digits, as `isBackendHandle` takes it, would let
- * "1" through to the backend — and it is tested as a string: parsing a
+ * True when a video id is shaped like video-service's: a Snowflake, or one of
+ * the short numeric ids the seed data (`scripts/seed/mongo.js`: 2001…) gives
+ * its videos. Anything else ("1", "x7") cannot be a video, so it 404s without a
+ * request. Length matters — any run of digits, as `isBackendHandle` takes it,
+ * would let "1" through to the backend — and it is tested as a string: parsing a
  * Snowflake into a JS number loses precision silently.
  */
 export function isBackendVideoId(id: string): boolean {
-  return /^\d{15,}$/.test(id);
+  return /^\d{4,}$/.test(id);
 }
 
 /**
