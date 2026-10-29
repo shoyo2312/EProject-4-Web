@@ -49,6 +49,17 @@ const LOCAL_MEDIA_ORIGIN = ["localhost", "127.0.0.1", "0.0.0.0", "[::1]"].includ
   MEDIA_ORIGIN.hostname,
 );
 
+/**
+ * Where the dev seed (`scripts/seed` in the backend) points its avatars and video posters. They are
+ * third-party placeholder hosts, so they are allowed for `next dev` and local builds only; a real
+ * deployment serves media from the CDN and must not let the optimizer fetch from them. Set
+ * `ALLOW_SEED_MEDIA=true` to keep them in a production build that runs against seed data.
+ */
+const SEED_MEDIA_HOSTS =
+  process.env.NODE_ENV !== "production" || process.env.ALLOW_SEED_MEDIA === "true"
+    ? ["i.pravatar.cc", "picsum.photos"]
+    : [];
+
 const nextConfig: NextConfig = {
   output: "standalone",
 
@@ -60,7 +71,7 @@ const nextConfig: NextConfig = {
         hostname: MEDIA_ORIGIN.hostname,
         port: MEDIA_ORIGIN.port,
       },
-      ...PROVIDER_AVATAR_HOSTS.map((hostname) => ({
+      ...[...PROVIDER_AVATAR_HOSTS, ...SEED_MEDIA_HOSTS].map((hostname) => ({
         protocol: "https" as const,
         hostname,
       })),
