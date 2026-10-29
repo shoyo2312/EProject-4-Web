@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { useDismiss } from "@/hooks/use-dismiss";
 import { cn } from "@/lib/utils";
@@ -23,7 +23,8 @@ const OPTION_HEIGHT = 32;
  *
  * Measured live: menu #252525 with a 1px `rgba(255,255,255,.12)` border and a
  * 4px radius; columns 72 × 224 with 96px of padding at either end, so the
- * first and last options can reach the band; options 64 × 32, 14/21.
+ * first and last options can reach the band; options 64 × 32, 14/21. A column
+ * snaps to its options, and the one it comes to rest on is picked.
  */
 export function PickerField({
   label,
@@ -88,8 +89,16 @@ export function PickerField({
   );
 }
 
+/** How long a column must sit still before its band is read, where `scrollend` is missing. */
+const SETTLE_MS = 150;
+
 function Column({ column }: { column: PickerColumn }) {
   const ref = useRef<HTMLDivElement>(null);
+  /** Read by the scroll listener, which outlives any one render. */
+  const latest = useRef(column);
+  useEffect(() => {
+    latest.current = column;
+  }, [column]);
 
   // On opening and after each pick, the choice scrolls into the middle band.
   useLayoutEffect(() => {
@@ -98,12 +107,41 @@ function Column({ column }: { column: PickerColumn }) {
     }
   }, [column.selected]);
 
+  // Scrolling the column is picking, as on the live ScrollInput: it snaps an
+  // option into the band, and once it comes to rest that option is the choice.
+  // Read on `scrollend` where the browser has it, and once `scroll` goes quiet
+  // everywhere (Safari). Without this the wheel just slid the options past a
+  // red one that stayed wherever it was, and the three columns drifted out of
+  // line.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let timer = 0;
+    const settle = () => {
+      window.clearTimeout(timer);
+      const { options, selected, onSelect } = latest.current;
+      const index = Math.round(el.scrollTop / OPTION_HEIGHT);
+      if (index !== selected && index >= 0 && index < options.length) onSelect(index);
+    };
+    const onScroll = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(settle, SETTLE_MS);
+    };
+    el.addEventListener("scroll", onScroll);
+    el.addEventListener("scrollend", settle);
+    return () => {
+      window.clearTimeout(timer);
+      el.removeEventListener("scroll", onScroll);
+      el.removeEventListener("scrollend", settle);
+    };
+  }, []);
+
   return (
     <div
       ref={ref}
       role="listbox"
       aria-label={column.label}
-      className="no-scrollbar h-56 w-[72px] overflow-y-auto py-24"
+      className="no-scrollbar h-56 w-[72px] snap-y snap-mandatory overflow-y-auto py-24"
     >
       {column.options.map((option, index) => {
         const chosen = index === column.selected;
@@ -115,7 +153,7 @@ function Column({ column }: { column: PickerColumn }) {
             aria-selected={chosen}
             onClick={() => column.onSelect(index)}
             className={cn(
-              "mx-1 block h-8 w-16 text-center text-[14px] leading-8",
+              "mx-1 block h-8 w-16 snap-center text-center text-[14px] leading-8",
               chosen
                 ? "bg-[#121212] font-bold text-[#ff3b5c]"
                 : "text-[rgb(255_255_255/0.9)] hover:bg-white/[0.04]",
