@@ -88,8 +88,11 @@ export function ExploreGrid({
   return (
     <main className="h-screen flex-1 overflow-y-auto px-6 pb-12 tt-1024:px-4">
       {/* `.DivCategoryListWrapper` — sticky so the taxonomy stays reachable
-          while the grid scrolls, which is how the live bar behaves. */}
-      <div className="sticky top-0 z-10 flex h-[86px] items-center gap-2 bg-[var(--tt-page)] pt-6 pb-5">
+          while the grid scrolls, which is how the live bar behaves. The right
+          padding is the live page's `DivCategorySpacer`: the bar shares its row
+          with the fixed TopBar (avatar or the 76px Log in pill, 24px from the
+          edge), so the list and its chevron stop short of that corner. */}
+      <div className="sticky top-0 z-10 flex h-[86px] items-center gap-2 bg-[var(--tt-page)] pt-6 pr-28 pb-5">
         <ChevronButton label="Scroll categories left" onClick={() => scrollBy(-1)} />
 
         <div
