@@ -91,12 +91,11 @@ describe("conversation menu", () => {
     expect(screen.getByRole("menu")).toBeTruthy();
   });
 
-  it("offers mute, pin, block and delete — and no report", () => {
+  it("offers mute, pin, report, block and delete, with Report between Pin and Block", () => {
     mount();
     openMenu();
     const labels = screen.getAllByRole("menuitem").map((item) => item.textContent);
-    expect(labels).toEqual(["Mute notifications", "Pin to top", "Block", "Delete"]);
-    expect(screen.queryByText(/report/i)).toBeNull();
+    expect(labels).toEqual(["Mute notifications", "Pin to top", "Report", "Block", "Delete"]);
   });
 
   it("is not on a row that did not ask for it (the request box)", () => {
@@ -200,6 +199,7 @@ describe("mute", () => {
       "Unmute notifications",
       "Change mute duration",
       "Pin to top",
+      "Report",
       "Block",
       "Delete",
     ]);
@@ -331,6 +331,20 @@ describe("delete", () => {
   });
 });
 
+describe("report from the menu", () => {
+  it("closes the menu and opens the reason step for this conversation without calling the API", () => {
+    mount();
+    openMenu();
+    act(() => choose("Report"));
+    expect(screen.queryByRole("menu")).toBeNull();
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("heading").textContent).toBe("Report");
+    expect(within(dialog).getByText(/Why are you reporting Alice\?/)).toBeTruthy();
+    expect((within(dialog).getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(block).not.toHaveBeenCalled();
+  });
+});
+
 describe("unblock from the menu", () => {
   it("offers Unblock instead of Block for an account the viewer blocked", () => {
     chat.blockedUsers = new Set(["2"]);
@@ -339,6 +353,7 @@ describe("unblock from the menu", () => {
     expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
       "Mute notifications",
       "Pin to top",
+      "Report",
       "Unblock",
       "Delete",
     ]);
