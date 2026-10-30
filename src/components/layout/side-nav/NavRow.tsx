@@ -55,7 +55,7 @@ export function NavRow({
   /** The row whose href matches the current route. */
   active?: boolean;
   selected?: boolean;
-  onClick?: () => void;
+  onClick?: (event: React.MouseEvent) => void;
 }) {
   const Icon = ICONS[item.label];
 
@@ -123,6 +123,7 @@ export function NavRow({
       <Link
         href={item.href}
         aria-label={iconOnly ? item.label : undefined}
+        onClick={onClick}
         className={cn(collapsed ? "w-10" : "w-full")}
       >
         {inner}

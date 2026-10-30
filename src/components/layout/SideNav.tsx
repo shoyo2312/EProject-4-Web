@@ -15,6 +15,7 @@ import { FollowingAccounts } from "@/components/layout/side-nav/FollowingAccount
 import { NavRow } from "@/components/layout/side-nav/NavRow";
 import { SearchField } from "@/components/layout/side-nav/SearchField";
 import { SidebarFooter } from "@/components/layout/side-nav/SidebarFooter";
+import { useMessagesPanel } from "@/components/messages/panel/MessagesPanelProvider";
 import { useChatUnreadContext } from "@/components/messages/ChatUnreadProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -61,6 +62,9 @@ export function SideNav({
   footerSections: FooterSection[];
 }) {
   const chatUnread = useChatUnreadContext();
+  const panel = useMessagesPanel();
+  const panelOpen = panel.mode !== "closed";
+  const { close: closePanel } = panel;
   const [activityOpen, setActivityOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -86,7 +90,9 @@ export function SideNav({
   // the header read it exactly as they read an open drawer — icons only — but
   // unlike a drawer it keeps the rows on screen, so the rail gets the 1024px
   // breakpoint's look rather than the drawer's.
-  const { sideNavCollapsed } = useLocalSettings();
+  const { sideNavCollapsed: sideNavToggled } = useLocalSettings();
+  // The Messages panel folds the rail the same way the toggle does, and for as long as it is open.
+  const sideNavCollapsed = sideNavToggled || panelOpen;
   // Set for as long as the toggle's width transition runs, and only for that:
   // a drawer snaps the rail, as on the live site, so the transition class
   // cannot stay on. While collapsing, the full layout is held until the rail
@@ -107,6 +113,18 @@ export function SideNav({
     return () => query.removeEventListener("change", sync);
   }, []);
   const iconOnly = narrow || railBelow;
+
+  // The panel opens and closes from outside this component too (its own buttons), so the rail's
+  // width transition is started by watching the state, not by the click.
+  const [seenPanelOpen, setSeenPanelOpen] = useState(panelOpen);
+  if (seenPanelOpen !== panelOpen) {
+    setSeenPanelOpen(panelOpen);
+    if (!sideNavToggled && !railBelow) setRailMotion(panelOpen ? "collapsing" : "expanding");
+  }
+  // A drawer and the panel take the same slot beside the rail.
+  useEffect(() => {
+    if (collapsed) closePanel();
+  }, [collapsed, closePanel]);
   // The highlighted row follows the URL, so every new route lights itself up
   // without touching the nav data.
   const pathname = usePathname();
@@ -211,22 +229,22 @@ export function SideNav({
           so it rides the edge across the width transition instead of jumping.
           Gone below 1024px, where the rail stays icon-only whatever this says,
           and while a drawer holds the rail narrow on its own. */}
-      <Tooltip label={sideNavCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+      <Tooltip label={sideNavToggled ? "Expand sidebar" : "Collapse sidebar"}>
         <button
           type="button"
           onClick={() => {
-            setRailMotion(sideNavCollapsed ? "expanding" : "collapsing");
-            setSideNavCollapsed(!sideNavCollapsed);
+            setRailMotion(sideNavToggled ? "expanding" : "collapsing");
+            setSideNavCollapsed(!sideNavToggled);
           }}
-          aria-label={sideNavCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-expanded={!sideNavCollapsed}
+          aria-label={sideNavToggled ? "Expand sidebar" : "Collapse sidebar"}
+          aria-expanded={!sideNavToggled}
           className={cn(
             "absolute top-1 right-4 z-[5] opacity-40 flex h-10 w-10 items-center justify-center rounded-[6px]",
             "text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-field)] tt-1024:hidden",
-            collapsed && "hidden",
+            (collapsed || panelOpen) && "hidden",
           )}
         >
-          {sideNavCollapsed ? (
+          {sideNavToggled ? (
             <PanelLeftOpen className="h-6 w-6" />
           ) : (
             <PanelLeftClose className="h-6 w-6" />
@@ -322,14 +340,26 @@ export function SideNav({
               iconOnly={iconOnly}
               active={
                 item.href === pathname ||
-                (item.href === "/messages" && pathname.startsWith("/messages/"))
+                (item.href === "/messages" && pathname.startsWith("/messages/")) ||
+                (item.label === "Messages" && panelOpen)
               }
               selected={
                 (item.label === "Activity" && activityOpen) ||
                 (item.label === "More" && moreOpen)
               }
               onClick={
-                item.label === "Activity"
+                item.label === "Messages"
+                  ? (event) => {
+                      if (!panel.available || pathname.startsWith("/messages")) return;
+                      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                      event.preventDefault();
+                      setActivityOpen(false);
+                      setSearchOpen(false);
+                      setMoreOpen(false);
+                      setFollowingOpen(false);
+                      panel.toggle();
+                    }
+                  : item.label === "Activity"
                   ? () => {
                       setSearchOpen(false);
                       setMoreOpen(false);
