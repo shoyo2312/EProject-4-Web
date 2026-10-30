@@ -5,6 +5,8 @@ import { StoryBar, StoryTray } from "@/components/stories/StoryTray";
 import { toast } from "@/components/ui/toast";
 import type { StoryGroup, StoryResponse, StoryStatus } from "@/lib/api/types";
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("@/lib/api/conversations", () => ({ sendStoryReply: vi.fn() }));
 vi.mock("@/components/session/SessionProvider", () => ({
   useSession: () => ({ user: { userId: "1", avatarUrl: "/me.png" } }),
 }));

@@ -10,6 +10,8 @@ import { RING_TTL_MS } from "@/lib/stories/ring-store";
 import type { Author } from "@/types/tiktok";
 
 const session: { user: { userId: string } | null; loading: boolean } = { user: { userId: "1" }, loading: false };
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("@/lib/api/conversations", () => ({ sendStoryReply: vi.fn() }));
 vi.mock("@/components/session/SessionProvider", () => ({
   useSession: () => ({ user: session.user, isLoading: session.loading }),
 }));

@@ -2,9 +2,11 @@
 
 import { ChevronLeft, ChevronRight, Pause, Play, Volume2, VolumeX, X } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { useMessagesPanel } from "@/components/messages/panel/MessagesPanelProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
 import { useEscapeKey } from "@/hooks/use-escape-key";
@@ -22,6 +24,7 @@ import { ReactionBar } from "./ReactionBar";
 import { useStories } from "./StoriesProvider";
 import { StoryOwnerMenu } from "./StoryOwnerMenu";
 import { StoryOwnerPanel } from "./StoryOwnerPanel";
+import { StoryReplyBar } from "./StoryReplyBar";
 
 /** Where an arrow key moves the caret or the choice, not the story. */
 const TYPING = "input, textarea, select";
@@ -75,6 +78,12 @@ export function StoryViewer({
   const [busyStory, setBusyStory] = useState<string | null>(null);
   const [menuStory, setMenuStory] = useState<string | null>(null);
   const [hidden, setHidden] = useState(false);
+  // The story whose reply field is focused, holds text or is sending; stepping away releases it.
+  // The text itself is kept by story id, so it is back when the viewer returns and never moves to another story.
+  const [composingStory, setComposingStory] = useState<string | null>(null);
+  const drafts = useRef(new Map<string, string>());
+  const router = useRouter();
+  const messagesPanel = useMessagesPanel();
   // The viewer's own pause: sticky from the button or Space, momentary while the pointer is held.
   const [userPaused, setUserPaused] = useState(false);
   const holdTimer = useRef<number | null>(null);
@@ -142,6 +151,7 @@ export function StoryViewer({
   const paused =
     (busyStory !== null && busyStory === storyId) ||
     (menuStory !== null && menuStory === storyId) ||
+    (composingStory !== null && composingStory === storyId) ||
     hidden || held || userPaused || closing;
 
   // Through a ref: a parent's inline `onClose` would otherwise restart the clock on every render.
@@ -324,7 +334,7 @@ export function StoryViewer({
       data-story-viewer=""
       inert={closing || undefined}
       tabIndex={-1}
-      className={`fixed inset-0 z-[3001] flex items-center justify-center bg-black outline-none transition-opacity duration-300 ease-out starting:opacity-0 ${closing ? "opacity-0" : ""}`}
+      className={`fixed inset-0 z-[3001] flex items-center justify-center bg-black/85 backdrop-blur-md outline-none transition-opacity duration-300 ease-out starting:opacity-0 ${closing ? "opacity-0" : ""}`}
     >
       <button type="button" onClick={onClose} aria-label="Close"
         className="absolute top-4 right-4 z-20 rounded-full p-2 text-white hover:bg-white/10">
@@ -436,25 +446,60 @@ export function StoryViewer({
           </button>
 
           {story.caption && (
-            <p className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pt-10 text-[15px] leading-5 break-words text-white transition-opacity duration-200 ${own ? "pb-5" : "pb-16"} ${userPaused ? "opacity-40" : ""}`}>
+            <p className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/70 to-transparent px-4 pt-10 text-[15px] leading-5 break-words text-white transition-opacity duration-200 ${own ? "pb-5" : "pb-36"} ${userPaused ? "opacity-40" : ""}`}>
               {story.caption}
             </p>
           )}
 
           {!own && (
             // The band takes no taps of its own: left and right of the pill still step the story.
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center pb-4">
-              <ReactionBar
-                value={myReaction}
-                onChange={(next) => react(story.id, story.myReaction, next)}
-                signedIn={user !== null}
-                onRequireLogin={() => {
-                  // The sign-in sheet opens over the player; the story waits for it.
-                  setUserPaused(true);
-                  openLogin();
-                }}
+            <>
+              <div
+                aria-hidden
+                className={`pointer-events-none absolute inset-0 z-[5] bg-black/45 transition-opacity duration-200 motion-reduce:transition-none ${composingStory === story.id ? "opacity-100" : "opacity-0"}`}
               />
-            </div>
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 px-3 pb-3">
+                <div
+                  className={`pointer-events-none transition-opacity duration-200 motion-reduce:transition-none ${composingStory === story.id ? "opacity-0" : ""}`}
+                  aria-hidden={composingStory === story.id || undefined}
+                  inert={composingStory === story.id || undefined}
+                >
+                  <ReactionBar
+                    value={myReaction}
+                    onChange={(next) => react(story.id, story.myReaction, next)}
+                    signedIn={user !== null}
+                    onRequireLogin={() => {
+                      // The sign-in sheet opens over the player; the story waits for it.
+                      setUserPaused(true);
+                      openLogin();
+                    }}
+                  />
+                </div>
+                <StoryReplyBar
+                  key={story.id}
+                  storyId={story.id}
+                  initialDraft={drafts.current.get(story.id) ?? ""}
+                  onDraftChange={(id, text) => {
+                    if (text) drafts.current.set(id, text);
+                    else drafts.current.delete(id);
+                  }}
+                  onActiveChange={(active) => setComposingStory(active ? story.id : null)}
+                  signedIn={user !== null}
+                  onRequireLogin={() => {
+                    setUserPaused(true);
+                    openLogin();
+                  }}
+                  onOpenChat={(conversationId) => {
+                    onClose();
+                    if (messagesPanel.available && document.getElementById("messages-panel")) {
+                      messagesPanel.go({ kind: "conversation", id: conversationId });
+                    } else {
+                      router.push(`/messages/${conversationId}`);
+                    }
+                  }}
+                />
+              </div>
+            </>
           )}
 
           {userPaused && (
