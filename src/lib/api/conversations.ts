@@ -36,7 +36,20 @@ export type MuteMode = "NONE" | "TIMED" | "INDEFINITE";
 export type MuteLength = "ONE_HOUR" | "EIGHT_HOURS" | "TWENTY_FOUR_HOURS" | "INDEFINITE";
 
 /** Emoji are not a type: they are characters inside a TEXT message's content. */
-export type MessageType = "TEXT" | "STICKER" | "VIDEO";
+export type MessageType = "TEXT" | "STICKER" | "VIDEO" | "STORY_REPLY";
+
+/**
+ * The story a STORY_REPLY answers, as the viewer may see it right now (read by the server on every
+ * load, `mediaUrl` presigned for this viewer). Anything but AVAILABLE carries the id and the state
+ * alone: the reply text stays, the story does not.
+ */
+export interface StoryCard {
+  storyId: string;
+  state: "AVAILABLE" | "UNAVAILABLE" | "UNKNOWN";
+  ownerId: string | null;
+  mediaType: "IMAGE" | "VIDEO" | null;
+  mediaUrl: string | null;
+}
 
 /**
  * A shared video as the viewer may see it right now, read by the server on every load — never a
@@ -169,6 +182,8 @@ export interface MessageResponse {
   sticker: StickerView | null;
   /** Present only on a video; `content` is then its optional note. */
   video?: VideoCard | null;
+  /** Present only on a story reply; `content` is then the reply text. */
+  story?: StoryCard | null;
   sentAt: string;
   replyToMessageId: string | null;
   replyTo: ReplyQuote | null;
@@ -262,6 +277,13 @@ type RawVideo = Omit<VideoCard, "ownerId" | "thumbnailUrl" | "title" | "duration
   title?: string | null;
   durationSeconds?: number | null;
 };
+type RawStory = {
+  storyId: string | number;
+  state: StoryCard["state"];
+  ownerId?: string | number | null;
+  mediaType?: StoryCard["mediaType"];
+  mediaUrl?: string | null;
+};
 type RawQuote = Omit<ReplyQuote, "senderId" | "video"> & {
   senderId?: string | number | null;
   video?: RawVideo | null;
@@ -278,6 +300,7 @@ type RawMessage = Omit<
   | "stickerId"
   | "sticker"
   | "video"
+  | "story"
   | "replyToMessageId"
   | "replyTo"
   | "recalledAt"
@@ -285,6 +308,7 @@ type RawMessage = Omit<
   | "revision"
 > & {
   video?: RawVideo | null;
+  story?: RawStory | null;
   senderId: string | number;
   replyToMessageId?: string | null;
   replyTo?: RawQuote | null;
@@ -348,6 +372,17 @@ function normalizeVideo(raw: RawVideo | null | undefined): VideoCard | null {
   };
 }
 
+function normalizeStory(raw: RawStory | null | undefined): StoryCard | null {
+  if (!raw) return null;
+  return {
+    storyId: String(raw.storyId),
+    state: raw.state,
+    ownerId: raw.ownerId == null ? null : String(raw.ownerId),
+    mediaType: raw.mediaType ?? null,
+    mediaUrl: raw.mediaUrl ?? null,
+  };
+}
+
 export function normalizeUpdate(raw: RawUpdate): MessageUpdate {
   return { ...raw, recalledAt: raw.recalledAt ?? null, reactions: normalizeReactions(raw.reactions) };
 }
@@ -361,6 +396,7 @@ export function normalizeMessage(raw: RawMessage): MessageResponse {
     stickerId: raw.stickerId ?? null,
     sticker: raw.sticker ?? null,
     video: normalizeVideo(raw.video),
+    story: normalizeStory(raw.story),
     replyToMessageId: raw.replyToMessageId ?? null,
     replyTo: normalizeQuote(raw.replyTo),
     recalledAt: raw.recalledAt ?? null,
@@ -512,6 +548,24 @@ export async function sendMessage(
   payload: SendPayload,
 ): Promise<MessageResponse> {
   const raw = await apiFetch<RawMessage>(`/conversations/${conversationId}/messages`, {
+    method: "POST",
+    body: payload,
+    auth: "required",
+  });
+  return normalizeMessage(raw);
+}
+
+/**
+ * Answers a story: the server finds the story's owner, opens (or reuses) the thread with them and
+ * stores one message holding the story and the text. Sending the same `clientRequestId` again
+ * returns that message instead of a second one.
+ */
+export async function sendStoryReply(payload: {
+  storyId: string;
+  content: string;
+  clientRequestId: string;
+}): Promise<MessageResponse> {
+  const raw = await apiFetch<RawMessage>("/conversations/story-replies", {
     method: "POST",
     body: payload,
     auth: "required",

@@ -9,6 +9,7 @@ import { MessageActions } from "@/components/messages/thread/MessageActions";
 import { ReactionBadges } from "@/components/messages/thread/ReactionBadges";
 import { ReplyQuoteBlock } from "@/components/messages/thread/ReplyQuoteBlock";
 import { StickerMessage } from "@/components/messages/thread/StickerMessage";
+import { StoryReplyMessage } from "@/components/messages/thread/StoryReplyMessage";
 import { VideoMessage } from "@/components/messages/thread/VideoMessage";
 import { useHoverCapable } from "@/hooks/use-hover-capable";
 import { useSharedNow } from "@/hooks/use-shared-now";
@@ -281,6 +282,13 @@ export function MessageList({
                     </div>
                   ) : item.message.type === "STICKER" ? (
                     <StickerMessage sticker={item.message.sticker} />
+                  ) : item.message.type === "STORY_REPLY" ? (
+                    <StoryReplyMessage
+                      story={item.message.story}
+                      mine={item.mine}
+                      text={item.message.content}
+                      bubbleClassName={bubble(item.mine, true, true)}
+                    />
                   ) : item.message.type === "VIDEO" ? (
                     <div className={cn("flex flex-col gap-1", item.mine ? "items-end" : "items-start")}>
                       <VideoMessage

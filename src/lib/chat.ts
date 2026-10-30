@@ -30,6 +30,9 @@ export function messagePreview(
   if (conversation.lastMessageRecalled) return mine ? "You recalled a message" : "Message recalled";
   if (conversation.lastMessageType === "STICKER") return mine ? "You sent a sticker" : "Sent a sticker";
   if (conversation.lastMessageType === "VIDEO") return mine ? "You shared a video" : "Shared a video";
+  if (conversation.lastMessageType === "STORY_REPLY") {
+    return mine ? "You replied to their story" : "Replied to your story";
+  }
   if (!conversation.lastMessageContent) return "No messages yet";
   return `${mine ? "You: " : ""}${conversation.lastMessageContent}`;
 }
@@ -316,6 +319,7 @@ export function canReplyTo(message: MessageResponse): boolean {
 export function quoteText(content: string | null, type: MessageResponse["type"] | null): string {
   if (type === "STICKER") return "Sticker";
   if (type === "VIDEO") return (content ?? "").trim() ? `Video · ${content?.trim()}` : "Video";
+  if (type === "STORY_REPLY") return (content ?? "").trim() ? `Story reply · ${content?.trim()}` : "Story reply";
   return (content ?? "").replace(/\s+/g, " ").trim();
 }
 
@@ -373,6 +377,7 @@ export function noticeBody(message: Pick<MessageResponse, "type" | "content" | "
   if (message.recalledAt) return "Sent a message";
   if (message.type === "STICKER") return "Sent a sticker";
   if (message.type === "VIDEO") return "Shared a video";
+  if (message.type === "STORY_REPLY") return "Replied to your story";
   const text = (message.content ?? "").replace(/\s+/g, " ").trim();
   return text.length > 120 ? `${text.slice(0, 119)}…` : text || "Sent a message";
 }

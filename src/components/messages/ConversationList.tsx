@@ -1,14 +1,15 @@
 "use client";
 
 import { BellOff, MessagesSquare, Pin } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 
 import { ChatAvatar } from "@/components/messages/ChatAvatar";
+import { MessagesLink } from "@/components/messages/MessagesLink";
+import { ConversationSearch } from "@/components/messages/ConversationSearch";
 import { ConversationMenu } from "@/components/messages/ConversationMenu";
 import { useChatUnreadContext } from "@/components/messages/ChatUnreadProvider";
 import { useSession } from "@/components/session/SessionProvider";
-import { MessagesIcon, SearchIcon } from "@/components/icons";
+import { MessagesIcon } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useHoverCapable } from "@/hooks/use-hover-capable";
 import type { ConversationResponse } from "@/lib/api/conversations";
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
 import type { Author } from "@/types/tiktok";
 
 /** Instagram Direct's rail: title, a search over the people already here, then one row per thread. */
-export function ConversationList({ openId }: { openId: string | null }) {
+export function ConversationList({ openId, inPanel = false }: { openId: string | null; inPanel?: boolean }) {
   const { user } = useSession();
   const { conversations: items, authors, status, reload, requestSummary } = useChatUnreadContext();
   const [query, setQuery] = useState("");
@@ -36,19 +37,9 @@ export function ConversationList({ openId }: { openId: string | null }) {
 
   return (
     <>
-      <header className="flex-none px-5 pt-16 pb-2 tt-768:pt-5">
+      <header className={cn("flex-none px-5 pb-2", inPanel ? "pt-5 pr-24" : "pt-16 tt-768:pt-5")}>
         <h1 className="text-[22px] leading-7 font-bold tracking-[-0.01em] text-[var(--tt-text)]">Messages</h1>
-        <label className="relative mt-3.5 flex h-10 items-center">
-          <SearchIcon className="pointer-events-none absolute left-3.5 h-4 w-4 text-[var(--tt-placeholder)]" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search"
-            aria-label="Search conversations"
-            className="h-10 w-full rounded-[var(--chat-radius-control)] bg-white/[0.06] pr-3 pl-10 text-[15px] text-[var(--tt-text)] transition-colors placeholder:text-[var(--tt-placeholder)] hover:bg-white/[0.08] focus-visible:bg-white/[0.09] focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-white/40"
-          />
-        </label>
+        <ConversationSearch value={query} onChange={setQuery} />
       </header>
 
       <nav aria-label="Conversations" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-4">
@@ -107,7 +98,7 @@ export function ConversationList({ openId }: { openId: string | null }) {
  */
 function MessageRequestsEntry({ pending, unread }: { pending: number; unread: number }) {
   return (
-    <Link
+    <MessagesLink
       href="/messages/requests"
       className="mb-1 flex items-center gap-3 rounded-[var(--chat-radius-control)] px-3 py-2.5 transition-colors hover:bg-[var(--chat-hover)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/70"
     >
@@ -123,7 +114,7 @@ function MessageRequestsEntry({ pending, unread }: { pending: number; unread: nu
         </span>
       </span>
       {unread > 0 && <CountBadge count={unread} label={`${unread} unread`} />}
-    </Link>
+    </MessagesLink>
   );
 }
 
@@ -168,7 +159,7 @@ export function ConversationRow({
   const buttonShown = withMenu && (menuOpen || !hover);
 
   const link = (
-    <Link
+    <MessagesLink
       href={`/messages/${item.id}`}
       aria-current={active ? "page" : undefined}
       className={cn(
@@ -232,7 +223,7 @@ export function ConversationRow({
             ))}
         </span>
       </span>
-    </Link>
+    </MessagesLink>
   );
 
   if (!withMenu) return link;

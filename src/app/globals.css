@@ -363,12 +363,14 @@
    * `color` marked `!important` in the UA stylesheet, which author CSS cannot
    * beat. Stalling the background transition keeps our fill, and
    * `-webkit-text-fill-color` sits outside that rule so the text stays ours.
+   * `!important` because a `transition-*` utility on the input (utilities layer) would
+   * otherwise replace this stall and let the autofill colour fade in.
    */
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus {
     -webkit-text-fill-color: var(--tt-text);
-    transition: background-color 600000s 0s;
+    transition: background-color 600000s 0s !important;
   }
 }
 
