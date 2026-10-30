@@ -3,6 +3,7 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
 
 import { ChevronLeftIcon, CloseIcon } from "@/components/icons";
+import { StoryReplyMessage } from "@/components/messages/thread/StoryReplyMessage";
 import { StickerMessage } from "@/components/messages/thread/StickerMessage";
 import { VideoMessage } from "@/components/messages/thread/VideoMessage";
 import { useReportMessages } from "@/hooks/use-report-messages";
@@ -260,6 +261,19 @@ function Content({ message, mine }: { message: MessageResponse; mine: boolean })
     );
   }
   if (message.type === "STICKER") return <StickerMessage sticker={message.sticker} />;
+  if (message.type === "STORY_REPLY") {
+    return (
+      <StoryReplyMessage
+        story={message.story}
+        mine={mine}
+        text={message.content}
+        bubbleClassName={cn(
+          "rounded-[var(--chat-radius-bubble)] px-3.5 py-2 text-[15px] leading-[1.6] break-words whitespace-pre-wrap [overflow-wrap:anywhere]",
+          mine ? "bg-[var(--chat-own)] text-white" : "bg-[var(--chat-recv)] text-[var(--tt-text)]",
+        )}
+      />
+    );
+  }
   if (message.type === "VIDEO") {
     return (
       <>
