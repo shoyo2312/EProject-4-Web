@@ -2,7 +2,8 @@
 
 import { CornerUpLeft } from "lucide-react";
 
-import type { ReplyQuote } from "@/lib/api/conversations";
+import { useChatImage } from "@/hooks/use-chat-image";
+import type { ImageView, ReplyQuote } from "@/lib/api/conversations";
 import { quoteText } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 
@@ -17,16 +18,19 @@ export function ReplyQuoteBlock({
   mine,
   peerName,
   onJump,
+  animate = false,
 }: {
   quote: ReplyQuote;
   mine: boolean;
   peerName: string;
   onJump: (messageId: string) => void;
+  /** A reply that just arrived: the block slides in from the left. History shows at once. */
+  animate?: boolean;
 }) {
   const label = mine ? "You replied" : `${peerName} replied`;
 
   return (
-    <div className={cn("flex max-w-[min(72%,520px)] flex-col", mine ? "items-end" : "items-start")}>
+    <div className={cn("flex max-w-[min(72%,520px)] flex-col", mine ? "items-end" : "items-start", animate && "motion-safe:animate-chat-quote-in")}>
       <p className="flex items-center gap-1 px-1 pb-1 text-[11.5px] leading-4 text-[var(--chat-meta)]">
         <CornerUpLeft aria-hidden className="h-3 w-3" />
         {label}
@@ -47,6 +51,8 @@ export function ReplyQuoteBlock({
         {quote.state === "OK" && quote.type === "VIDEO" && quote.video?.state === "AVAILABLE" && quote.video.thumbnailUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- a small thumbnail from the media store; next/image would need its host allow-listed
           <img src={quote.video.thumbnailUrl} alt="Video" className="h-14 w-10 rounded object-cover" />
+        ) : quote.state === "OK" && quote.type === "IMAGE" && quote.image ? (
+          <QuoteThumb image={quote.image} caption={quote.content} />
         ) : quote.state === "OK" && quote.sticker ? (
           // eslint-disable-next-line @next/next/no-img-element -- a small public sticker image; next/image would need its host allow-listed
           <img src={quote.sticker.url} alt={quote.sticker.name} className="h-10 w-10 object-contain" />
@@ -62,4 +68,20 @@ function describe(quote: ReplyQuote): string {
   if (quote.state === "RECALLED") return "Message recalled";
   if (quote.state === "UNAVAILABLE") return "Message unavailable";
   return quoteText(quote.content, quote.type);
+}
+
+/** A quoted picture: a small thumbnail (the same authenticated fetch as the message) and its caption. */
+function QuoteThumb({ image, caption }: { image: ImageView; caption: string | null }) {
+  const loaded = useChatImage(image);
+  return (
+    <span className="flex items-center gap-2">
+      {loaded.status === "ready" ? (
+        // eslint-disable-next-line @next/next/no-img-element -- an object URL made from an authenticated fetch; next/image cannot load it
+        <img src={loaded.src} alt="Photo" className="h-14 w-14 flex-none rounded object-cover" />
+      ) : (
+        <span aria-hidden className="h-14 w-14 flex-none rounded bg-white/[0.08]" />
+      )}
+      <span className="line-clamp-2 break-words [overflow-wrap:anywhere]">{caption?.trim() || "Photo"}</span>
+    </span>
+  );
 }

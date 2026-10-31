@@ -3,6 +3,7 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
 
 import { ChevronLeftIcon, CloseIcon } from "@/components/icons";
+import { ImageMessage } from "@/components/messages/thread/ImageMessage";
 import { StoryReplyMessage } from "@/components/messages/thread/StoryReplyMessage";
 import { StickerMessage } from "@/components/messages/thread/StickerMessage";
 import { VideoMessage } from "@/components/messages/thread/VideoMessage";
@@ -272,6 +273,14 @@ function Content({ message, mine }: { message: MessageResponse; mine: boolean })
           mine ? "bg-[var(--chat-own)] text-white" : "bg-[var(--chat-recv)] text-[var(--tt-text)]",
         )}
       />
+    );
+  }
+  if (message.type === "IMAGE") {
+    return (
+      <>
+        <ImageMessage image={message.image} />
+        {message.content && <Bubble mine={mine}>{message.content}</Bubble>}
+      </>
     );
   }
   if (message.type === "VIDEO") {

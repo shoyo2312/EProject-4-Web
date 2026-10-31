@@ -8,6 +8,7 @@ import type {
   ReplyQuote,
 } from "@/lib/api/conversations";
 import { isApiError } from "@/lib/api/errors";
+import { MAX_IMAGE_MB } from "@/lib/chat-image";
 
 /** How long a request message waits before its sender may send one more (chat-service `SendPolicy.RETRY_AFTER`). */
 export const REQUEST_RETRY_DAYS = 15;
@@ -29,6 +30,7 @@ export function messagePreview(
   const mine = conversation.lastMessageSenderId === me;
   if (conversation.lastMessageRecalled) return mine ? "You recalled a message" : "Message recalled";
   if (conversation.lastMessageType === "STICKER") return mine ? "You sent a sticker" : "Sent a sticker";
+  if (conversation.lastMessageType === "IMAGE") return mine ? "You sent a photo" : "Sent a photo";
   if (conversation.lastMessageType === "VIDEO") return mine ? "You shared a video" : "Shared a video";
   if (conversation.lastMessageType === "STORY_REPLY") {
     return mine ? "You replied to their story" : "Replied to your story";
@@ -303,6 +305,25 @@ export function groupReactions(reactions: readonly ReactionView[], me: string): 
   return [...groups.values()].sort((a, b) => b.count - a.count);
 }
 
+export type ReactionMotion = "pop" | "bump";
+
+/**
+ * Which badges moved between two renders of one message's reactions: an emoji that was not there pops,
+ * one whose count went up bumps, everything else (same, fewer, unchanged) stays still.
+ */
+export function reactionMotion(
+  before: ReadonlyMap<string, number>,
+  after: readonly ReactionGroup[],
+): ReadonlyMap<string, ReactionMotion> {
+  const moved = new Map<string, ReactionMotion>();
+  for (const group of after) {
+    const was = before.get(group.emoji);
+    if (was === undefined) moved.set(group.emoji, "pop");
+    else if (group.count > was) moved.set(group.emoji, "bump");
+  }
+  return moved;
+}
+
 export function myReaction(message: MessageResponse, me: string): string | null {
   return message.reactions.find((reaction) => reaction.userId === me)?.emoji ?? null;
 }
@@ -318,6 +339,7 @@ export function canReplyTo(message: MessageResponse): boolean {
 /** One line for the reply bar and for a quote, whatever the original was. */
 export function quoteText(content: string | null, type: MessageResponse["type"] | null): string {
   if (type === "STICKER") return "Sticker";
+  if (type === "IMAGE") return (content ?? "").trim() ? `Photo · ${content?.trim()}` : "Photo";
   if (type === "VIDEO") return (content ?? "").trim() ? `Video · ${content?.trim()}` : "Video";
   if (type === "STORY_REPLY") return (content ?? "").trim() ? `Story reply · ${content?.trim()}` : "Story reply";
   return (content ?? "").replace(/\s+/g, " ").trim();
@@ -376,6 +398,7 @@ export function nextMuteExpiry(conversations: readonly ConversationResponse[], n
 export function noticeBody(message: Pick<MessageResponse, "type" | "content" | "recalledAt">): string {
   if (message.recalledAt) return "Sent a message";
   if (message.type === "STICKER") return "Sent a sticker";
+  if (message.type === "IMAGE") return "Sent a photo";
   if (message.type === "VIDEO") return "Shared a video";
   if (message.type === "STORY_REPLY") return "Replied to your story";
   const text = (message.content ?? "").replace(/\s+/g, " ").trim();
@@ -562,6 +585,15 @@ export function chatErrorMessage(error: unknown): string {
         return "That sticker isn't available any more.";
       case "INVALID_MESSAGE":
         return "That message couldn't be sent.";
+      case "IMAGE_TOO_LARGE":
+        return `Photos can be up to ${MAX_IMAGE_MB} MB.`;
+      case "IMAGE_UNSUPPORTED_TYPE":
+        return "Only JPEG, PNG, GIF or WebP photos can be sent.";
+      case "IMAGE_DIMENSIONS":
+        return "That photo is too large in pixels.";
+      case "IMAGE_CORRUPT":
+      case "IMAGE_EMPTY":
+        return "That photo couldn't be read.";
       case "MESSAGE_REQUEST_LIMIT_REACHED":
         return "You can send more messages once this request is accepted.";
       case "MESSAGE_REQUEST_NOT_ACCEPTED":

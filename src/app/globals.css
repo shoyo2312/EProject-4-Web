@@ -240,34 +240,111 @@
   --chat-active: rgb(255 255 255 / 0.16);
 }
 
-/* A message that arrives while the thread is open eases in once; no motion under reduced motion. */
+/*
+ * Chat motion. Everything is transform + opacity, runs once, and is gated by `motion-safe:` at the
+ * call site, so with reduced motion the content is simply there.
+ *
+ * chat-pop-in is the new-message entrance: one animation that slides up and pops, because two
+ * animations on one element would fight over `transform`. The quote block and the reaction badges
+ * are other elements, so they animate on their own.
+ */
 @theme {
-  --animate-chat-in: chat-in 200ms ease-out both;
-  @keyframes chat-in {
+  --animate-chat-in: chat-pop-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  @keyframes chat-pop-in {
+    0% {
+      opacity: 0;
+      transform: translateY(16px) scale(0.9);
+    }
+    60% {
+      opacity: 1;
+      transform: translateY(-1px) scale(1.03);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  --animate-chat-quote-in: chat-quote-in 240ms ease-out 80ms both;
+  @keyframes chat-quote-in {
     from {
       opacity: 0;
-      transform: translateY(5px);
+      transform: translateX(-14px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  --animate-chat-bar-in: chat-bar-in 180ms ease-out both;
+  @keyframes chat-bar-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
     }
     to {
       opacity: 1;
       transform: translateY(0);
     }
   }
+
+  --animate-chat-react-pop: chat-react-pop 320ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  @keyframes chat-react-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+    55% {
+      opacity: 1;
+      transform: scale(1.3);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  --animate-chat-react-bump: chat-react-bump 220ms ease-out both;
+  @keyframes chat-react-bump {
+    0% {
+      transform: scale(1);
+    }
+    45% {
+      transform: scale(1.18);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
 }
 
-/* The typing dots: each rises a few pixels and brightens in turn, then settles. Still under reduced motion. */
+/* Typing: three dots bounce out of step while the bubble swells a little. Only while typing is live. */
 @theme {
-  --animate-chat-typing: chat-typing 1.3s ease-in-out infinite;
+  --animate-chat-typing-1: chat-typing 1.2s ease-in-out 0ms infinite;
+  --animate-chat-typing-2: chat-typing 1.2s ease-in-out 150ms infinite;
+  --animate-chat-typing-3: chat-typing 1.2s ease-in-out 300ms infinite;
   @keyframes chat-typing {
     0%,
     60%,
     100% {
       transform: translateY(0);
-      opacity: 0.4;
+      opacity: 0.45;
     }
     30% {
-      transform: translateY(-3px);
+      transform: translateY(-4px);
       opacity: 1;
+    }
+  }
+
+  --animate-chat-typing-bubble: chat-typing-bubble 1.8s ease-in-out infinite;
+  @keyframes chat-typing-bubble {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.06);
     }
   }
 }

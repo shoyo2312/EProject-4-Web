@@ -51,6 +51,18 @@ export function appendedAfter(
 }
 
 /**
+ * Of the messages that were appended, those that arrived live in this open thread — the only ones that
+ * animate. A page fetched after a reconnect or a tab switch can append messages too, but they are
+ * catching up, not arriving.
+ */
+export function arrivedLive(
+  appended: readonly MessageResponse[],
+  live: ReadonlySet<string>,
+): MessageResponse[] {
+  return appended.filter((message) => live.has(message.id));
+}
+
+/**
  * Adds the other side's appended messages to the unseen ids, once each. The reader's own messages
  * never count: they scroll the list to the bottom instead.
  */

@@ -1,6 +1,6 @@
 "use client";
 
-import { apiFetch } from "@/lib/api/client";
+import { apiFetch, apiFetchBlob } from "@/lib/api/client";
 import { parseJsonPreservingIds } from "@/lib/api/json";
 
 /**
@@ -36,7 +36,21 @@ export type MuteMode = "NONE" | "TIMED" | "INDEFINITE";
 export type MuteLength = "ONE_HOUR" | "EIGHT_HOURS" | "TWENTY_FOUR_HOURS" | "INDEFINITE";
 
 /** Emoji are not a type: they are characters inside a TEXT message's content. */
-export type MessageType = "TEXT" | "STICKER" | "VIDEO" | "STORY_REPLY";
+export type MessageType = "TEXT" | "STICKER" | "VIDEO" | "STORY_REPLY" | "IMAGE";
+
+/**
+ * A picture sent in a conversation. `url` is a path under `/api/v1` that needs the viewer's token, so
+ * it is fetched with `fetchChatImage`, never put in an `<img src>`. `width` and `height` are the
+ * display size, known before the bytes arrive, so the space can be reserved.
+ */
+export interface ImageView {
+  imageId: string;
+  url: string;
+  mime: string;
+  width: number;
+  height: number;
+  size: number;
+}
 
 /**
  * The story a STORY_REPLY answers, as the viewer may see it right now (read by the server on every
@@ -167,6 +181,8 @@ export interface ReplyQuote {
   sticker: StickerView | null;
   /** On a quoted video: its card, with only the id and state when it cannot be shown. */
   video?: VideoCard | null;
+  /** On a quoted picture. */
+  image?: ImageView | null;
 }
 
 export interface MessageResponse {
@@ -184,6 +200,8 @@ export interface MessageResponse {
   video?: VideoCard | null;
   /** Present only on a story reply; `content` is then the reply text. */
   story?: StoryCard | null;
+  /** Present only on a picture; `content` is then its optional caption. */
+  image?: ImageView | null;
   sentAt: string;
   replyToMessageId: string | null;
   replyTo: ReplyQuote | null;
@@ -212,6 +230,7 @@ export type SendPayload = (
   | { type: "TEXT"; content: string }
   | { type: "STICKER"; stickerId: string }
   | { type: "VIDEO"; videoId: string; content?: string; clientRequestId: string }
+  | { type: "IMAGE"; imageId: string; content?: string; clientRequestId: string }
 ) & { replyToMessageId?: string };
 
 export interface MessagePage {
@@ -553,6 +572,27 @@ export async function sendMessage(
     auth: "required",
   });
   return normalizeMessage(raw);
+}
+
+/** Step one of sending a picture: the file is checked and stored by the server, which answers with its id. */
+export async function uploadChatImage(
+  conversationId: string,
+  file: File,
+  signal?: AbortSignal,
+): Promise<ImageView> {
+  const form = new FormData();
+  form.append("file", file);
+  return apiFetch<ImageView>(`/conversations/${conversationId}/images`, {
+    method: "POST",
+    body: form,
+    auth: "required",
+    signal,
+  });
+}
+
+/** The bytes of a chat picture, with the viewer's token. `url` is an `ImageView.url`. */
+export function fetchChatImage(url: string, signal?: AbortSignal): Promise<Blob> {
+  return apiFetchBlob(url.replace(/^\/api\/v1/, ""), signal);
 }
 
 /**
