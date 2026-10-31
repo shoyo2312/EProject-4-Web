@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { unknownAuthor, videoToExploreItem } from "@/lib/api/adapters";
 import { resolveAuthors } from "@/lib/api/authors";
 import { searchVideos } from "@/lib/api/search";
+import { EXPLORE_CATEGORY_HASHTAGS } from "@/lib/site-config";
 import { isLastPage } from "@/lib/api/types";
 import { getFeed, getVideosByIds } from "@/lib/api/videos";
 import { appendUnique } from "@/lib/paging";
@@ -110,7 +111,9 @@ async function fetchPage(
     videos = page.items;
     after = page.nextCursor ? { cursor: page.nextCursor, page: 0 } : null;
   } else {
-    const page = await searchVideos(category, position.page, PAGE_SIZE, signal);
+    // Each tab is a hashtag search; a tab without a mapping falls back to free text.
+    const hashtag = EXPLORE_CATEGORY_HASHTAGS[category];
+    const page = await searchVideos(hashtag ? `#${hashtag}` : category, position.page, PAGE_SIZE, signal);
     videos = await getVideosByIds(
       page.content.map((item) => item.id),
       signal,

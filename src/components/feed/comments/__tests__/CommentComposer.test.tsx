@@ -85,3 +85,60 @@ describe("CommentComposer", () => {
     expect(hint.getAttribute("aria-hidden")).toBe("false");
   });
 });
+
+describe("CommentComposer emoji tray (the grid the chat shares)", () => {
+  function mount() {
+    render(
+      <CommentComposer
+        ref={createRef<HTMLInputElement>()}
+        replyTo={null}
+        onCancelReply={() => {}}
+        onPost={async () => null}
+      />,
+    );
+    const input = screen.getByRole<HTMLInputElement>("textbox", { name: "Add comment" });
+    return { input, open: () => fireEvent.click(screen.getByRole("button", { name: "Emoji" })) };
+  }
+
+  it("opens a tray with the same groups the chat uses", () => {
+    const { open } = mount();
+    open();
+    expect(screen.getByText("Smileys")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "😀" })).toBeTruthy();
+    expect(screen.getByText("Hearts")).toBeTruthy();
+  });
+
+  it("inserts an emoji at the caret and does not post", async () => {
+    const { input, open } = mount();
+    fireEvent.change(input, { target: { value: "ab" } });
+    input.setSelectionRange(1, 1);
+    open();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "😀" }));
+    });
+
+    expect(input.value).toBe("a😀b");
+  });
+
+  it("replaces the selected text", async () => {
+    const { input, open } = mount();
+    fireEvent.change(input, { target: { value: "say HELLO now" } });
+    input.setSelectionRange(4, 9);
+    open();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "🎉" }));
+    });
+
+    expect(input.value).toBe("say 🎉 now");
+  });
+
+  it("closes on a press outside the bar and on Escape", () => {
+    const { open } = mount();
+    open();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByText("Smileys")).toBeNull();
+  });
+});
+

@@ -8,7 +8,12 @@ describe("isBackendVideoId", () => {
     expect(isBackendVideoId("7301234567890123456")).toBe(true);
   });
 
-  it("rejects anything that is not a Snowflake, short numbers included", () => {
+  it("takes the short numeric ids the seed data gives its videos", () => {
+    expect(isBackendVideoId("2001")).toBe(true);
+    expect(isBackendVideoId("2008")).toBe(true);
+  });
+
+  it("rejects anything that is not a Snowflake or a seeded id, short numbers included", () => {
     for (const id of ["1", "3", "x7", "citylapse~videos~3"]) {
       expect(isBackendVideoId(id)).toBe(false);
     }

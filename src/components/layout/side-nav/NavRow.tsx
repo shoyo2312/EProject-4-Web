@@ -14,6 +14,7 @@ import {
   UploadIcon,
 } from "@/components/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { formatBadgeCount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { NavItem } from "@/types/tiktok";
 
@@ -54,7 +55,7 @@ export function NavRow({
   /** The row whose href matches the current route. */
   active?: boolean;
   selected?: boolean;
-  onClick?: () => void;
+  onClick?: (event: React.MouseEvent) => void;
 }) {
   const Icon = ICONS[item.label];
 
@@ -99,7 +100,7 @@ export function NavRow({
 
           {item.badgeCount ? (
             <span className="absolute -right-1 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--tt-red)] px-1 text-[10px] font-bold leading-none text-white">
-              {item.badgeCount}
+              {formatBadgeCount(item.badgeCount)}
             </span>
           ) : null}
         </span>
@@ -122,6 +123,7 @@ export function NavRow({
       <Link
         href={item.href}
         aria-label={iconOnly ? item.label : undefined}
+        onClick={onClick}
         className={cn(collapsed ? "w-10" : "w-full")}
       >
         {inner}

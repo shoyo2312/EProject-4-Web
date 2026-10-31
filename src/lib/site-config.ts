@@ -43,8 +43,7 @@ export const SIGNUP_OPTIONS: LoginOption[] = [
 
 /**
  * Sidebar navigation — order, labels and hrefs are taken verbatim from the live
- * site's `.DivMainNavContainer` (10 children, in order). "Messages", "Activity"
- * and "More" render as buttons, not links. Profile has no href of its own:
+ * site's `.DivMainNavContainer` (10 children, in order). "Activity" and "More" render as buttons, not links ("Messages" is a link: it has a page). Profile has no href of its own:
  * `SideNav` points it at the signed-in viewer, and a guest gets the login modal.
  */
 export const NAV_ITEMS: NavItem[] = [
@@ -52,7 +51,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Explore", kind: "link", href: "/explore" },
   { label: "Following", kind: "link", href: "/following" },
   { label: "Friends", kind: "link", href: "/friends", authOnly: true },
-  { label: "Messages", kind: "button", authOnly: true },
+  { label: "Messages", kind: "link", href: "/messages", authOnly: true },
   { label: "Activity", kind: "button", authOnly: true },
   { label: "Upload", kind: "link", href: "/nowastudio/upload" },
   { label: "Profile", kind: "link" },
@@ -138,32 +137,29 @@ export const SHARE_TARGETS: ShareTarget[] = [
 ];
 
 /**
- * Explore category rail — the 21 chips of `.DivCategoryList`, in the live
- * site's own order. "All" is the default selection.
+ * Explore category rail, in the live site's order. "All" is the default selection.
+ * Only tabs the demo catalogue can fill are kept: `EXPLORE_CATEGORY_HASHTAGS` maps each
+ * one to the hashtag every clip of that category carries (seed `content.py EXPLORE_TAGS`),
+ * and the grid searches that hashtag. Comedy, Anime & Comics, Relationship, Shows,
+ * Lipsync, Games, Society, Drama and Beauty Care have no clips, so they are not listed.
  */
-export const EXPLORE_CATEGORIES = [
-  "All",
-  "Singing & Dancing",
-  "Comedy",
-  "Sports",
-  "Anime & Comics",
-  "Relationship",
-  "Shows",
-  "Lipsync",
-  "Daily Life",
-  "Beauty Care",
-  "Games",
-  "Society",
-  "Outfit",
-  "Cars",
-  "Food",
-  "Animals",
-  "Family",
-  "Drama",
-  "Fitness & Health",
-  "Education",
-  "Technology",
-] as const;
+export const EXPLORE_CATEGORY_HASHTAGS: Record<string, string> = {
+  "Singing & Dancing": "music",
+  Sports: "sports",
+  "Daily Life": "dailylife",
+  Outfit: "fashion",
+  Cars: "cars",
+  Food: "food",
+  Animals: "animals",
+  Family: "kids",
+  "Fitness & Health": "fitness",
+  Education: "study",
+  Technology: "tech",
+  "Travel & Nature": "travel",
+  Art: "art",
+};
+
+export const EXPLORE_CATEGORIES = ["All", ...Object.keys(EXPLORE_CATEGORY_HASHTAGS)] as const;
 
 /* --- /setting ------------------------------------------------------------ */
 
@@ -199,18 +195,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             action: "password",
           },
           { kind: "link", title: "Deactivate or delete account", action: "close-account" },
-        ],
-      },
-      {
-        heading: "Account information",
-        rows: [
-          {
-            kind: "value",
-            title: "Account region",
-            description:
-              "Your account region is initially set based on the time and place of registration.",
-            value: "Vietnam",
-          },
         ],
       },
     ],
@@ -306,26 +290,18 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
           {
             kind: "expand",
             title: "Interactions",
-            description: "Likes, comments, new followers, mentions and tags",
+            description: "Likes, comments, new followers",
+            action: "push-preferences",
           },
         ],
       },
-      { rows: [{ kind: "expand", title: "In-app notifications" }] },
-    ],
-  },
-  {
-    id: "business-verification",
-    label: "Business verification",
-    icon: "business-verification",
-    groups: [
       {
         rows: [
           {
-            kind: "switch",
-            title: "Business verification",
-            description:
-              "Verify your business to access marketing tools and exclusive features that better connect you with viewers.",
-            on: false,
+            kind: "expand",
+            title: "In-app notifications",
+            heading: true,
+            action: "in-app-preferences",
           },
         ],
       },
@@ -364,12 +340,9 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             title: "Summary",
             description:
               "Your weekly metrics include your time on the app and on nowa.com.",
+            action: "screen-time-summary",
           },
         ],
-      },
-      {
-        heading: "Help and resources",
-        rows: [{ kind: "external", title: "Digital well-being tips" }],
       },
     ],
   },
@@ -385,6 +358,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
             title: "Filter keywords",
             description:
               "When you filter a keyword, you won’t see posts in your selected feeds that contain that word in any titles, descriptions, or stickers. Certain keywords can’t be filtered.",
+            action: "keyword-filters",
           },
         ],
       },

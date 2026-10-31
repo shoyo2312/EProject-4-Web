@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/components/ui/toast";
 import { useEscapeKey } from "@/hooks/use-escape-key";
 import { useFocusTrap } from "@/hooks/use-focus-trap";
@@ -42,7 +43,16 @@ export function DownloadDataTab({
 }) {
   const [canceling, setCanceling] = useState<DataExportResponse | null>(null);
 
-  if (requests === null) return <div className="min-h-0 flex-1" />;
+  if (requests === null) {
+    return (
+      <div role="status" aria-label="Loading requests" className="min-h-0 flex-1 pt-4">
+        <Skeleton className="my-4 h-[21px] w-32" />
+        {[0, 1].map((index) => (
+          <Skeleton key={index} className="mb-2 h-[76px] rounded-[8px]" />
+        ))}
+      </div>
+    );
+  }
 
   if (requests.length === 0) {
     return (

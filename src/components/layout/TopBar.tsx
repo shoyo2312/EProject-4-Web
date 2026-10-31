@@ -100,7 +100,7 @@ export function TopBar() {
  * blacklists the access token server-side, so a token that leaked before the
  * click stops working immediately instead of living out its 15 minutes.
  */
-function AccountMenu() {
+export function AccountMenu() {
   const { user, confirmSignOut } = useSession();
   const [open, setOpen] = useState(false);
 

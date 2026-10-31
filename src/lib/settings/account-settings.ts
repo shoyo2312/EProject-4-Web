@@ -1,4 +1,4 @@
-import type { SettingsAudience } from "@/lib/api/types";
+import type { SettingsAudience, UserSettingsResponse } from "@/lib/api/types";
 
 /** The `/setting` value text for each audience, and the picker's labels. */
 export const AUDIENCE_LABELS: Record<SettingsAudience, string> = {
@@ -7,27 +7,31 @@ export const AUDIENCE_LABELS: Record<SettingsAudience, string> = {
   NO_ONE: "No one",
 };
 
-/** The daily limits the picker offers, in minutes — the app's own presets. */
-export const SCREEN_TIME_PRESETS: readonly number[] = [40, 60, 90, 120];
+/** The daily limit chips, in minutes — the app's own presets. */
+export const DAILY_LIMIT_PRESETS: readonly number[] = [40, 60, 90, 120];
 
-export function formatScreenTimeLimit(minutes: number | null): string {
-  return minutes === null ? "Off" : `${minutes} min`;
+/** A limit as the live chips print it: "40m", "1h", "1h 30m". */
+export function formatLimit(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest}m`;
+  return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
 }
 
-/**
- * The picker's choices, `null` (off) first. A limit saved from another client
- * that is not one of the presets is slotted in by size, so the viewer's current
- * choice always has a radio to be checked on.
- */
-export function screenTimeChoices(current: number | null): (number | null)[] {
-  const minutes =
-    current === null || SCREEN_TIME_PRESETS.includes(current)
-      ? SCREEN_TIME_PRESETS
-      : [...SCREEN_TIME_PRESETS, current].sort((a, b) => a - b);
-  return [null, ...minutes];
+/** Today's limit in minutes, or null when there is none. Per-day limits run Monday first. */
+export function todayLimitMinutes(settings: UserSettingsResponse, now: Date): number | null {
+  const byDay = settings.screenTimeLimitsByDay;
+  if (byDay) return byDay[(now.getDay() + 6) % 7] ?? null;
+  return settings.screenTimeLimitMinutes;
 }
 
-/** Either end missing is off — the server never stores just one. */
-export function formatSleepHours(start: string | null, end: string | null): string {
-  return start && end ? `${start} – ${end}` : "Off";
+/** The Daily screen time row's value: "Off", or today's limit. */
+export function dailyLimitValue(settings: UserSettingsResponse | null, now: Date): string {
+  const minutes = settings && todayLimitMinutes(settings, now);
+  return minutes ? formatLimit(minutes) : "Off";
+}
+
+/** The Sleep hours row's value. The end is always the start plus eight hours. */
+export function formatSleepHours(start: string | null): "On" | "Off" {
+  return start ? "On" : "Off";
 }

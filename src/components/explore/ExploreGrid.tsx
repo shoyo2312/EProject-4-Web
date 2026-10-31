@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { HeartIcon, MutedIcon, VolumeIcon } from "@/components/icons";
+import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useExploreFeed } from "@/hooks/use-explore-feed";
 import { useHoverCapable } from "@/hooks/use-hover-capable";
@@ -17,8 +18,11 @@ import type { ExploreItem } from "@/types/tiktok";
  * category bar over a video grid.
  *
  * Measured on the live page at 1920px:
- *   category bar  flex, 42px tall, 8px gap, 24px block padding, chevrons at
- *                 both ends that scroll the list
+ *   category bar  flex, 42px tall, 8px gap, 24px above / 20px below, chevrons
+ *                 at both ends that scroll the list
+ *   chip          `.tux-chip`: 32px pill, 12px side padding, 14/18 medium;
+ *                 selected is white at 13% with #f6f6f6 text, the rest are
+ *                 bare at 88% white and fill to 13% on hover
  *   grid          6 columns, 16px column gap / 24px row gap
  *   tile          254.656 × 371.859 — a 3:4 poster plus the author row beneath
  */
@@ -84,8 +88,11 @@ export function ExploreGrid({
   return (
     <main className="h-screen flex-1 overflow-y-auto px-6 pb-12 tt-1024:px-4">
       {/* `.DivCategoryListWrapper` — sticky so the taxonomy stays reachable
-          while the grid scrolls, which is how the live bar behaves. */}
-      <div className="sticky top-0 z-10 flex items-center gap-2 bg-[var(--tt-page)] pt-16 pb-6">
+          while the grid scrolls, which is how the live bar behaves. The right
+          padding is the live page's `DivCategorySpacer`: the bar shares its row
+          with the fixed TopBar (avatar or the 76px Log in pill, 24px from the
+          edge), so the list and its chevron stop short of that corner. */}
+      <div className="sticky top-0 z-10 flex h-[86px] items-center gap-2 bg-[var(--tt-page)] pt-6 pr-28 pb-5">
         <ChevronButton label="Scroll categories left" onClick={() => scrollBy(-1)} />
 
         <div
@@ -104,10 +111,10 @@ export function ExploreGrid({
               }}
               aria-pressed={category === active}
               className={cn(
-                "h-[42px] flex-none rounded-[8px] px-4 text-[15px] font-medium whitespace-nowrap transition-colors",
+                "h-8 flex-none rounded-full px-3 text-[14px] leading-[18px] font-medium whitespace-nowrap transition-colors",
                 category === active
-                  ? "bg-[var(--tt-text)] text-[var(--tt-page)]"
-                  : "bg-[var(--tt-field)] text-[var(--tt-text)] hover:bg-[var(--tt-shape-neutral-3)]",
+                  ? "bg-[var(--tt-field)] text-[#f6f6f6]"
+                  : "text-[rgb(255_255_255/0.88)] hover:bg-[var(--tt-field)]",
               )}
             >
               {category}
@@ -302,13 +309,15 @@ function ExploreTile({
         href={`/@${item.author.username}`}
         className="flex items-center gap-2 text-[14px] text-[var(--tt-text-secondary)] hover:underline"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- local static asset, no optimisation needed */}
-        <img
-          src={item.author.avatarUrl}
-          alt=""
-          referrerPolicy="no-referrer"
-          className="h-6 w-6 flex-none rounded-full"
-        />
+        <StoryAvatar author={item.author} className="h-6 w-6" thin>
+          {/* eslint-disable-next-line @next/next/no-img-element -- local static asset, no optimisation needed */}
+          <img
+            src={item.author.avatarUrl}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="h-6 w-6 flex-none rounded-full"
+          />
+        </StoryAvatar>
         <span className="truncate">{item.author.nickname}</span>
       </Link>
     </div>
@@ -329,15 +338,15 @@ function ChevronButton({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="flex h-[42px] w-[42px] flex-none items-center justify-center rounded-full text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-field)] tt-768:hidden"
+      // `.DivArrowIconContainer` — a 32px circle around a 16px chevron.
+      className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)] tt-768:hidden"
     >
       <svg
         viewBox="0 0 48 48"
         fill="currentColor"
-        // The shared arrow path points up: +90° faces it right, −90° left.
-        className={cn("h-5 w-5", right ? "rotate-90" : "-rotate-90")}
+        className={cn("h-4 w-4", !right && "rotate-180")}
       >
-        <path d="M24 15.4 8.7 30.7a1 1 0 0 0 0 1.4l1.4 1.4a1 1 0 0 0 1.4 0L24 20.9l12.5 12.6a1 1 0 0 0 1.4 0l1.4-1.4a1 1 0 0 0 0-1.4L24 15.4Z" />
+        <path d="M39.88 24 26.7 10.83a1 1 0 0 1 0-1.41l2.83-2.83a1 1 0 0 1 1.41 0L47.3 22.94a1.5 1.5 0 0 1 0 2.12L30.95 41.42a1 1 0 0 1-1.41 0l-2.83-2.83a1 1 0 0 1 0-1.42L39.88 24Z" />
       </svg>
     </button>
   );

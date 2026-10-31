@@ -23,6 +23,24 @@ export function submitReport(
 }
 
 /**
+ * `POST /api/v1/admin/reports/direct-message` — one report on the other person of a conversation,
+ * with the messages picked as evidence. Only ids go up: who sent them and what they said is read by
+ * the server. `requestId` makes a retry of this submit return the report it already made.
+ */
+export function submitDirectMessageReport(
+  conversationId: string,
+  reason: string,
+  messageIds: readonly string[],
+  requestId: string,
+): Promise<unknown> {
+  return apiFetch("/admin/reports/direct-message", {
+    method: "POST",
+    body: { conversationId, reason, messageIds, requestId },
+    auth: "required",
+  });
+}
+
+/**
  * The scenarios a viewer can pick from, each with the rules that scenario
  * covers — shown back to them before they submit, the way the live site does
  * ("We don't allow the following" + bullets). `reason` is a free-text column

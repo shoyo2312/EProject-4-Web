@@ -79,6 +79,29 @@ export async function apiFetch<T>(
   return unwrap<T>(response);
 }
 
+/**
+ * An authenticated binary GET (a chat picture): an `<img src>` cannot carry the bearer token, so the
+ * bytes are fetched here, with the same one-refresh-one-replay rule as `apiFetch`. A failure throws
+ * `ApiError` with the envelope's code when the server sent one.
+ */
+export async function apiFetchBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  const url = BASE + path;
+  let response = await send(url, "GET", undefined, getAccessToken(), signal);
+  if (response.status === 401 && (getAccessToken() || getRefreshToken())) {
+    const fresh = await refreshAccessToken();
+    if (!fresh) throw new ApiError(401, "INVALID_REFRESH_TOKEN", "Session expired");
+    response = await send(url, "GET", undefined, fresh, signal);
+  }
+  if (!response.ok) {
+    const code = await response
+      .json()
+      .then((body: { code?: string }) => body.code ?? null)
+      .catch(() => null);
+    throw new ApiError(response.status, code, response.statusText);
+  }
+  return response.blob();
+}
+
 function buildQuery(query: RequestOptions["query"]): string {
   if (!query) return "";
   const params = new URLSearchParams();

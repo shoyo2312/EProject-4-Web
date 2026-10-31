@@ -7,7 +7,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useEscapeKey } from "@/hooks/use-escape-key";
 import { ClockIcon, CloseIcon, DotIcon, SearchIcon, TrendingIcon } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
-import { DEFAULT_AVATAR } from "@/lib/api/adapters";
+import { StoryAvatar } from "@/components/stories/StoryAvatar";
+import { authorFromProfile, DEFAULT_AVATAR } from "@/lib/api/adapters";
 import { getTrending } from "@/lib/api/recommendations";
 import { SEARCH_MAX_LENGTH } from "@/lib/api/search";
 import { searchUsers } from "@/lib/api/users";
@@ -351,15 +352,17 @@ export function SearchDrawer({ open, onClose }: { open: boolean; onClose: () => 
                       }}
                       className="flex items-center gap-3 px-4 py-2 hover:bg-[rgb(255_255_255/0.08)]"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element -- the avatar can be any CDN URL */}
-                      <img
-                        src={result.avatarUrl || DEFAULT_AVATAR}
-                        alt=""
-                        referrerPolicy="no-referrer"
-                        width={40}
-                        height={40}
-                        className="h-10 w-10 flex-none rounded-full object-cover"
-                      />
+                      <StoryAvatar author={authorFromProfile(result)} className="h-10 w-10">
+                        {/* eslint-disable-next-line @next/next/no-img-element -- the avatar can be any CDN URL */}
+                        <img
+                          src={result.avatarUrl || DEFAULT_AVATAR}
+                          alt=""
+                          referrerPolicy="no-referrer"
+                          width={40}
+                          height={40}
+                          className="h-10 w-10 flex-none rounded-full object-cover"
+                        />
+                      </StoryAvatar>
                       <span className="min-w-0">
                         <span className="block truncate text-[14px] font-semibold text-[var(--tt-text)]">
                           {result.displayName ?? result.username ?? "Unknown"}

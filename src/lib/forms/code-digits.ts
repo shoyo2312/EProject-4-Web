@@ -1,7 +1,8 @@
 export const CODE_LENGTH = 6;
 
 /**
- * What typing into one of the six code boxes does to the whole code.
+ * What typing into one of the code boxes does to the whole code — six boxes for
+ * an emailed code, four for the screen time passcode; `digits` sets how many.
  *
  * `typed` is the box's new raw value, which is more than one character when a
  * digit is typed over an existing one or a whole code is pasted. Every digit in
@@ -33,14 +34,14 @@ export function enterDigits(
 
   let cursor = index;
   for (const digit of written) {
-    if (cursor >= CODE_LENGTH) break;
+    if (cursor >= digits.length) break;
     next[cursor] = digit;
     cursor += 1;
   }
 
-  return { digits: next, focus: Math.min(cursor, CODE_LENGTH - 1) };
+  return { digits: next, focus: Math.min(cursor, digits.length - 1) };
 }
 
-export function emptyCode(): string[] {
-  return Array.from({ length: CODE_LENGTH }, () => "");
+export function emptyCode(length = CODE_LENGTH): string[] {
+  return Array.from({ length }, () => "");
 }

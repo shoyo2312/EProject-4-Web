@@ -98,6 +98,15 @@ export function MoreIcon(props: IconProps) {
   );
 }
 
+/** The sidebar's "View all" under Following accounts, drawn at 16px. */
+export function ListIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6 10a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H6Zm0 12a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H6ZM5 35a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-2Zm11-25a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h26a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H16Zm0 12a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h26a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H16Zm-1 13a1 1 0 0 1 1-1h26a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H16a1 1 0 0 1-1-1v-2Z" />
+    </Icon>
+  );
+}
+
 /**
  * The collapsed rail's stand-in for the guest Log in button — a person in a
  * ring, read off `.SquareTUXButton` with the live sidebar collapsed. TikTok
@@ -578,9 +587,7 @@ export function EmptyGridIcon(props: IconProps) {
  * `/setting` glyphs.
  *
  * Every path below is the live 48-grid `d` attribute read from the settings
- * page's own SVGs, except `BusinessVerificationIcon` — that one ships on a
- * 20-grid as a 3.2KB multi-part logo, so it is redrawn here on the 48 grid at
- * the same optical weight. It is marked again at its definition.
+ * page's own SVGs.
  * ---------------------------------------------------------------------------
  */
 
@@ -610,7 +617,7 @@ export function ChevronRightIcon(props: IconProps) {
   );
 }
 
-/** The same chevron turned down, for a row that expands in place. */
+/** The same chevron turned down, for a dropdown. */
 export function CaretDownIcon(props: IconProps) {
   return (
     <Icon {...props}>
@@ -619,12 +626,85 @@ export function CaretDownIcon(props: IconProps) {
   );
 }
 
-/** Marks a row that leaves TikTok — drawn to the 48 grid, not extracted. */
-export function ExternalLinkIcon(props: IconProps) {
+/**
+ * `ArrowTriangleDownFill` — the caret of a settings row that opens in place.
+ * It points down whether the row is open or not.
+ */
+export function TriangleDownIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M28 6a1.5 1.5 0 0 0 0 3h8.88L21.44 24.44a1.5 1.5 0 0 0 2.12 2.12L39 11.12V20a1.5 1.5 0 0 0 3 0V7.5A1.5 1.5 0 0 0 40.5 6H28Z" />
-      <path d="M9 13.5A1.5 1.5 0 0 1 10.5 12H22a1.5 1.5 0 0 1 0 3H12v21h21V26a1.5 1.5 0 0 1 3 0v11.5a1.5 1.5 0 0 1-1.5 1.5h-24A1.5 1.5 0 0 1 9 37.5v-24Z" />
+      <path d="M24.7125 32.0323C24.3109 32.5525 23.5252 32.5505 23.1263 32.0282L14.4015 20.6071C13.8988 19.949 14.368 19 15.1962 19H32.7385C33.569 19 34.0375 19.9537 33.53 20.6111L24.7125 32.0323Z" />
+    </Icon>
+  );
+}
+
+/** The ringed "!" beside Screen time → Summary's Day time and Night time, which carries their tooltip. */
+export function InfoCircleIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M26.07 13.03a1 1 0 0 0-1-1h-2.15a1 1 0 0 0-1 1V26.4a1 1 0 0 0 1 1h2.15a1 1 0 0 0 1-1V13.03ZM22.02 35.39c.55.52 1.2.78 1.97.78.8 0 1.45-.26 1.98-.78.54-.52.81-1.17.81-1.94 0-.8-.27-1.45-.81-1.97a2.62 2.62 0 0 0-1.98-.82c-.77 0-1.42.27-1.97.82a2.67 2.67 0 0 0-.78 1.97c0 .77.26 1.42.78 1.94Z" />
+      <path d="M46 24a22 22 0 1 0-44 0 22 22 0 0 0 44 0Zm-4 0a18 18 0 1 1-36 0 18 18 0 0 1 36 0Z" />
+    </Icon>
+  );
+}
+
+/** Daily screen time → "Set your daily time", and the sleep hours time fields. */
+export function TimeClockIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M22 24a2 2 0 0 0 .85 1.64l9.19 6.43a1 1 0 0 0 1.39-.25l1.15-1.64a1 1 0 0 0-.25-1.39l-7.9-5.53a1 1 0 0 1-.43-.82V13a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v11Z" />
+      <path d="M24 2a22 22 0 1 0 0 44 22 22 0 0 0 0-44ZM6 24a18 18 0 1 1 36 0 18 18 0 0 1-36 0Z" />
+    </Icon>
+  );
+}
+
+/** Daily screen time → "Get notified". */
+export function BellOutlineIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M14.83 14.33a9.22 9.22 0 0 1 18.34 0l1.03 10.59c.28 2.85 1.86 4.92 3.56 7.08H10.24c1.7-2.16 3.28-4.23 3.56-7.08l1.03-10.6ZM24 2c-6.8 0-12.5 5.17-13.16 11.94L9.82 24.53c-.3 3.19-3.4 5.86-5.27 8.23A2 2 0 0 0 6.12 36h35.76a2 2 0 0 0 1.57-3.24c-1.87-2.37-4.96-5.04-5.27-8.23l-1.02-10.59A13.22 13.22 0 0 0 24 2Zm6.9 39c.11-.55-.35-1-.9-1H18c-.55 0-1.01.45-.9 1 1.28 6.61 12.52 6.61 13.8 0Z" />
+    </Icon>
+  );
+}
+
+/** Filter keywords → "+ Add keyword": a thinner plus than the action rail's. */
+export function ThinPlusIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M26 7a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v15H7a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h15v15a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V26h15a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H26V7Z" />
+    </Icon>
+  );
+}
+
+/** Filter keywords → Filter from → For You. */
+export function HouseOutlineIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M24 23a2 2 0 0 1 2 2v10a2 2 0 0 1-4 0V25c0-1.1.9-2 2-2Z" />
+      <path d="M22.54 2.51a5 5 0 0 1 2.92 0c1.09.33 2.04 1.21 3.95 2.96l10.95 10.06c1.52 1.4 2.29 2.1 2.83 2.94a8 8 0 0 1 1.06 2.42c.25.96.25 2 .25 4.07v9.32c-.01 3.45-.1 5.35-.87 6.85a8 8 0 0 1-3.5 3.5c-1.5.76-3.4.86-6.85.87H14.72c-3.2-.01-5.08-.1-6.52-.72l-.33-.15a8 8 0 0 1-3.35-3.22l-.15-.28c-.76-1.5-.86-3.4-.87-6.85v-9.32c0-1.81 0-2.83.16-3.7l.09-.37a8 8 0 0 1 .88-2.14l.18-.28c.4-.63.94-1.18 1.82-2l1.01-.94L18.59 5.47c1.9-1.75 2.86-2.63 3.95-2.96Zm1.73 3.82a1 1 0 0 0-.54 0c-.05.03-.17.1-.4.28-.45.36-1.04.89-2.04 1.8L10.35 18.49c-1.68 1.54-1.99 1.86-2.2 2.18a4 4 0 0 0-.53 1.2c-.1.38-.12.83-.12 3.1v7.74c0 2.3 0 3.8.1 4.93.08 1.09.23 1.49.34 1.69a4 4 0 0 0 1.74 1.74c.2.1.6.26 1.7.34 1.12.1 2.61.1 4.92.1h15.4c2.3 0 3.8 0 4.93-.1a4.57 4.57 0 0 0 1.69-.34 4 4 0 0 0 1.74-1.74c.1-.2.26-.6.34-1.7.1-1.12.1-2.61.1-4.92v-7.74c0-2.27-.03-2.72-.12-3.1a4 4 0 0 0-.53-1.2c-.21-.32-.52-.64-2.2-2.18L26.71 8.42c-1-.92-1.59-1.45-2.05-1.81a3.4 3.4 0 0 0-.4-.28Z" />
+    </Icon>
+  );
+}
+
+/** Filter keywords → Filter from → Following. */
+export function PersonPlusOutlineIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M19 2.5a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-6 10a6 6 0 1 1 12 0 6 6 0 0 1-12 0Z"
+      />
+      <path d="M5 43.5c.55 0 1-.45 1.02-1 .18-4.33 1.56-7.46 3.6-9.53 2.2-2.23 5.4-3.47 9.38-3.47 2.44 0 4.58.46 6.38 1.33A4.5 4.5 0 0 1 29 29h.94c-2.96-2.36-6.76-3.5-10.94-3.5-4.82 0-9.12 1.51-12.22 4.66-2.92 2.96-4.57 7.16-4.76 12.34-.02.55.43 1 .98 1h2ZM35 26.5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v6h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-6v6a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1v-6h-6a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1h6v-6Z" />
+    </Icon>
+  );
+}
+
+/** Filter keywords → Filter from → Friends. */
+export function FriendsOutlineIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M25 14a10 10 0 1 1-20 0 10 10 0 0 1 20 0Zm-4 0a6 6 0 1 0-12 0 6 6 0 0 0 12 0ZM44 19a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-4 0a4 4 0 1 0-8 0 4 4 0 0 0 8 0ZM6.24 35a13.75 13.75 0 0 0-2.21 7c-.03.55-.48 1-1.03 1H1c-.55 0-1-.45-.98-1 .14-2.92.91-6.39 2.94-9.29C5.3 29.37 9.18 27 15 27c5.82 0 9.7 2.37 12.04 5.71 2.03 2.9 2.8 6.37 2.94 9.3.02.54-.43.99-.98.99h-2c-.55 0-1-.45-1.03-1a13.76 13.76 0 0 0-2.2-7c-1.57-2.22-4.2-4-8.77-4-4.58 0-7.2 1.78-8.76 4ZM36 34c-1.4 0-2.55.23-3.48.62a19.32 19.32 0 0 0-1.8-3.59A12.9 12.9 0 0 1 36 30c4.64 0 7.77 1.94 9.65 4.69A14.52 14.52 0 0 1 47.97 42c.03.55-.42 1-.97 1h-2c-.55 0-1-.45-1.04-1-.13-1.74-.61-3.59-1.61-5.05C41.23 35.32 39.36 34 36 34Z" />
     </Icon>
   );
 }
@@ -661,19 +741,6 @@ export function PushNotificationsIcon(props: IconProps) {
         clipRule="evenodd"
         d="M24 6C30.6274 6 36 11.3726 36 18V26C36 28.0577 36.4561 30.2073 37.4628 32H10.5372C11.544 30.2073 12 28.0577 12 26V18C12 11.3726 17.3726 6 24 6ZM44 32C42.7758 32 41.8568 31.4296 41.1641 30.3906C40.4319 29.2923 40 27.7033 40 26V18C40 9.16344 32.8366 2 24 2C15.1634 2 8 9.16344 8 18V26C8 27.7033 7.56811 29.2923 6.8359 30.3906C6.1432 31.4296 5.22419 32 4 32C2.89543 32 2 32.8954 2 34C2 35.1046 2.89543 36 4 36H44C45.1046 36 46 35.1046 46 34C46 32.8954 45.1046 32 44 32ZM18.2987 40.9485C18.6631 40.3589 19.3068 40 20 40H28C28.6932 40 29.3369 40.3589 29.7013 40.9485C30.0657 41.5382 30.0988 42.2745 29.7889 42.8944C29.7889 42.8944 29.7878 42.8965 29.7867 42.8987L29.7844 42.9032L29.7796 42.9128L29.7684 42.9343C29.7604 42.9496 29.7511 42.967 29.7405 42.9863C29.7193 43.0248 29.6928 43.0711 29.6607 43.1239C29.5967 43.2293 29.5097 43.3621 29.3969 43.5125C29.1719 43.8125 28.8387 44.1903 28.3744 44.5617C27.4203 45.325 25.9858 46 24 46C22.0142 46 20.5797 45.325 19.6256 44.5617C19.1613 44.1903 18.8281 43.8125 18.6031 43.5125C18.4903 43.3621 18.4033 43.2293 18.3393 43.1239C18.3072 43.0711 18.2807 43.0248 18.2595 42.9863C18.2489 42.967 18.2396 42.9496 18.2316 42.9343L18.2204 42.9128L18.2156 42.9032L18.2133 42.8987L18.2122 42.8965C17.9012 42.2745 17.9343 41.5382 18.2987 40.9485Z"
       />
-    </Icon>
-  );
-}
-
-/**
- * Business verification's storefront. NOT extracted — the live glyph is a
- * 3.2KB multi-part mark on a 20 viewBox; this is the same shape redrawn on the
- * 48 grid, from a screenshot of the settings page.
- */
-export function BusinessVerificationIcon(props: IconProps) {
-  return (
-    <Icon {...props}>
-      <path d="M8 6a2 2 0 0 0-1.86 1.26l-3 7.5A2 2 0 0 0 3 15.5V17a5 5 0 0 0 2 4v18a2 2 0 0 0 2 2h34a2 2 0 0 0 2-2V21a5 5 0 0 0 2-4v-1.5a2 2 0 0 0-.14-.74l-3-7.5A2 2 0 0 0 40 6H8Zm1.35 4h29.3l2.2 5.5V17a2 2 0 0 1-4 0 2 2 0 0 0-4 0 2 2 0 0 1-4 0 2 2 0 0 0-4 0 2 2 0 0 1-4 0 2 2 0 0 0-4 0 2 2 0 0 1-4 0 2 2 0 0 0-4 0 2 2 0 0 1-4 0v-1.5L9.35 10ZM9 22.8a6 6 0 0 0 6-1.7 6 6 0 0 0 9 0 6 6 0 0 0 9 0 6 6 0 0 0 6 1.7V37H9V22.8Z" />
     </Icon>
   );
 }
@@ -881,6 +948,38 @@ export function BoldCheckIcon(props: IconProps) {
   return (
     <Icon viewBox="0 0 26 24" {...props}>
       <path d="M25.0139 1.77347C25.4794 2.07079 25.6156 2.68912 25.3183 3.15454L13.0799 22.3118C12.656 22.9754 11.9442 23.4005 11.1589 23.459C10.3737 23.5175 9.60676 23.2027 9.08914 22.6093L1.02329 13.3629C0.660243 12.9467 0.703321 12.315 1.11951 11.952L3.38024 9.97989C3.79643 9.61683 4.42812 9.65991 4.79117 10.0761L10.6631 16.8075L21.1047 0.462741C21.4021 -0.00267747 22.0204 -0.138942 22.4858 0.158386L25.0139 1.77347Z" />
+    </Icon>
+  );
+}
+
+/** Smiley with a plus: "add a reaction". Stroked, drawn on the same 48×48 grid. */
+export function EmojiAddIcon(props: IconProps) {
+  return (
+    <Icon {...props} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M40.4 26A17 17 0 1 1 22 7.6" />
+      <path d="M15 29a10 10 0 0 0 14 2.5" />
+      <path d="M17 20.5v.5M27 20.5v.5" strokeWidth={4} />
+      <path d="M37 5v12M31 11h12" />
+    </Icon>
+  );
+}
+
+/** Curved arrow pointing back: "reply". */
+export function ReplyIcon(props: IconProps) {
+  return (
+    <Icon {...props} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 10 7 21l12 11" />
+      <path d="M8 21h20a12 12 0 0 1 12 12v5" />
+    </Icon>
+  );
+}
+
+export function TrashIcon(props: IconProps) {
+  return (
+    <Icon {...props} fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 13h32M18 13V8h12v5" />
+      <path d="M12 13l2 27h20l2-27" />
+      <path d="M20 21v12M28 21v12" />
     </Icon>
   );
 }

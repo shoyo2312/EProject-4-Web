@@ -134,6 +134,16 @@ export interface UserProfileResponse {
   displayNameChangeableAt?: string | null;
 }
 
+export type SuggestionReason = "FOLLOWS_YOU" | "FOLLOWED_BY" | "POPULAR";
+
+/** One "person you may know" from `GET /users/me/suggested-accounts`. */
+export interface SuggestedAccountResponse {
+  profile: UserProfileResponse;
+  reason: SuggestionReason;
+  /** `FOLLOWED_BY` only: one account the viewer follows that follows this one. */
+  followedBy: string | null;
+}
+
 export interface FollowResponse {
   followerId: string;
   followingId: string;
@@ -162,10 +172,15 @@ export type SettingsAudience = "EVERYONE" | "FRIENDS" | "NO_ONE";
 export interface UserSettingsResponse {
   commentAudience: SettingsAudience;
   dmAudience: SettingsAudience;
-  /** 10–1440 when set. */
+  /** 10–480, the same limit every day. Null when off or when the limit is set per day. */
   screenTimeLimitMinutes: number | null;
-  /** "HH:mm" wall-clock with no timezone. Both ends set, or both null. */
+  /** Seven limits of 10–480, Monday first. Null unless the limit is set per day. */
+  screenTimeLimitsByDay: number[] | null;
+  /** The passcode itself is write-only; this says whether one is set. */
+  hasScreenTimePasscode: boolean;
+  /** "HH:mm" wall-clock with no timezone, or null when sleep hours are off. */
   sleepHoursStart: string | null;
+  /** Always the start plus eight hours, worked out by the server. */
   sleepHoursEnd: string | null;
   weeklyScreenTimeDigest: boolean;
   /**
@@ -183,7 +198,26 @@ export interface UserSettingsResponse {
   filterAllComments: boolean;
   /** Replaced whole by a PATCH. At most 50, each 1–30 code points. */
   commentKeywords: string[];
+  /** Push notifications → Interactions: what may raise a push or a desktop notification. */
+  pushLikes: boolean;
+  pushComments: boolean;
+  pushNewFollowers: boolean;
+  /** Push notifications → In-app notifications: what may raise a banner on an open tab. */
+  inAppLikes: boolean;
+  inAppComments: boolean;
+  inAppNewFollowers: boolean;
+  inAppReposts: boolean;
+  /** The IANA zone the last screen-time heartbeat came from. Null until there has been one. */
+  timeZone: string | null;
 }
+
+/**
+ * `PATCH /api/v1/users/me/settings`: any of the settings, less the three the
+ * server works out itself, plus the write-only four-digit passcode.
+ */
+export type UserSettingsPatch = Partial<
+  Omit<UserSettingsResponse, "hasScreenTimePasscode" | "timeZone" | "sleepHoursEnd">
+> & { screenTimePasscode?: string };
 
 /* --- api-gateway aggregate ----------------------------------------------- */
 
@@ -542,4 +576,62 @@ export interface VideoSearchResponse {
   commentCount: number;
   shareCount: number;
   createdAt: string;
+}
+
+/** Where a story is in moderation — see `tiktok-backend/docs/story-service-api.md` §1. */
+export type StoryStatus = "PENDING_MODERATION" | "ACTIVE" | "HELD" | "REJECTED";
+
+export type StoryMediaType = "IMAGE" | "VIDEO";
+
+/** The five reactions a viewer can give a story, as story-service spells them. */
+export type StoryReaction = "LIKE" | "LOVE" | "WOW" | "ANGRY" | "SAD";
+
+/** The same three audiences, with the same meaning, as a video's. */
+export type StoryVisibility = VideoVisibility;
+
+export interface StoryResponse {
+  id: string;
+  userId: string;
+  /** A presigned GET that lives one hour — fetch the story again for a fresh one. */
+  mediaUrl: string | null;
+  mediaType: StoryMediaType;
+  caption: string | null;
+  visibility: StoryVisibility;
+  /** The owner's own view only; null for everyone else, who only ever sees ACTIVE stories. */
+  status: StoryStatus | null;
+  durationSeconds: number | null;
+  /** The owner's own view only. */
+  viewCount: number | null;
+  viewedByMe: boolean;
+  /** The viewer's reaction; null when none, and always null on their own story. */
+  myReaction: StoryReaction | null;
+  /** The owner's own view only: how many viewers reacted each way, reactions nobody gave absent. */
+  reactionCounts: Partial<Record<StoryReaction, number>> | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** One bubble in the tray: an owner's live stories, oldest first — the order they play in. */
+export interface StoryGroup {
+  userId: string;
+  stories: StoryResponse[];
+  /**
+   * Whether the viewer has a story of this owner left to watch. For the viewer's own group the feed
+   * always sends false, while a group built with `ringStateOf` has it true as long as one of their
+   * stories is ACTIVE: take the own ring from `ringStateOf`, not from this.
+   */
+  hasUnseen: boolean;
+}
+
+/** An avatar's ring. Accounts with no story the viewer may watch are left out of the answer, not listed. */
+export interface StoryRing {
+  userId: string;
+  /** Always true for a guest. For the viewer's own account: true iff one of their stories is ACTIVE. */
+  hasUnseen: boolean;
+}
+
+export interface StoryViewer {
+  viewerId: string;
+  viewedAt: string;
+  reaction: StoryReaction | null;
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef } from "react";
 
 import { VerifiedBadgeIcon } from "@/components/icons";
+import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useFollow } from "@/hooks/use-follow";
 import { useSuggestedCreators } from "@/hooks/use-suggested-creators";
@@ -117,13 +118,15 @@ function CreatorCard({ creator }: { creator: SuggestedCreator }) {
 
       {/* `.DivInfoContainer` */}
       <div className="absolute inset-x-0 top-[102px] flex h-[200px] flex-col items-center justify-end px-3 pt-[30px] pb-5 text-center">
-        {/* eslint-disable-next-line @next/next/no-img-element -- avatar URL comes from user-service, not the image pipeline */}
-        <img
-          src={creator.author.avatarUrl}
-          alt=""
-          referrerPolicy="no-referrer"
-          className="mb-[14px] h-12 w-12 rounded-full bg-[rgb(136_136_136/0.5)] object-cover"
-        />
+        <StoryAvatar author={creator.author} className="mb-[14px] h-12 w-12">
+          {/* eslint-disable-next-line @next/next/no-img-element -- avatar URL comes from user-service, not the image pipeline */}
+          <img
+            src={creator.author.avatarUrl}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="mb-[14px] h-12 w-12 rounded-full bg-[rgb(136_136_136/0.5)] object-cover"
+          />
+        </StoryAvatar>
 
         <h3 className="w-full truncate text-[18px] leading-[24px] font-bold text-white">
           {creator.author.nickname}

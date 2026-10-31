@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import {
@@ -11,7 +12,12 @@ import {
   VerifiedBadgeIcon,
 } from "@/components/icons";
 import { ProfileMoreMenu } from "@/components/profile/ProfileMoreMenu";
+import { SUGGESTED_ACCOUNTS_PANEL_ID } from "@/components/profile/SuggestedAccountsPanel";
+import { ProfileStoryAvatar } from "@/components/stories/ProfileStoryAvatar";
+import { toast } from "@/components/ui/toast";
 import { displayHandle } from "@/lib/api/adapters";
+import { openConversation } from "@/lib/api/conversations";
+import { chatErrorMessage } from "@/lib/chat";
 import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { FollowStatus, UserProfile } from "@/types/tiktok";
@@ -29,7 +35,7 @@ import type { FollowStatus, UserProfile } from "@/types/tiktok";
  *
  * Which buttons appear is the page's only real fork: the owner gets
  * Edit profile / Promote post / settings / share, a visitor gets
- * Follow / Message / add-friend / share / more.
+ * Follow / Message / add-friend / more.
  */
 export function ProfileHeader({
   profile,
@@ -39,6 +45,8 @@ export function ProfileHeader({
   onToggleFollow,
   onOpenFollowers,
   onOpenFollowing,
+  suggestedOpen,
+  onToggleSuggested,
 }: {
   profile: UserProfile;
   isOwner: boolean;
@@ -58,6 +66,9 @@ export function ProfileHeader({
   /** Opens the Followers/Following dialog on that stat. */
   onOpenFollowers: () => void;
   onOpenFollowing: () => void;
+  /** Whether the "Suggested accounts" row under the header is open; the add-friend button toggles it. */
+  suggestedOpen: boolean;
+  onToggleSuggested: () => void;
 }) {
   const fromServer: FollowStatus = profile.isFollowing
     ? "FOLLOWING"
@@ -66,6 +77,22 @@ export function ProfileHeader({
       : "NONE";
   const [status, setStatus] = useState(fromServer);
   const [followPending, setFollowPending] = useState(false);
+  const [messagePending, setMessagePending] = useState(false);
+  const router = useRouter();
+
+  /** Get-or-create the thread, then land in it; refusals (blocked, DMs off) surface as a toast. */
+  const openMessages = async () => {
+    if (!requireSignIn() || messagePending) return;
+    setMessagePending(true);
+    try {
+      const conversation = await openConversation(profile.author.userId);
+      router.push(`/messages/${conversation.id}`);
+    } catch (error) {
+      toast.error(chatErrorMessage(error));
+    } finally {
+      setMessagePending(false);
+    }
+  };
 
   /**
    * The button owns its state so a click responds instantly, but the server's
@@ -106,13 +133,11 @@ export function ProfileHeader({
   };
 
   return (
-    <header className="mt-3 mb-5 flex items-start gap-7 tt-840:gap-4">
-      {/* eslint-disable-next-line @next/next/no-img-element -- local static asset, no optimisation needed */}
-      <img
-        src={profile.author.avatarUrl}
-        alt=""
-        referrerPolicy="no-referrer"
-        className="h-[172px] w-[172px] flex-none rounded-full object-cover tt-840:h-24 tt-840:w-24"
+    // 20px under the header, 12px while the suggestions row is open — switched, not animated.
+    <header className={cn("mt-3 flex items-start gap-7 tt-840:gap-4", suggestedOpen ? "mb-3" : "mb-5")}>
+      <ProfileStoryAvatar
+        author={profile.author}
+        className="h-[172px] w-[172px] flex-none tt-840:h-24 tt-840:w-24"
       />
 
       <div className="flex min-w-0 flex-col">
@@ -170,16 +195,25 @@ export function ProfileHeader({
               <PillButton primary={status === "NONE"} onClick={toggleFollow}>
                 {status === "FOLLOWING" ? "Following" : status === "REQUESTED" ? "Requested" : "Follow"}
               </PillButton>
-              <PillButton onClick={requireSignIn}>Message</PillButton>
-              <IconButton label="Suggest friends" onClick={requireSignIn}>
+              <PillButton onClick={openMessages}>Message</PillButton>
+              <IconButton
+                label="Suggested accounts"
+                expanded={suggestedOpen}
+                controls={SUGGESTED_ACCOUNTS_PANEL_ID}
+                onClick={() => {
+                  if (requireSignIn()) onToggleSuggested();
+                }}
+              >
                 <AddFriendIcon className="h-5 w-5" />
               </IconButton>
             </>
           )}
 
-          <IconButton label="Share profile" onClick={requireSignIn}>
-            <ShareIcon className="h-5 w-5" />
-          </IconButton>
+          {isOwner && (
+            <IconButton label="Share profile" onClick={requireSignIn}>
+              <ShareIcon className="h-5 w-5" />
+            </IconButton>
+          )}
 
           {!isOwner && (
             <ProfileMoreMenu userId={profile.author.userId} name={profile.author.nickname} />
@@ -264,10 +298,15 @@ function PillButton({
 function IconButton({
   children,
   label,
+  expanded,
+  controls,
   onClick,
 }: {
   children: React.ReactNode;
   label: string;
+  /** For a toggle: what it opens, and whether it is open now. */
+  expanded?: boolean;
+  controls?: string;
   onClick: () => void;
 }) {
   return (
@@ -276,6 +315,8 @@ function IconButton({
       onClick={onClick}
       aria-label={label}
       title={label}
+      aria-expanded={expanded}
+      aria-controls={controls}
       className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-[var(--tt-field)] text-[var(--tt-icon)] transition-colors hover:bg-[var(--tt-shape-neutral-3)]"
     >
       {children}

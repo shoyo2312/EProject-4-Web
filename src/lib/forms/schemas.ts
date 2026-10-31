@@ -272,18 +272,3 @@ export function commentKeywordSchemaFor(existing: readonly string[]) {
       ),
   });
 }
-
-/**
- * `/setting` → Sleep hours: two `<input type="time">` values, already the
- * server's "HH:mm". Mirrors user-service — both ends, and not the same minute.
- * Start after end is not an error: that is a night crossing midnight.
- */
-export const sleepHoursSchema = z
-  .object({
-    start: z.string().min(1, "Choose a start time."),
-    end: z.string().min(1, "Choose an end time."),
-  })
-  .refine((values) => values.start !== values.end, {
-    path: ["end"],
-    message: "Start and end can’t be the same time.",
-  });

@@ -1,0 +1,23 @@
+# Production: one container from the Dockerfile. Coolify (Docker Compose build pack) reads this
+# file; every ${VAR:?} must be set in its Environment Variables. No port is published — the proxy
+# in front is the only way in. `docker-compose.yml` beside this is the generic template, not prod.
+#
+# Everything here is fixed at `next build` (the /api rewrite target, next/image hosts, NEXT_PUBLIC_*),
+# so they are build args, not runtime env — changing one means rebuilding the image.
+# API_GATEWAY_URL should reach api-gateway over Coolify's internal network (http://api-gateway:8080,
+# "Connect To Predefined Network" on): through the public domain every viewer shares one rate-limit
+# bucket and every sign-in is logged from the data centre — see tiktok-backend docs/operations.md §6.
+# NEXT_PUBLIC_WS_GATEWAY_URL is what the *browser* dials, so that one is the public gateway URL.
+services:
+  web:
+    build:
+      context: .
+      args:
+        API_GATEWAY_URL: ${API_GATEWAY_URL:?}
+        MEDIA_ORIGIN: ${MEDIA_ORIGIN:?}
+        MEDIA_CDN_HOST: ${MEDIA_CDN_HOST:-cdn.tiktok-clone.local}
+        NEXT_PUBLIC_WS_GATEWAY_URL: ${NEXT_PUBLIC_WS_GATEWAY_URL:?}
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:?}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+        NEXT_PUBLIC_FACEBOOK_APP_ID: ${NEXT_PUBLIC_FACEBOOK_APP_ID:-}
+    restart: unless-stopped

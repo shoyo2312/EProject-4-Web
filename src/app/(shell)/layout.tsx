@@ -1,3 +1,4 @@
+import { MessagesPanel, MessagesPanelSpacer } from "@/components/messages/panel/MessagesPanel";
 import { SideNav } from "@/components/layout/SideNav";
 import { FOOTER_SECTIONS, NAV_ITEMS } from "@/lib/site-config";
 
@@ -24,6 +25,9 @@ export default function ShellLayout({
       <div className="z-[99] h-screen w-[var(--side-nav-width)] flex-none transition-[width] duration-300 ease-[var(--tt-ease)] tt-1024:w-18 has-[.side-nav-collapsed]:w-18">
         <SideNav navItems={NAV_ITEMS} footerSections={FOOTER_SECTIONS} />
       </div>
+
+      <MessagesPanelSpacer />
+      <MessagesPanel />
 
       {children}
     </>

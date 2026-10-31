@@ -7,13 +7,19 @@ import { useEscapeKey } from "@/hooks/use-escape-key";
 import { AddFriendIcon, ChevronRightIcon, CloseIcon } from "@/components/icons";
 import { FollowRequestsModal } from "@/components/layout/FollowRequestsModal";
 import { useSession } from "@/components/session/SessionProvider";
+import { useStories } from "@/components/stories/StoriesProvider";
+import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import {
   NOTIFICATION_FILTERS,
   groupByDay,
   type NotificationInbox,
 } from "@/hooks/use-notifications";
-import { DEFAULT_AVATAR } from "@/lib/api/adapters";
-import { referencesUser, type NotificationResponse } from "@/lib/api/notifications";
+import { authorFromProfile, DEFAULT_AVATAR, unknownAuthor } from "@/lib/api/adapters";
+import {
+  ACCOUNT_SECURITY_REFERENCE,
+  referencesUser,
+  type NotificationResponse,
+} from "@/lib/api/notifications";
 import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
 import { getFollowRequests } from "@/lib/api/users";
 import { formatRelativeTime } from "@/lib/format";
@@ -48,17 +54,25 @@ import { cn } from "@/lib/utils";
  * `visibility` is included in the transition on purpose: it flips to visible
  * immediately on open but holds until the end of the 400ms on close, so the
  * panel does not disappear mid-slide.
+ *
+ * `placement="header"` is for `/setting`, which has a header instead of the
+ * rail: the same panel hangs under the 60px bar at the right edge, beside the
+ * inbox glyph that opened it, and slides in from that side.
  */
 export function ActivityDrawer({
   open,
   inbox,
   onClose,
+  placement = "rail",
 }: {
   open: boolean;
   inbox: NotificationInbox;
   onClose: () => void;
+  placement?: "rail" | "header";
 }) {
+  const fromRail = placement === "rail";
   const router = useRouter();
+  const { openStories } = useStories();
   const signedIn = useSession().user !== null;
   const [filter, setFilter] = useState<string>(NOTIFICATION_FILTERS[0].label);
   /** Follow requests waiting on this (private) account; a public one has none. */
@@ -115,9 +129,31 @@ export function ActivityDrawer({
    * Follow the notification to whatever it is about, and mark it read on the
    * way — opening it is the read, the same as the live site.
    */
-  const openNotification = (item: NotificationResponse) => {
+  const openNotification = async (
+    item: NotificationResponse,
+    actor: UserProfileResponse | undefined,
+  ) => {
     inbox.markRead(item.id);
+
+    // A weekly update names the week it covers (its Monday), not a video: it
+    // opens the Summary chart on the settings page at that week.
+    if (item.type === "SCREEN_TIME") {
+      navigate(`/setting?summary=${item.referenceId ?? "1"}#screen-time`);
+      return;
+    }
     if (!item.referenceId) return;
+
+    // The story's owner, not a story: one entry stands for all of their stories in the last
+    // day, and by now there may be none the viewer can still see — then their profile is where
+    // the tap lands.
+    if (item.type === "STORY") {
+      const opened = await openStories(
+        actor ? authorFromProfile(actor) : unknownAuthor(item.referenceId),
+      );
+      if (opened) onClose();
+      else navigate(`/@${item.referenceId}`);
+      return;
+    }
 
     // The follow types' referenceId is an account's userId, and `/@{id}` is a
     // profile URL in its own right (see ProfileRouter) — no lookup needed to
@@ -157,23 +193,33 @@ export function ActivityDrawer({
           type="button"
           aria-label="Close notifications"
           onClick={onClose}
-          className="fixed top-0 left-[calc(20rem+4.5rem)] z-[99] h-screen w-screen cursor-default"
+          className={cn(
+            "fixed z-[99] cursor-default",
+            fromRail
+              ? "top-0 left-[calc(20rem+4.5rem)] h-screen w-screen"
+              : "inset-x-0 top-15 bottom-0",
+          )}
         />
       )}
 
       <div
         inert={!open || undefined}
         className={cn(
-          // Under the sidebar's animation cover — see `SearchDrawer`.
-          "fixed top-0 z-[1] h-screen w-80 overscroll-contain bg-[var(--tt-page)]",
-          "left-18 border-x border-[var(--tt-divider)]",
+          "fixed w-80 overscroll-contain bg-[var(--tt-page)]",
+          fromRail
+            ? // Under the sidebar's animation cover — see `SearchDrawer`.
+              "top-0 left-18 z-[1] h-screen border-x border-[var(--tt-divider)]"
+            : // Over the mask, which covers everything below the header.
+              "top-15 right-0 z-[100] h-[calc(100vh-60px)] border-l border-[var(--tt-divider)]",
           // `transform`, not Tailwind's `translate-x-*`: in v4 those compile to the
           // `translate` property, which `transition-[transform]` does not cover —
           // the slide snapped instantly while opacity eased.
           "transition-[transform,opacity,visibility] duration-[400ms] ease-[ease]",
           open
             ? "visible opacity-100 [transform:translateX(0)]"
-            : "invisible opacity-30 [transform:translateX(-24rem)] [pointer-events:none]",
+            : fromRail
+              ? "invisible opacity-30 [transform:translateX(-24rem)] [pointer-events:none]"
+              : "invisible opacity-30 [transform:translateX(24rem)] [pointer-events:none]",
         )}
       >
         {/* `.DivDrawerCloseButtonContainer` — absolute, top 1.5rem, end 1rem.
@@ -281,8 +327,9 @@ export function ActivityDrawer({
                           item={item}
                           actor={actor}
                           video={item.referenceId ? inbox.videos.get(item.referenceId) : undefined}
-                          onOpen={() => openNotification(item)}
+                          onOpen={() => openNotification(item, actor)}
                           onOpenActor={() => openActor(item, actor)}
+                          onSecure={() => navigate("/setting")}
                         />
                       </li>
                     );
@@ -358,9 +405,14 @@ function describe(item: NotificationResponse): string {
       return "requested to follow you";
     case "FOLLOW_REQUEST_ACCEPTED":
       return "accepted your follow request";
+    case "STORY":
+      return "posted a new story";
+    case "REPOST":
+      return "reposted your video";
     case "COMMENT":
       return `commented: ${item.body}`;
     case "SYSTEM":
+    case "SCREEN_TIME":
       return item.body;
   }
 }
@@ -371,6 +423,7 @@ function NotificationItem({
   video,
   onOpen,
   onOpenActor,
+  onSecure,
 }: {
   item: NotificationResponse;
   /** Undefined while still resolving, or absent for SYSTEM (no actor). */
@@ -379,6 +432,8 @@ function NotificationItem({
   video: VideoResponse | undefined;
   onOpen: () => void;
   onOpenActor: () => void;
+  /** Settings, where "Change password" is — offered on the new-device notice only. */
+  onSecure: () => void;
 }) {
   /**
    * The actor is the heading — a row about a person shows that person, never the service's own
@@ -396,6 +451,17 @@ function NotificationItem({
     onOpen();
     if (expandable) setExpanded((value) => !value);
   };
+  const avatar = (
+    // eslint-disable-next-line @next/next/no-img-element -- the avatar can be any CDN URL the account set; next/image would need each host allow-listed
+    <img
+      src={actor?.avatarUrl ?? DEFAULT_AVATAR}
+      alt=""
+      referrerPolicy="no-referrer"
+      width={48}
+      height={48}
+      className="h-full w-full rounded-3xl object-cover"
+    />
+  );
 
   return (
     <div
@@ -416,15 +482,17 @@ function NotificationItem({
     >
       <div className="flex h-12 w-12 min-w-12 items-center justify-center rounded-3xl bg-[rgb(50,54,75)]">
         {item.actorId ? (
-          // eslint-disable-next-line @next/next/no-img-element -- the avatar can be any CDN URL the account set; next/image would need each host allow-listed
-          <img
-            src={actor?.avatarUrl ?? DEFAULT_AVATAR}
-            alt=""
-            referrerPolicy="no-referrer"
-            width={48}
-            height={48}
-            className="h-12 w-12 rounded-3xl object-cover"
-          />
+          actor ? (
+            <StoryAvatar
+              author={authorFromProfile(actor)}
+              className="h-12 w-12"
+              decorative={item.type === "STORY"}
+            >
+              {avatar}
+            </StoryAvatar>
+          ) : (
+            avatar
+          )
         ) : (
           <BellGlyph />
         )}
@@ -472,6 +540,42 @@ function NotificationItem({
             <p className="mt-1 text-[12px] leading-[16px] text-[rgb(255_255_255_/_0.5)]">
               {new Date(item.createdAt).toLocaleString()}
             </p>
+            {item.type === "SYSTEM" && item.referenceId === ACCOUNT_SECURITY_REFERENCE && (
+              <>
+                {/* Its own target, like the actor's name: stopPropagation so the row does not also
+                    collapse. Settings opens on Manage account, where "Change password" is — and
+                    changing it signs every other device out. */}
+                <span
+                  role="link"
+                  tabIndex={0}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSecure();
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onSecure();
+                    }
+                  }}
+                  className="mt-2 inline-block text-[13px] font-semibold leading-[17px] text-[var(--tt-red)] hover:underline"
+                >
+                  Secure your account
+                </span>
+                {/* The place comes from DB-IP's free database, whose licence asks a web page that
+                    shows one for a link back. */}
+                <a
+                  href="https://db-ip.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                  className="mt-1 block w-fit text-[11px] leading-[14px] text-[rgb(255_255_255_/_0.5)] hover:underline"
+                >
+                  IP Geolocation by DB-IP
+                </a>
+              </>
+            )}
           </>
         ) : (
           <p className="truncate text-[13px] leading-[17px] text-[var(--tt-text)]">

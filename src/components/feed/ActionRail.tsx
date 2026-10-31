@@ -13,8 +13,8 @@ import {
   ShareIcon,
 } from "@/components/icons";
 import { ShareSheet } from "@/components/feed/ShareSheet";
+import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import { useFollow } from "@/hooks/use-follow";
-import { shareVideo } from "@/lib/api/interactions";
 import { cn } from "@/lib/utils";
 import { formatCount } from "@/lib/format";
 import type { FeedVideo } from "@/types/tiktok";
@@ -83,14 +83,8 @@ export function ActionRail({
   const [shareOpen, setShareOpen] = useState(false);
   const [extraShares, setExtraShares] = useState(0);
 
-  // Opening the sheet is itself the share, on the live site as much as here —
-  // there is no further "confirm" step, so it is recorded the moment the rail
-  // button is tapped.
-  const recordShare = () => {
-    setShareOpen(true);
-    setExtraShares((n) => n + 1);
-    shareVideo(video.id).catch(() => setExtraShares((n) => n - 1));
-  };
+  // Opening the sheet counts for nothing: a share is a message that was delivered, or a link that was
+  // copied or handed to another service, and the sheet reports each through `onShared`.
 
   return (
     <section
@@ -102,18 +96,24 @@ export function ActionRail({
       {/* Avatar + follow badge — 48×48 with a 24×24 badge overlapping the base
           (32×32 with a 16×16 badge in the compact rail). */}
       <div className={cn("relative", compact ? "mb-2.5 h-8 w-8" : "mb-3 h-12 w-12")}>
-        <Link href={`/@${video.author.username}`} aria-label={video.author.nickname}>
-          <Image
-            src={video.author.avatarUrl}
-            alt={video.author.nickname}
-            width={48}
-            height={48}
-            className={cn(
-              "rounded-full object-cover",
-              compact ? "h-8 w-8" : "h-12 w-12",
-            )}
-          />
-        </Link>
+        <StoryAvatar
+          author={video.author}
+          className={compact ? "h-8 w-8" : "h-12 w-12"}
+          thin={compact}
+        >
+          <Link href={`/@${video.author.username}`} aria-label={video.author.nickname}>
+            <Image
+              src={video.author.avatarUrl}
+              alt={video.author.nickname}
+              width={48}
+              height={48}
+              className={cn(
+                "rounded-full object-cover",
+                compact ? "h-8 w-8" : "h-12 w-12",
+              )}
+            />
+          </Link>
+        </StoryAvatar>
         {/* Hidden on your own video: following yourself is not a thing the
             backend allows, and the badge would only ever error. */}
         {!isSelf && (
@@ -187,7 +187,7 @@ export function ActionRail({
 
       <RailButton
         label={formatCount(video.stats.shares + extraShares)}
-        onClick={recordShare}
+        onClick={() => setShareOpen(true)}
         active={shareOpen}
         activeColor="text-[var(--tt-icon)]"
         ariaLabel="Share video"
@@ -201,6 +201,7 @@ export function ActionRail({
           videoId={video.id}
           shares={video.stats.shares + extraShares}
           onClose={() => setShareOpen(false)}
+          onShared={(count) => setExtraShares((n) => n + count)}
         />
       )}
 

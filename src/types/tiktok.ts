@@ -166,6 +166,13 @@ export interface SuggestedCreator {
   isFollowing: boolean;
 }
 
+/** A card in the profile's "Suggested accounts" row and the dialog's Suggested tab. */
+export interface SuggestedAccount {
+  author: Author;
+  /** "Follows you" / "Followed by {name}" / "Suggested for you" — see `lib/suggested-accounts.ts`. */
+  label: string;
+}
+
 /**
  * The four tabs of a profile page, in the order the live bar renders them.
  * (A fifth, "Short dramas", exists in the live DOM but stays 0×0 unless the
@@ -274,14 +281,13 @@ export type SettingsIconName =
   | "manage-account"
   | "privacy"
   | "push-notifications"
-  | "business-verification"
   | "screen-time"
   | "content-preferences"
   | "accessibility";
 
 /**
- * What a settings row actually does. Absent on the rows that are still inert —
- * the ones whose flows need account state no backend service stores yet.
+ * What a settings row actually does. Every row has one: a row TikTok shows
+ * that this app cannot back is left out of the page, not drawn inert.
  *
  * The layout stays local data (`SETTINGS_SECTIONS`) while behaviour hangs off
  * this key, so a row gaining an action is one word here and a branch in `Row`,
@@ -302,23 +308,27 @@ export type SettingsAction =
   | "screen-time-limit"
   | "password"
   | "sleep-hours"
-  | "weekly-screen-time";
+  | "weekly-screen-time"
+  | "push-preferences"
+  | "in-app-preferences"
+  | "screen-time-summary"
+  | "keyword-filters";
 
 /**
- * The five row shapes the live settings panel uses. `link` and `value` both
- * end in a chevron; `value` also shows the current choice before it. `expand`
- * is a row that opens in place (caret), `external` leaves TikTok.
+ * The row shapes the settings panel uses. `link` and `value` both end in a
+ * chevron; `value` also shows the current choice before it. `expand` is a row
+ * that opens in place (caret); `heading` sets its title as a group heading, as
+ * the live panel does for "In-app notifications".
  */
 export type SettingsRow = {
   title: string;
   description?: string;
-  action?: SettingsAction;
+  action: SettingsAction;
 } & (
   | { kind: "link" }
   | { kind: "value"; value: string }
   | { kind: "switch"; on: boolean }
-  | { kind: "expand" }
-  | { kind: "external" }
+  | { kind: "expand"; heading?: boolean }
 );
 
 export interface SettingsGroup {

@@ -49,10 +49,31 @@ const LOCAL_MEDIA_ORIGIN = ["localhost", "127.0.0.1", "0.0.0.0", "[::1]"].includ
   MEDIA_ORIGIN.hostname,
 );
 
+/**
+ * Where the dev seed (`scripts/seed` in the backend) points its avatars and video posters. They are
+ * third-party placeholder hosts, so they are allowed for `next dev` and local builds only; a real
+ * deployment serves media from the CDN and must not let the optimizer fetch from them. Set
+ * `ALLOW_SEED_MEDIA=true` to keep them in a production build that runs against seed data.
+ */
+const SEED_MEDIA_HOSTS =
+  process.env.NODE_ENV !== "production" || process.env.ALLOW_SEED_MEDIA === "true"
+    ? ["i.pravatar.cc", "picsum.photos"]
+    : [];
+
 const nextConfig: NextConfig = {
   output: "standalone",
 
   images: {
+    /**
+     * The optimizer would fetch every avatar from the server itself, out through Cloudflare and
+     * back in through the tunnel. In production that outbound connection to Cloudflare times out
+     * (no IPv6 route, flaky IPv4 connects), so `/_next/image` answered with 500s or took 5–16 s
+     * and avatars stayed grey. Served as-is, the browser loads them straight from Cloudflare's edge.
+     * The settings below only apply again if this is turned back off.
+     */
+    // ponytail: avatars ship at full size (~30–60 KB JPEG instead of a ~3 KB WebP); have media-worker store resized variants if that weight starts to matter.
+    unoptimized: true,
+
     remotePatterns: [
       { protocol: "https", hostname: MEDIA_CDN_HOST },
       {
@@ -60,7 +81,7 @@ const nextConfig: NextConfig = {
         hostname: MEDIA_ORIGIN.hostname,
         port: MEDIA_ORIGIN.port,
       },
-      ...PROVIDER_AVATAR_HOSTS.map((hostname) => ({
+      ...[...PROVIDER_AVATAR_HOSTS, ...SEED_MEDIA_HOSTS].map((hostname) => ({
         protocol: "https" as const,
         hostname,
       })),
@@ -74,6 +95,17 @@ const nextConfig: NextConfig = {
      * deployment serves media from the CDN and must keep the block.
      */
     dangerouslyAllowLocalIP: LOCAL_MEDIA_ORIGIN,
+
+    /**
+     * How long an optimized image stays in Next's cache and in the browser's
+     * (`Cache-Control: max-age`). The default is 4 hours, which is why every
+     * comment avatar was re-fetched from the media origin — a round trip out
+     * through Cloudflare and back into the tunnel — several times a day.
+     * Avatar URLs carry a `?v=` that changes on every upload, and a thumbnail
+     * is written once under its video id, so a long TTL never shows a stale
+     * picture.
+     */
+    minimumCacheTTL: 60 * 60 * 24 * 30,
   },
 
   /**

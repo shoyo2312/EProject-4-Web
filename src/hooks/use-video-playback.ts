@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
+import { usePlaybackHeld } from "@/hooks/use-playback-held";
+
 interface UseVideoPlaybackOptions {
   /** Timeline length until the `<video>`'s own `duration` loads. */
   durationSeconds: number;
@@ -53,7 +55,10 @@ export function useVideoPlayback({
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const [isActive, setIsActive] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [wantsToPlay, setIsPlaying] = useState(false);
+  // The daily limit's cover holds every player; the card resumes when it lifts.
+  const held = usePlaybackHeld();
+  const isPlaying = wantsToPlay && !held;
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(durationSeconds);
 
