@@ -186,7 +186,7 @@ function AvatarRail({ openId }: { openId: string }) {
               active ? "bg-[var(--chat-active)] ring-2 ring-[var(--tt-red)]" : "hover:bg-[var(--chat-hover)]",
             )}
           >
-            <ChatAvatar src={author?.avatarUrl} className="h-9 w-9" />
+            <ChatAvatar userId={otherParticipantId(item, me)} src={author?.avatarUrl} className="h-9 w-9" />
             {item.hasUnread && (
               <span aria-hidden className="absolute top-0.5 right-0.5 h-2.5 w-2.5 rounded-full bg-[var(--tt-red)]" />
             )}

@@ -116,7 +116,7 @@ function OpenThread({
           href={`/@${otherId}`}
           className="flex min-w-0 items-center gap-3 rounded-[var(--chat-radius-control)] py-1 pr-3 transition-colors hover:bg-[var(--chat-hover)] focus-visible:outline-2 focus-visible:outline-white/70"
         >
-          <ChatAvatar src={avatar} className="h-10 w-10 tt-768:h-9 tt-768:w-9" />
+          <ChatAvatar userId={otherId} src={avatar} className="h-10 w-10 tt-768:h-9 tt-768:w-9" />
           <span className="min-w-0">
             <span className="block truncate text-[16px] leading-5 font-semibold tracking-[-0.005em] text-[var(--tt-text)]">
               {name}

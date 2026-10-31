@@ -171,7 +171,7 @@ export function ConversationRow({
         withMenu && !hover && "pr-12",
       )}
     >
-      <ChatAvatar src={author?.avatarUrl} className="h-12 w-12" />
+      <ChatAvatar userId={otherParticipantId(item, me)} src={author?.avatarUrl} className="h-12 w-12" />
 
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">

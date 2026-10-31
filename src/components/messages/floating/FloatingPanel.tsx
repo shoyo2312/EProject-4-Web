@@ -62,7 +62,7 @@ export function FloatingPanel({
           href={`/@${otherId}`}
           className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[var(--chat-radius-control)] py-1 pr-2 pl-1 transition-colors hover:bg-[var(--chat-hover)] focus-visible:outline-2 focus-visible:outline-white/70"
         >
-          <ChatAvatar src={author?.avatarUrl} className="h-9 w-9" />
+          <ChatAvatar userId={otherId} src={author?.avatarUrl} className="h-9 w-9" />
           <span className="min-w-0">
             <span className="block truncate text-[15px] leading-5 font-semibold text-[var(--tt-text)]">
               {name}
