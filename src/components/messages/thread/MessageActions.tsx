@@ -48,46 +48,51 @@ export function MessageActions({
     <div
       className={cn(
         // Beside the bubble, out of the flow: appearing moves nothing. It fades and settles in rather than snapping.
-        "absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 rounded-full border border-[var(--chat-line)] bg-[var(--chat-pop)] p-0.5 shadow-[var(--chat-shadow-soft)]",
-        mine ? "right-full mr-2" : "left-full ml-2",
+        // The space between bubble and bar is this element's own padding, not a margin: a margin is not
+        // hoverable, so the pointer would leave the message on its way to the bar and the bar would vanish.
+        "absolute top-1/2 z-10 -translate-y-1/2",
+        // Scales toward the bubble, so the edge that bridges the two never moves.
+        mine ? "right-full origin-right pr-2" : "left-full origin-left pl-2",
         "pointer-events-none scale-95 opacity-0 transition duration-150 ease-out motion-reduce:transition-none",
         "focus-within:pointer-events-auto focus-within:scale-100 focus-within:opacity-100 group-hover/msg:pointer-events-auto group-hover/msg:scale-100 group-hover/msg:opacity-100",
         (pinned || pickerOpen) && "pointer-events-auto scale-100 opacity-100",
       )}
     >
-      {!recalled && (
-        <>
-          <button
-            ref={trigger}
-            type="button"
-            onClick={() => setPickerOpen((open) => !open)}
-            aria-label="React to message"
-            aria-haspopup="dialog"
-            aria-expanded={pickerOpen}
-            className={cn(barButton, pickerOpen && "bg-[var(--tt-shape-neutral-3)]")}
-          >
-            <EmojiAddIcon className="h-[18px] w-[18px]" />
-          </button>
-          <button type="button" onClick={onReply} aria-label="Reply" className={barButton}>
-            <ReplyIcon className="h-[18px] w-[18px]" />
-          </button>
-        </>
-      )}
-      <button type="button" onClick={onDelete} aria-label="Delete message" className={barButton}>
-        <TrashIcon className="h-[18px] w-[18px]" />
-      </button>
+      <div className="flex items-center gap-0.5 rounded-full border border-[var(--chat-line)] bg-[var(--chat-pop)] p-0.5 shadow-[var(--chat-shadow-soft)]">
+        {!recalled && (
+          <>
+            <button
+              ref={trigger}
+              type="button"
+              onClick={() => setPickerOpen((open) => !open)}
+              aria-label="React to message"
+              aria-haspopup="dialog"
+              aria-expanded={pickerOpen}
+              className={cn(barButton, pickerOpen && "bg-[var(--tt-shape-neutral-3)]")}
+            >
+              <EmojiAddIcon className="h-[18px] w-[18px]" />
+            </button>
+            <button type="button" onClick={onReply} aria-label="Reply" className={barButton}>
+              <ReplyIcon className="h-[18px] w-[18px]" />
+            </button>
+          </>
+        )}
+        <button type="button" onClick={onDelete} aria-label="Delete message" className={barButton}>
+          <TrashIcon className="h-[18px] w-[18px]" />
+        </button>
 
-      {pickerOpen && (
-        <ReactionPicker
-          anchor={trigger}
-          current={current}
-          onPick={(emoji) => {
-            setPickerOpen(false);
-            onReact(emoji);
-          }}
-          onClose={() => setPickerOpen(false)}
-        />
-      )}
+        {pickerOpen && (
+          <ReactionPicker
+            anchor={trigger}
+            current={current}
+            onPick={(emoji) => {
+              setPickerOpen(false);
+              onReact(emoji);
+            }}
+            onClose={() => setPickerOpen(false)}
+          />
+        )}
+      </div>
     </div>
   );
 }
