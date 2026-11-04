@@ -61,7 +61,7 @@ export function PostCell({
 
 export function PostThumb({ url, className }: { url: string | null; className?: string }) {
   return (
-    <span className={cn("flex-none overflow-hidden rounded-[4px] bg-black/8", className)}>
+    <span className={cn("block flex-none overflow-hidden rounded-[4px] bg-black/8", className)}>
       {url && (
         // eslint-disable-next-line @next/next/no-img-element -- CDN thumbnail, as in ActivityDrawer
         <img src={url} alt="" className="h-full w-full object-cover" />
