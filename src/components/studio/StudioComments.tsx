@@ -8,6 +8,7 @@ import { DateRangeChip, type DayRange } from "@/components/studio/DateRangeChip"
 import { EmptyState, FilterChip, MenuOption, Popover, StudioCard, StudioSkeleton } from "@/components/studio/ui";
 import { toast } from "@/components/ui/toast";
 import { useCommentContext } from "@/hooks/use-comment-context";
+import { useDebounced } from "@/hooks/use-debounced";
 import { useStudioQuery } from "@/hooks/use-studio-query";
 import { messageFor } from "@/lib/api/errors";
 import { addComment, approveComment, deleteComment } from "@/lib/api/interactions";
@@ -28,16 +29,16 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
  * kind, post, date and text. Held comments are approved or deleted here;
  * anything can be replied to or deleted.
  */
-export function StudioComments() {
+/**
+ * `initialVideoId`: a Posts row's "View comments" opens this already narrowed to that post. It
+ * only seeds the filter, so the route keys this on it: another post in the URL is a fresh inbox.
+ */
+export function StudioComments({ initialVideoId }: { initialVideoId?: string }) {
   const [status, setStatus] = useState<StatusFilter>();
-  const [videoId, setVideoId] = useState<string | undefined>();
+  const [videoId, setVideoId] = useState<string | undefined>(initialVideoId);
   const [range, setRange] = useState<DayRange>({ start: null, end: null });
   const [search, setSearch] = useState("");
-  const [q, setQ] = useState("");
-  useEffect(() => {
-    const id = window.setTimeout(() => setQ(search.trim()), 300);
-    return () => window.clearTimeout(id);
-  }, [search]);
+  const q = useDebounced(search.trim(), 300);
 
   const [comments, setComments] = useState<CommentResponse[] | null>(null);
   const [cursor, setCursor] = useState<string | null>(null);
