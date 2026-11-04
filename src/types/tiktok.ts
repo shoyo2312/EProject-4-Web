@@ -194,6 +194,8 @@ export interface ProfileVideo {
   views: number;
   /** `visibility: "PRIVATE"` — the grid marks it with a lock. Owner-only. */
   isPrivate?: boolean;
+  /** Pinned by the owner: sorted first by video-service, marked "Pinned" on the tile. */
+  isPinned?: boolean;
   /**
    * video-service's status. On someone else's grid every tile is PUBLISHED
    * anyway — it is the owner's own grid that

@@ -273,6 +273,33 @@
 }
 
 /*
+ * Studio's loading dots: cyan and red cross over and back. RECONSTRUCTION —
+ * the live loader is drawn from JS, so there are no keyframes to copy.
+ */
+@theme {
+  --animate-tt-dot-cyan: tt-dot-cyan 0.9s ease-in-out infinite;
+  --animate-tt-dot-red: tt-dot-red 0.9s ease-in-out infinite;
+  @keyframes tt-dot-cyan {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    50% {
+      transform: translateX(10px);
+    }
+  }
+  @keyframes tt-dot-red {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    50% {
+      transform: translateX(-10px);
+    }
+  }
+}
+
+/*
  * Accessibility -> "Increase color contrast", written on <html> by
  * `HighContrastSync`.
  *

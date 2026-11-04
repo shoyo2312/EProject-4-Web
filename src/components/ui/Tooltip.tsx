@@ -25,7 +25,8 @@ export function Tooltip({
 }: {
   label: string;
   placement?: "top" | "right" | "right-start";
-  variant?: "label" | "bubble";
+  /** `studio`: TikTok Studio's dim action label, which — unlike the rail's — fades in over 300ms. */
+  variant?: "label" | "bubble" | "studio";
   children: ReactNode;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -65,7 +66,9 @@ export function Tooltip({
                 "pointer-events-none fixed z-[100]",
                 variant === "bubble"
                   ? "max-w-[240px] whitespace-normal rounded-[12px] bg-white px-3 py-[9px] text-[14px] leading-[18.2px] font-medium text-black shadow-[0_2px_10px_rgba(0,0,0,0.21)]"
-                  : "whitespace-nowrap rounded-md border border-[var(--tt-divider)] bg-[var(--tt-page)] px-2 py-1 text-[13px] font-medium text-[var(--tt-text)] shadow-lg",
+                  : variant === "studio"
+                    ? "whitespace-nowrap rounded-[6px] bg-black/50 px-2.5 py-1.5 text-[14px] leading-5 font-medium text-white transition-opacity duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] starting:opacity-0"
+                    : "whitespace-nowrap rounded-md border border-[var(--tt-divider)] bg-[var(--tt-page)] px-2 py-1 text-[13px] font-medium text-[var(--tt-text)] shadow-lg",
                 placement === "right"
                   ? "-translate-y-1/2"
                   : placement === "top"

@@ -344,6 +344,8 @@ export interface VideoResponse {
   width: number | null;
   height: number | null;
   createdAt: string;
+  /** When the owner pinned it to the top of their profile; null or absent when not pinned. */
+  pinnedAt?: string | null;
 }
 
 /**
@@ -710,3 +712,6 @@ export interface CreatorViewersResponse {
 }
 
 export type StudioPostSort = "NEWEST" | "VIEWS" | "LIKES" | "COMMENTS";
+export type SortOrder = "ASC" | "DESC";
+/** Studio's count buckets: <1K, 1K–10K, 10K–100K, >100K. */
+export type CountRange = "UNDER_1K" | "FROM_1K_TO_10K" | "FROM_10K_TO_100K" | "OVER_100K";

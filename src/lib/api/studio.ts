@@ -3,12 +3,14 @@
 import { apiFetch } from "@/lib/api/client";
 import type {
   CommentPageResponse,
+  CountRange,
   CreatorOverviewResponse,
   CreatorVideoDetail,
   CreatorVideoSort,
   CreatorVideoStats,
   CreatorViewersResponse,
   PageResponse,
+  SortOrder,
   StudioPostSort,
   VideoResponse,
   VideoStatus,
@@ -69,10 +71,15 @@ export function getCreatorViewers(days: number, signal?: AbortSignal): Promise<C
 }
 
 export interface StudioPostQuery {
-  status?: VideoStatus;
-  visibility?: VideoVisibility;
+  /** Each list filter matches any one of its values; empty means no filter. */
+  status?: VideoStatus[];
+  visibility?: VideoVisibility[];
+  views?: CountRange[];
+  likes?: CountRange[];
+  comments?: CountRange[];
   q?: string;
   sort?: StudioPostSort;
+  order?: SortOrder;
   page?: number;
   size?: number;
 }
@@ -85,13 +92,27 @@ export function listStudioPosts(
   query: StudioPostQuery = {},
   signal?: AbortSignal,
 ): Promise<PageResponse<VideoResponse>> {
-  const { page = 0, size = 20, ...filters } = query;
+  const { page = 0, size = 20, status, visibility, views, likes, comments, q, sort, order } = query;
   return apiFetch<PageResponse<VideoResponse>>("/videos/me", {
     auth: "required",
-    query: { ...filters, q: filters.q?.trim() || undefined, page, size },
+    query: {
+      status: csv(status),
+      visibility: csv(visibility),
+      views: csv(views),
+      likes: csv(likes),
+      comments: csv(comments),
+      q: q?.trim() || undefined,
+      sort,
+      order,
+      page,
+      size,
+    },
     signal,
   });
 }
+
+/** Spring binds `a,b` to a list param. */
+const csv = (values?: string[]) => (values?.length ? values.join(",") : undefined);
 
 export interface InboxQuery {
   videoId?: string;

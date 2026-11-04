@@ -165,6 +165,8 @@ const MESSAGES: Record<string, string> = {
     "This description goes against our Community Guidelines. Edit it and post again.",
   VIDEO_TAGS_REJECTED:
     "A hashtag here goes against our Community Guidelines. Edit it and post again.",
+  VIDEO_CAPTION_HELD: "This caption can’t be used on a posted video. Try different wording.",
+  PIN_LIMIT_REACHED: "You can pin up to 3 videos. Unpin one first.",
   // Retry-After says when; the upload page shows that beside a held Post button.
   UPLOAD_RATE_LIMITED: "You’ve posted a lot in a short time. Try again later.",
 

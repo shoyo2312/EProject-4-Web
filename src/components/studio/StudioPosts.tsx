@@ -1,23 +1,27 @@
 "use client";
 
-import { ChevronsUpDown, Ellipsis, Search, SquareActivity } from "lucide-react";
+import { Search } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { PostCell } from "@/components/studio/PostCell";
-import { EmptyState, FilterChip, MenuOption, Popover, StudioCard, StudioSkeleton } from "@/components/studio/ui";
+import { POSTS_GRID, PostRow } from "@/components/studio/posts/PostRow";
+import { Checkbox, EmptyState, FilterChip, Popover, StudioCard, StudioLoader } from "@/components/studio/ui";
 import { toast } from "@/components/ui/toast";
-import { Modal } from "@/components/ui/modal";
+import { useDebounced } from "@/hooks/use-debounced";
 import { messageFor } from "@/lib/api/errors";
-import { listStudioPosts } from "@/lib/api/studio";
-import { isLastPage, type StudioPostSort, type VideoResponse, type VideoStatus, type VideoVisibility } from "@/lib/api/types";
-import { deleteVideo, updateVideoCommentsSetting, updateVideoVisibility } from "@/lib/api/videos";
-import { formatCount } from "@/lib/format";
-import { PRIVACY_LABEL } from "@/lib/studio/overview";
+import { listStudioPosts, type StudioPostQuery } from "@/lib/api/studio";
+import {
+  isLastPage,
+  type SortOrder,
+  type StudioPostSort,
+  type VideoResponse,
+  type VideoStatus,
+} from "@/lib/api/types";
+import { PRIVACY_LABEL, VISIBILITIES } from "@/lib/studio/overview";
+import { COUNT_RANGES, nextSort, type PostSort } from "@/lib/studio/posts";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
-const VISIBILITIES: VideoVisibility[] = ["PUBLIC", "FRIENDS", "PRIVATE"];
 const STATUSES: { value: VideoStatus; label: string }[] = [
   { value: "PUBLISHED", label: "Posted" },
   { value: "PROCESSING", label: "Processing" },
@@ -28,58 +32,92 @@ const STATUSES: { value: VideoStatus; label: string }[] = [
   { value: "FAILED", label: "Upload failed" },
 ];
 
-const GRID = "grid grid-cols-[minmax(0,1fr)_120px_96px_96px_104px_96px] items-center gap-4";
+const PRIVACY_OPTIONS = VISIBILITIES.map((value) => ({ value, label: PRIVACY_LABEL[value] }));
+const NONE: never[] = [];
+
+type PostFilters = Pick<StudioPostQuery, "views" | "likes" | "comments" | "visibility" | "status">;
 
 /**
  * `/studio/content` — TikTok Studio's Posts table: every post in every state,
- * filtered by privacy and status, searched by caption, sorted by a column.
+ * filtered by count ranges, privacy and status, searched by caption, sorted by
+ * a column.
  */
 export function StudioPosts() {
-  const [visibility, setVisibility] = useState<VideoVisibility | undefined>();
-  const [status, setStatus] = useState<VideoStatus | undefined>();
-  const [sort, setSort] = useState<StudioPostSort>("NEWEST");
+  const [filters, setFilters] = useState<PostFilters>({});
+  const [sort, setSort] = useState<PostSort | undefined>();
   const [search, setSearch] = useState("");
   const q = useDebounced(search.trim(), 300);
+
+  const query = useMemo(() => ({ ...filters, q, sort: sort?.key, order: sort?.order }), [filters, q, sort]);
+  const queryKey = JSON.stringify(query);
 
   const [posts, setPosts] = useState<VideoResponse[] | null>(null);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The rows on screen answer this query; anything else means a fetch is on its way.
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const loading = loadedKey !== queryKey;
+  // One controller per query; a page of it still in flight when the query changes is dropped.
+  const controller = useRef<AbortController | null>(null);
 
   const load = useCallback(
-    (pageNumber: number, signal?: AbortSignal) =>
-      listStudioPosts({ visibility, status, q, sort, page: pageNumber, size: PAGE_SIZE }, signal).then((result) => {
+    (pageNumber: number, signal: AbortSignal) =>
+      listStudioPosts({ ...query, page: pageNumber, size: PAGE_SIZE }, signal).then((result) => {
+        if (signal.aborted) return;
         setPosts((current) => (pageNumber === 0 ? result.content : [...(current ?? []), ...result.content]));
         setPage(pageNumber);
         setHasMore(!isLastPage(result.page));
         setError(null);
+        setLoadedKey(queryKey);
       }),
-    [visibility, status, q, sort],
+    [query, queryKey],
   );
 
   useEffect(() => {
-    const controller = new AbortController();
-    load(0, controller.signal).catch((cause: unknown) => {
-      if (!controller.signal.aborted) setError(messageFor(cause));
+    const current = new AbortController();
+    controller.current = current;
+    load(0, current.signal).catch((cause: unknown) => {
+      if (current.signal.aborted) return;
+      setError(messageFor(cause));
+      setLoadedKey(queryKey);
     });
-    return () => controller.abort();
-  }, [load]);
+    return () => current.abort();
+  }, [load, queryKey]);
+
+  const loadMore = () => {
+    const signal = controller.current?.signal;
+    if (!signal) return;
+    load(page + 1, signal).catch((cause: unknown) => {
+      if (!signal.aborted) toast.error(messageFor(cause));
+    });
+  };
 
   const replace = (video: VideoResponse) =>
     setPosts((current) => current?.map((item) => (item.id === video.id ? video : item)) ?? null);
   const remove = (id: string) => setPosts((current) => current?.filter((item) => item.id !== id) ?? null);
+  const filterBy =
+    <K extends keyof PostFilters>(key: K) =>
+    (value: PostFilters[K]) =>
+      setFilters((current) => ({ ...current, [key]: value }));
+  const header = (label: string, key: StudioPostSort) => (
+    <SortHeader label={label} order={sort?.key === key ? sort.order : undefined} onClick={() => setSort(nextSort(sort, key))} />
+  );
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <ChoiceChip
+        <div className="flex flex-wrap items-center gap-2">
+          <CheckChip label="Views" options={COUNT_RANGES} value={filters.views ?? NONE} onApply={filterBy("views")} />
+          <CheckChip label="Likes" options={COUNT_RANGES} value={filters.likes ?? NONE} onApply={filterBy("likes")} />
+          <CheckChip label="Comments" options={COUNT_RANGES} value={filters.comments ?? NONE} onApply={filterBy("comments")} />
+          <CheckChip
             label="Privacy"
-            options={VISIBILITIES.map((value) => ({ value, label: PRIVACY_LABEL[value] }))}
-            value={visibility}
-            onApply={setVisibility}
+            options={PRIVACY_OPTIONS}
+            value={filters.visibility ?? NONE}
+            onApply={filterBy("visibility")}
           />
-          <ChoiceChip label="Status" options={STATUSES} value={status} onApply={setStatus} />
+          <CheckChip label="Status" options={STATUSES} value={filters.status ?? NONE} onApply={filterBy("status")} />
         </div>
         <label className="flex h-9 w-[330px] items-center gap-2 rounded-[8px] border border-black/8 bg-white px-3">
           <Search className="h-4 w-4 flex-none" />
@@ -93,29 +131,29 @@ export function StudioPosts() {
       </div>
 
       <StudioCard>
-        <div className={cn(GRID, "border-b border-black/8 px-5 py-3 text-[12px] leading-4 text-black/50")}>
-          <SortHeader label="Content (Created on)" active={sort === "NEWEST"} onClick={() => setSort("NEWEST")} />
+        <div className={cn(POSTS_GRID, "border-b border-black/8 px-5 py-3 text-[12px] leading-4 font-medium text-black/48")}>
+          {header("Content (Created on)", "NEWEST")}
           <span>Privacy</span>
-          <SortHeader label="Views" active={sort === "VIEWS"} onClick={() => setSort("VIEWS")} />
-          <SortHeader label="Likes" active={sort === "LIKES"} onClick={() => setSort("LIKES")} />
-          <SortHeader label="Comments" active={sort === "COMMENTS"} onClick={() => setSort("COMMENTS")} />
+          {header("Views", "VIEWS")}
+          {header("Likes", "LIKES")}
+          {header("Comments", "COMMENTS")}
           <span className="text-center">Actions</span>
         </div>
 
-        {error ? (
+        {loading ? (
+          <StudioLoader className="h-[500px]" />
+        ) : error ? (
           <EmptyState>{error}</EmptyState>
         ) : !posts ? (
-          <div className="flex flex-col gap-3 p-5">
-            {[0, 1, 2].map((i) => (
-              <StudioSkeleton key={i} className="h-[72px]" />
-            ))}
-          </div>
+          <StudioLoader className="h-[500px]" />
+        ) : posts.length === 0 && (query.q || Object.values(filters).some((value) => value?.length)) ? (
+          <EmptyState>No posts match these filters</EmptyState>
         ) : posts.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-24 text-center">
             <p className="text-[20px] leading-6 font-bold">No posts yet</p>
             <p className="text-[16px] text-black/65">Videos you post will appear here.</p>
             <Link
-              href="/upload"
+              href="/studio/upload"
               className="mt-2 flex h-11 w-[300px] items-center justify-center rounded-[4px] bg-[#fe2c55] text-[15px] font-semibold text-white hover:bg-[#ea284e]"
             >
               Upload your first video
@@ -133,7 +171,7 @@ export function StudioPosts() {
       {hasMore && posts && (
         <button
           type="button"
-          onClick={() => load(page + 1).catch((cause: unknown) => toast.error(messageFor(cause)))}
+          onClick={loadMore}
           className="mx-auto h-9 rounded-[8px] border border-black/8 bg-white px-5 text-[14px] font-semibold hover:bg-black/3"
         >
           Load more
@@ -143,21 +181,46 @@ export function StudioPosts() {
   );
 }
 
-function SortHeader({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+// TikTok's own chevrons; each sits in the middle of the box, so they are nudged apart.
+const CHEVRON_UP =
+  "M7.74 14.492a1 1 0 0 0 1.41.109L12 12.158l2.85 2.443a1 1 0 0 0 1.3-1.519l-3.174-2.72a1.5 1.5 0 0 0-1.952 0l-3.175 2.72a1 1 0 0 0-.108 1.41";
+const CHEVRON_DOWN =
+  "M7.74 10.35a1 1 0 0 1 1.41-.11L12 12.684l2.85-2.442a1 1 0 1 1 1.3 1.518l-3.174 2.721a1.5 1.5 0 0 1-1.952 0l-3.175-2.72a1 1 0 0 1-.108-1.41";
+
+/** A sortable column title: grey until picked, then black with the live direction's chevron dark. */
+function SortHeader({ label, order, onClick }: { label: string; order: SortOrder | undefined; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={cn("flex items-center gap-1 text-left", active ? "font-semibold text-black" : "hover:text-black")}
+      aria-label={`Sort by ${label}${order ? (order === "DESC" ? ", high to low" : ", low to high") : ""}`}
+      className={cn("flex w-fit items-center gap-1 text-left transition-colors", order ? "text-black" : "hover:text-black")}
     >
       {label}
-      <ChevronsUpDown className="h-3 w-3" />
+      <span className="flex h-3.5 w-3.5 flex-none items-center justify-center rounded-[4px] border border-black/8">
+        <svg viewBox="0 0 24 24" className="h-3 w-3" aria-hidden>
+          <path
+            d={CHEVRON_UP}
+            transform="translate(0 -3)"
+            className={cn("transition-[fill] duration-200", order === "ASC" ? "fill-black" : "fill-black/34")}
+          />
+          <path
+            d={CHEVRON_DOWN}
+            transform="translate(0 3)"
+            className={cn("transition-[fill] duration-200", order === "DESC" ? "fill-black" : "fill-black/34")}
+          />
+        </svg>
+      </span>
     </button>
   );
 }
 
-/** A chip whose menu picks one value with checkboxes, then Clear or Apply — as TikTok's Privacy chip. */
-function ChoiceChip<T extends string>({
+/**
+ * A chip whose menu ticks any number of values, then Clear or Apply — as TikTok
+ * Studio's Views, Likes, Comments and Privacy chips. Ticks are a draft until Apply;
+ * closing the menu any other way drops them.
+ */
+function CheckChip<T extends string>({
   label,
   options,
   value,
@@ -165,47 +228,50 @@ function ChoiceChip<T extends string>({
 }: {
   label: string;
   options: { value: T; label: string }[];
-  value: T | undefined;
-  onApply: (value: T | undefined) => void;
+  value: T[];
+  onApply: (value: T[]) => void;
 }) {
-  const [draft, setDraft] = useState<T | undefined>(value);
+  const [draft, setDraft] = useState<T[]>(value);
+  const flip = (option: T) =>
+    setDraft((current) => (current.includes(option) ? current.filter((item) => item !== option) : [...current, option]));
 
   return (
     <Popover
-      className="w-[220px] pb-0"
+      className="top-[calc(100%+8px)] w-[217px] border border-black/8 py-0 shadow-[0_10px_15px_-3px_rgba(0,0,0,0.08),0_4px_6px_-4px_rgba(0,0,0,0.08)]"
       trigger={({ open, toggle }) => (
         <FilterChip
           label={label}
-          active={value !== undefined}
+          active={value.length > 0}
           open={open}
           onClick={() => {
             setDraft(value);
             toggle();
           }}
+          onClear={() => onApply([])}
         />
       )}
     >
       {(close) => (
         <>
-          {options.map((option) => (
-            <label key={option.value} className="flex h-10 cursor-pointer items-center gap-3 px-4 text-[14px] hover:bg-black/4">
-              <input
-                type="checkbox"
-                checked={draft === option.value}
-                onChange={() => setDraft(draft === option.value ? undefined : option.value)}
-                className="h-4 w-4 accent-[#fe2c55]"
-              />
-              {option.label}
-            </label>
-          ))}
-          <div className="mt-2 flex gap-2 border-t border-black/8 p-3">
+          <div className="p-2">
+            {options.map((option) => (
+              <label
+                key={option.value}
+                className="flex h-8 cursor-pointer items-center gap-2 rounded-[4px] px-2.5 text-[14px] whitespace-nowrap transition-colors hover:bg-black/4"
+              >
+                <Checkbox checked={draft.includes(option.value)} onChange={() => flip(option.value)} />
+                {option.label}
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-2 border-t border-black/8 p-3">
             <button
               type="button"
               onClick={() => {
-                onApply(undefined);
+                onApply([]);
                 close();
               }}
-              className="h-8 flex-1 rounded-[4px] border border-black/12 text-[14px] font-semibold hover:bg-black/3"
+              className="h-8 flex-1 rounded-[6px] border border-black/8 text-[14px] font-medium transition-colors hover:bg-black/3"
             >
               Clear
             </button>
@@ -215,7 +281,7 @@ function ChoiceChip<T extends string>({
                 onApply(draft);
                 close();
               }}
-              className="h-8 flex-1 rounded-[4px] bg-[#fe2c55] text-[14px] font-semibold text-white hover:bg-[#ea284e]"
+              className="h-8 flex-1 rounded-[6px] bg-[#fe2c55] text-[14px] font-medium text-white transition-colors hover:bg-[#ea284e]"
             >
               Apply
             </button>
@@ -224,162 +290,4 @@ function ChoiceChip<T extends string>({
       )}
     </Popover>
   );
-}
-
-function PostRow({
-  video,
-  onChange,
-  onDelete,
-}: {
-  video: VideoResponse;
-  onChange: (video: VideoResponse) => void;
-  onDelete: (id: string) => void;
-}) {
-  const [confirming, setConfirming] = useState(false);
-
-  const run = (action: Promise<VideoResponse>) =>
-    action.then(onChange).catch((cause: unknown) => toast.error(messageFor(cause)));
-
-  return (
-    <li className={cn(GRID, "px-5 py-4 text-[14px]")}>
-      <PostCell video={video} href={`/studio/analytics/${video.id}`} />
-
-      <Popover
-        className="w-[160px]"
-        trigger={({ open, toggle }) => (
-          <button
-            type="button"
-            onClick={toggle}
-            aria-expanded={open}
-            className="w-fit rounded-[4px] px-2 py-1 text-left font-medium hover:bg-black/4"
-          >
-            {PRIVACY_LABEL[video.visibility]} ▾
-          </button>
-        )}
-      >
-        {(close) =>
-          VISIBILITIES.map((value) => (
-            <MenuOption
-              key={value}
-              label={PRIVACY_LABEL[value]}
-              selected={value === video.visibility}
-              onClick={() => {
-                close();
-                if (value !== video.visibility) void run(updateVideoVisibility(video.id, value));
-              }}
-            />
-          ))
-        }
-      </Popover>
-
-      <span>{formatCount(video.viewCount)}</span>
-      <span>{formatCount(video.likeCount)}</span>
-      <span>{video.commentCount === null ? "–" : formatCount(video.commentCount)}</span>
-
-      <div className="flex items-center justify-center gap-1">
-        <Link
-          href={`/studio/analytics/${video.id}`}
-          aria-label="Analytics"
-          className="flex h-8 w-8 items-center justify-center rounded-[4px] hover:bg-black/5"
-        >
-          <SquareActivity className="h-4 w-4" />
-        </Link>
-        <RowMenu
-          commentsOff={video.commentsDisabled}
-          onToggleComments={() => run(updateVideoCommentsSetting(video.id, !video.commentsDisabled))}
-          onDelete={() => setConfirming(true)}
-        />
-      </div>
-
-      {confirming && (
-        <Modal onClose={() => setConfirming(false)} className="w-[400px] rounded-[8px] bg-white p-6 text-center text-black">
-          <p className="text-[20px] font-bold">Delete this post?</p>
-          <p className="mt-2 text-[14px] text-black/65">It is removed from your profile and from everyone&apos;s feed.</p>
-          <div className="mt-6 flex gap-3">
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              className="h-10 flex-1 rounded-[4px] border border-black/12 font-semibold hover:bg-black/3"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                deleteVideo(video.id)
-                  .then(() => {
-                    onDelete(video.id);
-                    toast.success("Post deleted");
-                  })
-                  .catch((cause: unknown) => toast.error(messageFor(cause)))
-                  .finally(() => setConfirming(false))
-              }
-              className="h-10 flex-1 rounded-[4px] bg-[#fe2c55] font-semibold text-white hover:bg-[#ea284e]"
-            >
-              Delete
-            </button>
-          </div>
-        </Modal>
-      )}
-    </li>
-  );
-}
-
-function RowMenu({
-  commentsOff,
-  onToggleComments,
-  onDelete,
-}: {
-  commentsOff: boolean;
-  onToggleComments: () => void;
-  onDelete: () => void;
-}) {
-  return (
-    <Popover
-      align="end"
-      className="w-[200px]"
-      trigger={({ toggle }) => (
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label="More actions"
-          className="flex h-8 w-8 items-center justify-center rounded-[4px] hover:bg-black/5"
-        >
-          <Ellipsis className="h-4 w-4" />
-        </button>
-      )}
-    >
-      {(close) => (
-        <>
-          <MenuOption
-            label={commentsOff ? "Turn on comments" : "Turn off comments"}
-            selected={false}
-            onClick={() => {
-              close();
-              onToggleComments();
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              close();
-              onDelete();
-            }}
-            className="flex h-10 w-full items-center px-4 text-left text-[14px] text-[#fe2c55] hover:bg-black/4"
-          >
-            Delete
-          </button>
-        </>
-      )}
-    </Popover>
-  );
-}
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const id = window.setTimeout(() => setSettled(value), ms);
-    return () => window.clearTimeout(id);
-  }, [value, ms]);
-  return settled;
 }

@@ -254,6 +254,30 @@ export function deleteVideo(videoId: string): Promise<void> {
  * PUBLIC, FRIENDS or PRIVATE from the detail page. Owner-only; a non-owner gets
  * `NOT_VIDEO_OWNER`.
  */
+/**
+ * `PATCH /api/v1/videos/{id}/caption` — owner only, from Studio's edit page.
+ * 422 `VIDEO_*_REJECTED` or `VIDEO_CAPTION_HELD` when the text screen refuses it.
+ */
+export function updateVideoCaption(
+  videoId: string,
+  caption: { title: string; description?: string },
+): Promise<VideoResponse> {
+  return apiFetch<VideoResponse>(`/videos/${videoId}/caption`, {
+    method: "PATCH",
+    body: caption,
+    auth: "required",
+  });
+}
+
+/** `PATCH /api/v1/videos/{id}/pin` — owner only; 409 `PIN_LIMIT_REACHED` past three. */
+export function updateVideoPinned(videoId: string, pinned: boolean): Promise<VideoResponse> {
+  return apiFetch<VideoResponse>(`/videos/${videoId}/pin`, {
+    method: "PATCH",
+    body: { pinned },
+    auth: "required",
+  });
+}
+
 export function updateVideoVisibility(
   videoId: string,
   visibility: VideoVisibility,

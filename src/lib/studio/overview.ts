@@ -30,6 +30,9 @@ export function overviewMetrics(overview: CreatorOverviewResponse): OverviewMetr
   ];
 }
 
+/** Who can watch, in the order Studio's menus list them. */
+export const VISIBILITIES: VideoVisibility[] = ["PUBLIC", "FRIENDS", "PRIVATE"];
+
 /** TikTok's names for who can watch. */
 export const PRIVACY_LABEL: Record<VideoVisibility, string> = {
   PUBLIC: "Everyone",

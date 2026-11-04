@@ -411,13 +411,22 @@ function ProfileTile({
         className="h-full w-full object-cover"
       />
 
-      {post.isPrivate && (
-        <div
-          title="Only you can watch this video"
-          className="pointer-events-none absolute top-2 left-2 flex items-center gap-1 rounded-[4px] bg-black/60 px-1.5 py-1 text-[12px] leading-4 font-semibold text-white"
-        >
-          <PrivacyLockIcon className="h-3.5 w-3.5" />
-          <span className="sr-only">Private</span>
+      {(post.isPinned || post.isPrivate) && (
+        <div className="pointer-events-none absolute top-2 left-2 flex items-center gap-1">
+          {post.isPinned && (
+            <span className="rounded-[4px] bg-[#fe2c55] px-1.5 py-1 text-[12px] leading-4 font-semibold text-white">
+              Pinned
+            </span>
+          )}
+          {post.isPrivate && (
+            <div
+              title="Only you can watch this video"
+              className="flex items-center gap-1 rounded-[4px] bg-black/60 px-1.5 py-1 text-[12px] leading-4 font-semibold text-white"
+            >
+              <PrivacyLockIcon className="h-3.5 w-3.5" />
+              <span className="sr-only">Private</span>
+            </div>
+          )}
         </div>
       )}
 

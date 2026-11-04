@@ -163,6 +163,7 @@ export function videoToProfileVideo(video: VideoResponse): ProfileVideo {
     videoUrl: video.hlsUrl ?? "",
     views: video.viewCount,
     isPrivate: video.visibility === "PRIVATE",
+    isPinned: Boolean(video.pinnedAt),
     status: video.status,
   };
 }
