@@ -40,8 +40,9 @@ export function TopBar() {
   // Private for your own upload) in its right column, so the floating avatar bar
   // is redundant there and is hidden — matching the request to drop this chrome
   // on `/video/{id}`. Settings is the same: the page has its own back button
-  // and the avatar would float over the panel's top-right corner.
-  if (pathname.startsWith("/video/") || pathname === "/setting") {
+  // and the avatar would float over the panel's top-right corner. Studio has
+  // its own header with the avatar in it.
+  if (pathname.startsWith("/video/") || pathname === "/setting" || pathname.startsWith("/studio")) {
     return null;
   }
 
