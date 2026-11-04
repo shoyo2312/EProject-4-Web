@@ -78,7 +78,7 @@ export function SettingsHeader() {
 
         <div className="flex flex-none items-center">
           <Link
-            href="/upload"
+            href="/studio/upload"
             className="flex h-9 w-[116px] items-center justify-center gap-2 rounded-[2px] bg-[rgb(255_255_255/0.08)] text-[16px] leading-6 font-semibold text-[var(--tt-text)] transition-colors hover:bg-[rgb(255_255_255/0.12)] tt-840:w-9"
           >
             <PlusIcon className="h-5 w-5 flex-none" />

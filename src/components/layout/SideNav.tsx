@@ -131,17 +131,15 @@ export function SideNav({
   // Guest sidebar: Friends, Messages and Activity are absent, leaving the seven
   // rows measured on the live signed-out nav.
   const visibleNavItems = (showGuest ? navItems.filter((item) => !item.authOnly) : navItems)
-    // Two rows are session-dependent rather than static: Profile has to point
-    // at whoever is signed in — a guest has no profile, so theirs opens the
-    // login modal, as on the live site — and Upload at the route that actually
-    // exists here (the live site's is `/tiktokstudio/upload`).
+    // Profile is session-dependent rather than static: it has to point at
+    // whoever is signed in — a guest has no profile, so theirs opens the login
+    // modal, as on the live site.
     .map((item) => {
       if (item.label === "Profile") {
         return user
           ? { ...item, href: `/@${user.username}` }
           : { ...item, kind: "button" as const };
       }
-      if (item.label === "Upload") return { ...item, href: "/upload" };
       // Zero drops the badge entirely rather than painting a "0".
       if (item.label === "Activity") {
         return { ...item, badgeCount: inbox.unreadCount || undefined };

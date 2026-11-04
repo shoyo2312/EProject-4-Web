@@ -147,7 +147,7 @@ export function AccountMenu() {
               View profile
             </Link>
             <Link
-              href="/upload"
+              href="/studio/upload"
               role="menuitem"
               onClick={() => setOpen(false)}
               className="block px-4 py-2 text-[15px] text-[var(--tt-text)] hover:bg-white/10"

@@ -60,5 +60,6 @@ export function formatDateTime(at: Date, timeZone?: string): string {
 /** File size for the upload preview — MB below a gigabyte, GB from there. */
 export function formatBytes(bytes: number): string {
   const mb = bytes / (1024 * 1024);
+  if (mb < 1) return `${(bytes / 1024).toFixed(1)} KB`;
   return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
 }

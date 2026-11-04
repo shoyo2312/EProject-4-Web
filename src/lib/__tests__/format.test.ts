@@ -23,6 +23,7 @@ describe("formatDateTime", () => {
 describe("formatBytes", () => {
   it("reads in MB below a gigabyte and GB above", () => {
     expect(formatBytes(1.5 * 1024 * 1024)).toBe("1.5 MB");
+    expect(formatBytes(44_535)).toBe("43.5 KB");
     expect(formatBytes(2 * 1024 * 1024 * 1024)).toBe("2.00 GB");
   });
 });

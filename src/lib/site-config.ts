@@ -53,7 +53,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Friends", kind: "link", href: "/friends", authOnly: true },
   { label: "Messages", kind: "link", href: "/messages", authOnly: true },
   { label: "Activity", kind: "button", authOnly: true },
-  { label: "Upload", kind: "link", href: "/nowastudio/upload" },
+  { label: "Upload", kind: "link", href: "/studio/upload" },
   { label: "Profile", kind: "link" },
   { label: "More", kind: "button" },
 ];
