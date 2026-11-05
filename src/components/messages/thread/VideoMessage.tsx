@@ -2,13 +2,15 @@
 
 import { Play, RotateCw, VideoOff } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { ChatAvatar } from "@/components/messages/ChatAvatar";
+import { resolveAuthor } from "@/lib/api/authors";
 import type { VideoCard } from "@/lib/api/conversations";
-import { cn } from "@/lib/utils";
+import type { Author } from "@/types/tiktok";
 
 /**
- * A shared video in the history: a portrait card with its thumbnail, a play mark and its title, that
+ * A shared video in the history: a portrait card with its thumbnail, a play mark and its owner's avatar and name (one line, cut with an ellipsis), that
  * opens the video's own page. Nothing plays here — a list of cards must not start a list of videos.
  *
  * The card has a fixed size while it can be played (a thumbnail still loading never moves the reader's
@@ -18,15 +20,25 @@ import { cn } from "@/lib/utils";
  */
 export function VideoMessage({
   video,
-  mine,
   onOpen,
 }: {
   video: VideoCard | null | undefined;
-  mine: boolean;
   /** Called as the card is followed to the video, so the page can be told what to step through. */
   onOpen?: () => void;
 }) {
   const [failed, setFailed] = useState<string | null>(null);
+  const [owner, setOwner] = useState<Author | null>(null);
+  const ownerId = video?.state === "AVAILABLE" ? video.ownerId : null;
+  useEffect(() => {
+    if (!ownerId) return;
+    let live = true;
+    void resolveAuthor(ownerId).then((author) => {
+      if (live) setOwner(author);
+    });
+    return () => {
+      live = false;
+    };
+  }, [ownerId]);
 
   // A video that cannot be shown is a small notice, not a screenful of empty card.
   if (!video || video.state !== "AVAILABLE") {
@@ -81,14 +93,10 @@ export function VideoMessage({
           <Play className="ml-0.5 h-5 w-5 fill-white" />
         </span>
       </span>
-      {video.title && (
-        <span
-          className={cn(
-            "absolute inset-x-0 bottom-0 line-clamp-2 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-3 pt-8 pb-2.5 text-[13px] leading-[18px] font-semibold text-white",
-            mine ? "text-right" : "text-left",
-          )}
-        >
-          {video.title}
+      {owner && (
+        <span className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-gradient-to-t from-black/75 via-black/40 to-transparent px-3 pt-8 pb-2.5">
+          <ChatAvatar src={owner.avatarUrl} className="h-6 w-6" />
+          <span className="min-w-0 flex-1 truncate text-[13px] leading-[18px] font-semibold text-white">{owner.nickname}</span>
         </span>
       )}
     </Link>

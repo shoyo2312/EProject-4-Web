@@ -286,7 +286,7 @@ function Content({ message, mine }: { message: MessageResponse; mine: boolean })
   if (message.type === "VIDEO") {
     return (
       <>
-        <VideoMessage video={message.video} mine={mine} />
+        <VideoMessage video={message.video} />
         {message.content && <Bubble mine={mine}>{message.content}</Bubble>}
       </>
     );
