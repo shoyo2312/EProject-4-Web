@@ -11,6 +11,7 @@ import { useStudioQuery } from "@/hooks/use-studio-query";
 import { getCreatorVideo } from "@/lib/api/studio";
 import { getVideo } from "@/lib/api/videos";
 import { formatCount, formatDuration } from "@/lib/format";
+import { markOverlayOrigin } from "@/lib/overlay-origin";
 import { formatPercent, formatWatchTime, linePath } from "@/lib/studio/metrics";
 
 const CHART_W = 1000;
@@ -41,7 +42,11 @@ export function StudioVideoAnalytics({ videoId }: { videoId: string }) {
           >
             <ChevronLeft className="h-5 w-5" />
           </Link>
-          <PostCell video={video.data ?? undefined} href={`/video/${videoId}`} />
+          <PostCell
+            video={video.data ?? undefined}
+            href={`/video/${videoId}`}
+            onClick={() => markOverlayOrigin(window.location.pathname)}
+          />
         </div>
         <RangeSelect days={days} onChange={setDays} />
       </div>

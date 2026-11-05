@@ -16,12 +16,14 @@ export function PostCell({
   href,
   size = "md",
   meta,
+  onClick,
 }: {
   video: VideoResponse | undefined;
   href?: string;
   size?: "sm" | "md";
   /** Replaces the date line. */
   meta?: React.ReactNode;
+  onClick?: () => void;
 }) {
   const status = video ? STATUS_LABEL[video.status] : null;
   const body = (
@@ -51,7 +53,7 @@ export function PostCell({
   );
 
   return href ? (
-    <Link href={href} className="flex min-w-0 items-center gap-3 hover:opacity-80">
+    <Link href={href} onClick={onClick} className="flex min-w-0 items-center gap-3 hover:opacity-80">
       {body}
     </Link>
   ) : (

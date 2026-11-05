@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PostThumb } from "@/components/studio/PostCell";
 import type { CommentResponse, VideoResponse } from "@/lib/api/types";
 import { formatRelativeTime } from "@/lib/format";
+import { markOverlayOrigin } from "@/lib/overlay-origin";
 import type { Author } from "@/types/tiktok";
 
 /**
@@ -46,7 +47,12 @@ export function CommentRow({
           {actions}
         </div>
       </div>
-      <Link href={`/video/${comment.videoId}`} className="flex-none hover:opacity-80" aria-label="Open the post">
+      <Link
+        href={`/video/${comment.videoId}`}
+        onClick={() => markOverlayOrigin(window.location.pathname + window.location.search)}
+        className="flex-none hover:opacity-80"
+        aria-label="Open the post"
+      >
         <PostThumb url={video?.thumbnailUrl ?? null} className="h-14 w-[42px]" />
       </Link>
     </div>
