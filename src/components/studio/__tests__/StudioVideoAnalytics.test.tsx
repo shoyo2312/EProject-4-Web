@@ -175,6 +175,36 @@ describe("StudioVideoAnalytics numbers", () => {
   });
 });
 
+describe("StudioVideoAnalytics traffic", () => {
+  it("listsTrafficSourcesHighestFirstWithTikTokLabels", async () => {
+    getVideo.mockResolvedValueOnce(video("PUBLISHED"));
+    getCreatorVideo.mockResolvedValueOnce(
+      detail({
+        trafficSources: [
+          { source: "SEARCH", views: 10 },
+          { source: "FOR_YOU", views: 60 },
+          { source: "PROFILE", views: 30 },
+        ],
+      }),
+    );
+
+    render(<StudioVideoAnalytics videoId="1001" />);
+
+    const list = (await screen.findByText("For You")).closest("ul")!;
+    const labels = Array.from(list.querySelectorAll("li > span:first-child")).map((el) => el.textContent);
+    expect(labels).toEqual(["For You", "Personal profile", "Search"]);
+    expect(list.textContent).toContain("60%");
+  });
+
+  it("showsTheEmptyStateWithoutSearchTraffic", async () => {
+    getVideo.mockResolvedValueOnce(video("PUBLISHED"));
+
+    render(<StudioVideoAnalytics videoId="1001" />);
+
+    expect(await screen.findByText("No search traffic yet")).toBeTruthy();
+  });
+});
+
 describe("PostThumb", () => {
   // A <span> ignores width and height while inline, so inside a parent that is not flex (the
   // Latest comments row) the cover rendered at the image's own size, 1280×720 for a landscape clip.

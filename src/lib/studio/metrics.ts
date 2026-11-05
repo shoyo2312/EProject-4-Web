@@ -1,5 +1,20 @@
 /** Studio's number formatting and chart geometry. No data, no React. */
 
+import type { TrafficSource } from "@/lib/api/types";
+
+/** TikTok Studio's names for where a view came from. */
+export const TRAFFIC_SOURCE_LABELS: Record<TrafficSource, string> = {
+  FOR_YOU: "For You",
+  FOLLOWING: "Following",
+  FRIENDS: "Friends",
+  EXPLORE: "Explore",
+  PROFILE: "Personal profile",
+  SEARCH: "Search",
+  MESSAGE: "Messages",
+  DIRECT: "Direct link",
+  OTHER: "Other",
+};
+
 /** The windows Studio's picker offers, as TikTok labels them. */
 export const RANGE_OPTIONS = [7, 28, 60, 365] as const;
 export type RangeDays = (typeof RANGE_OPTIONS)[number];
