@@ -31,6 +31,7 @@ const { list, listStickerPacks, applyConversation, blocked, unblock, publish } =
 vi.mock("@/lib/api/conversations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/conversations")>()),
   listStickerPacks: () => listStickerPacks(),
+  searchGiphyStickers: () => Promise.resolve([]),
 }));
 vi.mock("@/lib/api/users", () => ({ unblock: (...a: unknown[]) => unblock(...a) }));
 vi.mock("@/components/ui/toast", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));

@@ -618,6 +618,16 @@ export function listStickerPacks(): Promise<StickerPack[]> {
   return apiFetch<StickerPack[]>("/conversations/stickers", { auth: "required" });
 }
 
+/**
+ * GIPHY stickers through chat-service, which keeps the API key: the trending ones for a blank query,
+ * a search otherwise. Each comes with a `giphy:<id>` stickerId that is sent like any other sticker.
+ */
+export function searchGiphyStickers(query: string, signal?: AbortSignal): Promise<StickerView[]> {
+  const params = new URLSearchParams({ limit: "24" });
+  if (query.trim()) params.set("q", query.trim());
+  return apiFetch<StickerView[]>(`/conversations/stickers/giphy?${params.toString()}`, { auth: "required", signal });
+}
+
 /** The other participant's markers, for a sender to show "Delivered" and "Seen". */
 export async function getReceipts(conversationId: string, signal?: AbortSignal): Promise<Receipt> {
   const raw = await apiFetch<RawReceipt>(`/conversations/${conversationId}/messages/receipts`, {
