@@ -336,14 +336,16 @@ export function VideoCard({
           </p>
 
           {video.title && (
-            <p className="relative mt-1 text-[15px] font-bold leading-[20px] text-[var(--tt-text)]">
+            // Right padding clears the "00:00 / 00:13" label in the bottom-right corner
+            // (fixed 12px font, ~80px + right-3), which 85% of a narrow card did not.
+            <p className="relative mt-1 pr-[88px] text-[15px] font-bold leading-[20px] text-[var(--tt-text)]">
               {video.title}
             </p>
           )}
 
           {video.description && (
-            // 85% wide — the video duration sits in the bottom-right corner.
-            <div className="relative mt-1 max-w-[85%]">
+            // Same right padding as the title: the duration label sits in the bottom-right corner.
+            <div className="relative mt-1 pr-[88px]">
               <p
                 ref={descriptionRef}
                 className={cn(

@@ -121,6 +121,24 @@ describe("subscribeTopic", () => {
   });
 });
 
+describe("onStompConnect", () => {
+  it("fires on every (re)connect, so callers can refetch what the broker did not replay", async () => {
+    const { onStompConnect, subscribeTopic } = await load();
+    const listener = vi.fn();
+    const stop = onStompConnect(listener);
+    subscribeTopic("/user/queue/chat", vi.fn());
+    const client = instances[0];
+
+    await client.connect();
+    await client.connect();
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    stop();
+    await client.connect();
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("resetRealtime", () => {
   it("reconnects as the current viewer when topics are still open", async () => {
     const { resetRealtime, subscribeTopic } = await load();

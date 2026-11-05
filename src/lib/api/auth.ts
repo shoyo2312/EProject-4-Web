@@ -340,8 +340,12 @@ export async function deleteAccount(credential: ClosureCredential): Promise<Dele
  * trip instead of two, and it degrades to `profileReady: false` rather than
  * failing while user-service is still consuming the registration event.
  */
-export function getMe(): Promise<MeResponse> {
-  return apiFetch<MeResponse>("/me", { auth: "required" });
+export async function getMe(): Promise<MeResponse> {
+  const me = await apiFetch<MeResponse>("/me", { auth: "required" });
+  // Ids of 16+ digits arrive as strings (see `parseJsonPreservingIds`); a short one — a seed account, a
+  // local database — arrives as a number. Everything that compares `me` with an id from chat-service,
+  // which is always a string, needs the same type in both.
+  return { ...me, id: String(me.id) };
 }
 
 /**

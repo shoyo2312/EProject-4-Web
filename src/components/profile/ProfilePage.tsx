@@ -12,6 +12,7 @@ import {
 } from "@/components/profile/FollowListModal";
 import { ProfileBody } from "@/components/profile/ProfileBody";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { SuggestedAccountsPanel } from "@/components/profile/SuggestedAccountsPanel";
 import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
 import type { FollowStatus, ProfileTab, UserProfile } from "@/types/tiktok";
@@ -62,6 +63,7 @@ export function ProfilePage({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [followTab, setFollowTab] = useState<FollowTab | null>(null);
+  const [suggestedOpen, setSuggestedOpen] = useState(false);
 
   const isOwner = user !== null && user.userId === profile.author.userId;
 
@@ -99,7 +101,17 @@ export function ProfilePage({
           onOpenFollowing={() => {
             if (requireSignIn()) setFollowTab("following");
           }}
+          suggestedOpen={suggestedOpen}
+          onToggleSuggested={() => setSuggestedOpen((current) => !current)}
         />
+
+        {!isOwner && (
+          <SuggestedAccountsPanel
+            open={suggestedOpen}
+            excludeUserId={profile.author.userId}
+            onViewAll={() => setFollowTab("suggested")}
+          />
+        )}
 
         <ProfileBody
           profile={profile}

@@ -15,7 +15,6 @@ import {
 import { ShareSheet } from "@/components/feed/ShareSheet";
 import { StoryAvatar } from "@/components/stories/StoryAvatar";
 import { useFollow } from "@/hooks/use-follow";
-import { shareVideo } from "@/lib/api/interactions";
 import { cn } from "@/lib/utils";
 import { formatCount } from "@/lib/format";
 import type { FeedVideo } from "@/types/tiktok";
@@ -84,14 +83,8 @@ export function ActionRail({
   const [shareOpen, setShareOpen] = useState(false);
   const [extraShares, setExtraShares] = useState(0);
 
-  // Opening the sheet is itself the share, on the live site as much as here —
-  // there is no further "confirm" step, so it is recorded the moment the rail
-  // button is tapped.
-  const recordShare = () => {
-    setShareOpen(true);
-    setExtraShares((n) => n + 1);
-    shareVideo(video.id).catch(() => setExtraShares((n) => n - 1));
-  };
+  // Opening the sheet counts for nothing: a share is a message that was delivered, or a link that was
+  // copied or handed to another service, and the sheet reports each through `onShared`.
 
   return (
     <section
@@ -194,7 +187,7 @@ export function ActionRail({
 
       <RailButton
         label={formatCount(video.stats.shares + extraShares)}
-        onClick={recordShare}
+        onClick={() => setShareOpen(true)}
         active={shareOpen}
         activeColor="text-[var(--tt-icon)]"
         ariaLabel="Share video"
@@ -208,6 +201,7 @@ export function ActionRail({
           videoId={video.id}
           shares={video.stats.shares + extraShares}
           onClose={() => setShareOpen(false)}
+          onShared={(count) => setExtraShares((n) => n + count)}
         />
       )}
 

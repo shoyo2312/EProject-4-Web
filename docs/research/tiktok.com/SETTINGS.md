@@ -13,6 +13,12 @@ the search box, Upload, the two inbox glyphs and the avatar. Everything else on 
 the 240px sidebar.
 
 ```
+.DivHeaderContainer       fixed, 60 tall, #121212, box-shadow 0 1px 1px rgba(255,255,255,.12)
+  .DivHeaderWrapperMain   padding 0 24 0 16, flex, space-between
+    .DivHeaderLeft        300 wide; logo 118×42
+    .DivSearchForm        500×46, radius 92, rgba(255,255,255,.12); 1×28 divider, 52-wide button
+    .DivHeaderRight       Upload 116×36 (radius 2, rgba(255,255,255,.08), "+" 20, 16/600),
+                          then messages, inbox, avatar — 32×32 each, 32 / 16 / 24 apart
 .DivSettingContainer      full width, viewport height − 60 (932 measured)
   .DivSettingBack         absolute, 40×40 disc, top 32, 21px left of the card
   .DivLayoutContainer     1100 wide, margin-inline auto, padding-top 16, flex row
@@ -73,10 +79,9 @@ with the muted, unindented headings noted above.
 
 ## Deviations in our build
 
-- **The sidebar stays.** `/setting` lives in the `(shell)` route group, so it keeps the app's
-  sidebar and top bar instead of the live page's bespoke header. Rebuilding that header would
-  mean a second global chrome for one route, and the settings card itself — the part this page
-  is actually about — is reproduced at full fidelity beside it.
+- **The header's inbox opens the rail's Activity panel**, hung under the bar at the right edge
+  (`ActivityDrawer placement="header"`), rather than the live dropdown. Its messages glyph is
+  inert, like the rail's Messages row — there is no chat UI yet.
 - **The Ads section is dropped, not reproduced.** Seven rows and a nav entry, gone from
   `SETTINGS_SECTIONS` entirely rather than rendered inert — there is no ads subsystem anywhere in
   the backend, so every one of them would be permanently dead. The live section's measurements stay
@@ -86,35 +91,48 @@ with the muted, unindented headings noted above.
   advertising is ever built.
 - **One row-title style**, 16/400 `rgba(255,255,255,.9)`, rather than carrying the TUX
   generation's 16/600, which the live page uses for three of its rows.
-- **One switch size**, the 44 × 24 majority.
-- `Business verification`'s nav glyph is redrawn on the 48 grid; the live one is a 3.2KB
-  multi-part mark on a 20 viewBox. Every other nav glyph is the live path.
-- **Only some rows are live; the rest are inert.** A row is only wired when the backend has
-  somewhere to keep its answer:
-  - *Privacy → Comments* and *Direct messages*, and *Screen time → Daily screen time*,
-    *Sleep hours* and *Weekly screen time updates* read and write user-service's
-    `GET/PATCH /users/me/settings` (`useAccountSettings`, one read for the page). The two
-    audiences are enforced server-side; the screen-time fields are stored only — nothing,
-    client or server, acts on them yet. The pickers are the app's own dialogs, not
-    measured off the live site.
-  - *Privacy → Comment filters* is not a row on the live panel; its place and its dialog are
-    the app's own. It writes the same settings (`filterAllComments`, `filterSpamOffensive`,
-    `commentKeywords`), which interaction-service applies to each new comment under the
-    viewer's videos, holding a match for their review.
-  - *Privacy → Blocked accounts* opens a list backed by `GET /users/me/blocked` and
-    `DELETE /users/{id}/block`, both of which already existed.
-  - *Push notifications → Allow in browser* asks for the browser's Notification permission and
-    gates the desktop notification raised for a frame arriving on the STOMP socket. It registers
-    nothing with a push service: real pushes to a closed tab need FCM web credentials and a
-    `platform` field `DeviceToken` does not carry.
-  - *Accessibility → Increase color contrast* writes `.high-contrast` on `<html>`, which shifts
-    the alpha-blended tokens in `globals.css`. Browser-local, exactly as the row's own copy says.
-
-  Each is keyed by `SettingsRow.action`, so the layout stays data and only behaviour branches.
-- Every other row is inert, and deliberately so: the remaining switches hold their position for
-  the session and are forgotten on reload, and the link rows open flows (a region picker, a
-  keyword filter editor, account deletion) that this clone has no screens for. A control
-  that appears to save something it cannot is worse than one that visibly does nothing.
+- **Switches**: 44 × 24 on the panel. The Daily screen time page draws its switch with a dark
+  knob and Sleep hours draws a 48 × 28 cyan (#20D5EC) one, both as live does.
+- **Pages in the panel are state, not routes.** Live, Daily screen time, Sleep hours and Filter
+  keywords are routes under `/setting/…`; here they take over the panel like Deactivate and
+  Download your data, and the back arrow leaves them for the sections first.
+- **Every row does what it says.** Each is keyed by `SettingsRow.action`, which every row must
+  have (`src/lib/__tests__/site-config.test.ts`), so the layout stays data and only behaviour
+  branches:
+  - *Privacy → Comments* and *Direct messages* read and write user-service's
+    `GET/PATCH /users/me/settings` (`AccountSettingsProvider`, one read for the whole app), and
+    are enforced server-side. *Comment filters* is not a row on the live panel; its place and
+    dialog are the app's own, and interaction-service applies it to each new comment.
+  - *Push notifications → Interactions* (Likes, Comments, New followers) and *In-app
+    notifications* (+ Reposts) open in place as live does. notification-service skips the push,
+    and the web the desktop notification and the in-app banner, for a switch that is off; the
+    inbox entry is always written.
+  - *Screen time → Daily screen time* is live's page: the same-every-day chips or a limit per
+    weekday, picked in live's hours/minutes scroll picker, and a four-digit passcode set the
+    first time. Reaching the limit covers every page but `/setting` until the passcode is
+    entered (that cover was not observable live; it follows the Sleep hours screen).
+  - *Sleep hours* is live's page: Start time in the 12/00–59/AM-PM picker, End time eight hours
+    later and never chosen. Push is muted during the window, and the web shows a reminder ten
+    minutes before and at the start.
+  - *Weekly screen time updates* sends one inbox entry a week, which opens *Summary* — live's
+    chart of day and night time over the last four weeks, measured from the web's heartbeats.
+  - *Content preferences → Filter keywords* is live's list and add/edit form; video-service
+    leaves matching videos out of For You, Following and Friends.
+  - *Blocked accounts*, *Allow in browser* and *Increase color contrast* as before: the blocked
+    list over `GET /users/me/blocked`, the browser's Notification permission (nothing is
+    registered with a push service: that needs FCM web credentials and a `platform` on
+    `DeviceToken`), and `.high-contrast` on `<html>`.
+- **Rows left out on purpose**, since nothing here could back them:
+  - *Account information → Account region*: TikTok sets it from where the account signed up and
+    it cannot be changed; this app stores no region and nothing reads one.
+  - *Screen time → Help and resources → Digital well-being tips*: a link out to TikTok's help
+    site, which this app has no counterpart for.
+  - *Business verification* (its nav entry and section): TikTok's business-account programme,
+    which has no backing here.
+  - *Mentions and tags* and *LIVE* switches under Interactions and In-app notifications: the app
+    raises no mention notifications and has no LIVE.
+  - *Direct messages* switches under In-app notifications: the web has no Messages page to show
+    them from (decided at handoff, 2026-10-24).
 
 ## Gotchas
 

@@ -111,7 +111,7 @@ describe("ActivityDrawer, a story entry", () => {
     showStoryEntry([["2", bob]]);
 
     // The ring is still drawn around the picture; it just is not a button of its own.
-    const drawn = document.querySelector("img")?.closest("[class*='tt-red']");
+    const drawn = document.querySelector("img")?.closest("[data-ring='unseen']");
     expect(drawn).not.toBeNull();
     fireEvent.click(drawn!);
 
@@ -120,5 +120,119 @@ describe("ActivityDrawer, a story entry", () => {
     expect(openStories).toHaveBeenCalledOnce();
     expect(openStories).toHaveBeenCalledWith(authorFromProfile(bob));
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+// As notification-service writes it: SYSTEM, no actor, and the reference the web keys the link on.
+const alert: NotificationResponse = {
+  id: "n9",
+  actorId: null,
+  type: "SYSTEM",
+  title: "Your account logged in from a new device",
+  body:
+    "Your account logged in from device Chrome on macOS 27 on 10/23 21:42 +07 in Ho Chi Minh City, " +
+    "Vietnam. If this wasn't you, secure your account immediately.",
+  referenceId: "account-security",
+  read: false,
+  createdAt: new Date().toISOString(),
+};
+
+function show(item: NotificationResponse) {
+  const inbox: NotificationInbox = {
+    items: [item],
+    unreadCount: 1,
+    loaded: true,
+    actors: new Map(),
+    videos: new Map(),
+    markRead,
+    markAllRead: vi.fn(),
+  };
+  render(<ActivityDrawer open inbox={inbox} onClose={onClose} />);
+}
+
+describe("ActivityDrawer, an account-security notice", () => {
+  it("expands to the whole message and a link to Settings, which closes the drawer", () => {
+    show(alert);
+    expect(screen.queryByRole("link", { name: "Secure your account" })).toBeNull();
+
+    fireEvent.click(screen.getByText("Your account logged in from a new device"));
+    expect(markRead).toHaveBeenCalledWith("n9");
+    expect(push).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("link", { name: "Secure your account" }));
+    expect(push).toHaveBeenCalledWith("/setting");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  /** DB-IP's free licence asks web pages that show a looked-up place for a link back to DB-IP. */
+  it("credits DB-IP under the place, without collapsing the notice", () => {
+    show(alert);
+    fireEvent.click(screen.getByText("Your account logged in from a new device"));
+
+    const credit = screen.getByRole("link", { name: "IP Geolocation by DB-IP" });
+    expect(credit.getAttribute("href")).toBe("https://db-ip.com");
+    expect(credit.getAttribute("rel")).toBe("noopener noreferrer");
+
+    credit.addEventListener("click", (event) => event.preventDefault()); // jsdom cannot navigate
+    fireEvent.click(credit);
+
+    expect(screen.queryByRole("link", { name: "Secure your account" })).not.toBeNull();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("another system notice has no link", () => {
+    show({ ...alert, id: "n10", title: "Welcome to Nowaa!", body: "Hi nora, thanks for joining us.", referenceId: null });
+
+    fireEvent.click(screen.getByText("Welcome to Nowaa!"));
+
+    expect(screen.queryByRole("link", { name: "Secure your account" })).toBeNull();
+  });
+});
+
+describe("ActivityDrawer, a repost", () => {
+  it("describes a repost", () => {
+    const reposted: NotificationResponse = {
+      id: "n11",
+      actorId: "2",
+      type: "REPOST",
+      title: "New repost",
+      body: "Someone reposted your video.",
+      referenceId: "7",
+      read: false,
+      createdAt: new Date().toISOString(),
+    };
+    const inbox: NotificationInbox = {
+      items: [reposted],
+      unreadCount: 1,
+      loaded: true,
+      actors: new Map([["2", bob]]),
+      videos: new Map(),
+      markRead,
+      markAllRead: vi.fn(),
+    };
+    render(<ActivityDrawer open inbox={inbox} onClose={onClose} />);
+
+    expect(screen.getByText(/reposted your video/)).toBeTruthy();
+  });
+});
+
+describe("ActivityDrawer, a weekly screen time update", () => {
+  it("opens the Screen time summary on the week a weekly update covers", () => {
+    show({
+      id: "n12",
+      actorId: null,
+      type: "SCREEN_TIME",
+      title: "Your weekly screen time",
+      body: "Last week you spent 3h 20m on Nowaa, a daily average of 28m.",
+      referenceId: "2026-10-19",
+      read: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    fireEvent.click(screen.getByText(/Last week you spent 3h 20m/));
+
+    expect(markRead).toHaveBeenCalledWith("n12");
+    expect(push).toHaveBeenCalledWith("/setting?summary=2026-10-19#screen-time");
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

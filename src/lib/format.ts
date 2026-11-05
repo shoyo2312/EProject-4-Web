@@ -17,6 +17,11 @@ export function formatCount(n: number): string {
   return String(n);
 }
 
+/** Unread badge on the Activity icon: the live site caps it at "99+". */
+export function formatBadgeCount(n: number): string {
+  return n > 99 ? "99+" : String(n);
+}
+
 /** Renders the "00:02 / 01:39" label under each video. */
 export function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -55,5 +60,6 @@ export function formatDateTime(at: Date, timeZone?: string): string {
 /** File size for the upload preview — MB below a gigabyte, GB from there. */
 export function formatBytes(bytes: number): string {
   const mb = bytes / (1024 * 1024);
+  if (mb < 1) return `${(bytes / 1024).toFixed(1)} KB`;
   return mb >= 1024 ? `${(mb / 1024).toFixed(2)} GB` : `${mb.toFixed(1)} MB`;
 }

@@ -195,20 +195,34 @@ export const emailSchema = z.object({ email: emailField });
  * came back with. What is left is the metadata, and the limits mirror
  * video-service's DTO — in code points, as `@MaxCodePoints` counts.
  */
+/**
+ * video-service's own limits: `CreateVideoRequest` (`@MaxCodePoints(150)` title,
+ * `@MaxCodePoints(2000)` description) and `app.upload` in its application.yml.
+ */
+export const UPLOAD_LIMITS = {
+  title: 150,
+  description: 2000,
+  maxBytes: 500 * 1024 * 1024,
+  maxSeconds: 600,
+} as const;
+
 export const uploadSchema = z.object({
   title: z
     .string()
     .trim()
     .min(1, "Give the video a title.")
-    .refine((value) => codePointLength(value) <= 150, "Titles can be at most 150 characters."),
+    .refine(
+      (value) => codePointLength(value) <= UPLOAD_LIMITS.title,
+      `Titles can be at most ${UPLOAD_LIMITS.title} characters.`,
+    ),
   description: z
     .string()
     .trim()
     .refine(
-      (value) => codePointLength(value) <= 2000,
-      "Descriptions can be at most 2000 characters.",
+      (value) => codePointLength(value) <= UPLOAD_LIMITS.description,
+      `Descriptions can be at most ${UPLOAD_LIMITS.description} characters.`,
     ),
-  visibility: z.enum(["PUBLIC", "PRIVATE"]),
+  visibility: z.enum(["PUBLIC", "FRIENDS", "PRIVATE"]),
 });
 
 const editProfileSchema = z.object({
@@ -272,18 +286,3 @@ export function commentKeywordSchemaFor(existing: readonly string[]) {
       ),
   });
 }
-
-/**
- * `/setting` → Sleep hours: two `<input type="time">` values, already the
- * server's "HH:mm". Mirrors user-service — both ends, and not the same minute.
- * Start after end is not an error: that is a night crossing midnight.
- */
-export const sleepHoursSchema = z
-  .object({
-    start: z.string().min(1, "Choose a start time."),
-    end: z.string().min(1, "Choose an end time."),
-  })
-  .refine((values) => values.start !== values.end, {
-    path: ["end"],
-    message: "Start and end can’t be the same time.",
-  });

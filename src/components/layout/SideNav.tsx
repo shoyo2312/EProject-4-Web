@@ -15,6 +15,7 @@ import { FollowingAccounts } from "@/components/layout/side-nav/FollowingAccount
 import { NavRow } from "@/components/layout/side-nav/NavRow";
 import { SearchField } from "@/components/layout/side-nav/SearchField";
 import { SidebarFooter } from "@/components/layout/side-nav/SidebarFooter";
+import { useChatUnreadContext } from "@/components/messages/ChatUnreadProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { useFollowingAccounts } from "@/hooks/use-following-accounts";
@@ -59,16 +60,25 @@ export function SideNav({
   navItems: NavItem[];
   footerSections: FooterSection[];
 }) {
-  // One inbox for both readers: the rail's badge and the drawer's list are the
-  // same unread set, and fetching it twice would let the two disagree.
-  const inbox = useNotifications();
-  // Likewise the following list: the rows under the nav and the drawer behind
-  // View all are one list.
-  const following = useFollowingAccounts();
+  const chatUnread = useChatUnreadContext();
   const [activityOpen, setActivityOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [followingOpen, setFollowingOpen] = useState(false);
+  // One inbox for both readers: the rail's badge and the drawer's list are the
+  // same unread set, and fetching it twice would let the two disagree. A click
+  // on an in-app banner opens the drawer, as the rail's Activity row does.
+  const inbox = useNotifications({
+    onOpenInbox: () => {
+      setSearchOpen(false);
+      setMoreOpen(false);
+      setFollowingOpen(false);
+      setActivityOpen(true);
+    },
+  });
+  // Likewise the following list: the rows under the nav and the drawer behind
+  // View all are one list.
+  const following = useFollowingAccounts();
   // The drawers sit in the same slot beside the rail, so opening one closes
   // the others, and any one collapses the rail the same way.
   const collapsed = activityOpen || searchOpen || moreOpen || followingOpen;
@@ -121,20 +131,23 @@ export function SideNav({
   // Guest sidebar: Friends, Messages and Activity are absent, leaving the seven
   // rows measured on the live signed-out nav.
   const visibleNavItems = (showGuest ? navItems.filter((item) => !item.authOnly) : navItems)
-    // Two rows are session-dependent rather than static: Profile has to point
-    // at whoever is signed in — a guest has no profile, so theirs opens the
-    // login modal, as on the live site — and Upload at the route that actually
-    // exists here (the live site's is `/tiktokstudio/upload`).
+    // Profile is session-dependent rather than static: it has to point at
+    // whoever is signed in — a guest has no profile, so theirs opens the login
+    // modal, as on the live site.
     .map((item) => {
       if (item.label === "Profile") {
         return user
           ? { ...item, href: `/@${user.username}` }
           : { ...item, kind: "button" as const };
       }
-      if (item.label === "Upload") return { ...item, href: "/upload" };
       // Zero drops the badge entirely rather than painting a "0".
       if (item.label === "Activity") {
         return { ...item, badgeCount: inbox.unreadCount || undefined };
+      }
+      if (item.label === "Messages") {
+        return { ...item, // Unread messages in the inbox plus message requests nobody has opened: two counters
+        // kept apart, added only here so a request is noticed from any page.
+        badgeCount: chatUnread.total + chatUnread.requestSummary.unread || undefined };
       }
       return item;
     });
@@ -305,7 +318,10 @@ export function SideNav({
               avatarUrl={user?.avatarUrl ?? DEFAULT_AVATAR}
               collapsed={narrow}
               iconOnly={iconOnly}
-              active={item.href === pathname}
+              active={
+                item.href === pathname ||
+                (item.href === "/messages" && pathname.startsWith("/messages/"))
+              }
               selected={
                 (item.label === "Activity" && activityOpen) ||
                 (item.label === "More" && moreOpen)

@@ -1,6 +1,9 @@
 "use client";
 
+import type { NotificationType } from "@/lib/api/notifications";
+import type { UserSettingsResponse } from "@/lib/api/types";
 import { getLocalSettings } from "@/lib/settings/local-settings";
+import { pushAllowed } from "@/lib/settings/notification-preferences";
 
 /**
  * The browser's permission, plus the case the DOM has no value for: a browser
@@ -99,18 +102,23 @@ export interface BrowserNotice {
 
 /**
  * Raises a desktop notification for something that just landed in the inbox,
- * if all three gates in {@link shouldNotify} are open.
+ * if all three gates in {@link shouldNotify} are open, and the account's own
+ * switch for its type and its sleep hours let it through ({@link pushAllowed}).
  *
  * Self-gating on purpose: the realtime handler that calls this should not have
  * to know about permissions, and a caller that forgets the check is the way
  * this ends up notifying people who switched it off.
  */
-export function showBrowserNotification(notice: BrowserNotice): void {
-  const allowed = shouldNotify({
-    enabled: getLocalSettings().browserNotifications,
-    permission: getNotificationPermission(),
-    documentHidden: document.hidden,
-  });
+export function showBrowserNotification(
+  notice: BrowserNotice & { type: NotificationType },
+  settings: UserSettingsResponse | null,
+): void {
+  const allowed =
+    shouldNotify({
+      enabled: getLocalSettings().browserNotifications,
+      permission: getNotificationPermission(),
+      documentHidden: document.hidden,
+    }) && pushAllowed(settings, notice.type, new Date());
   if (!allowed) return;
 
   try {

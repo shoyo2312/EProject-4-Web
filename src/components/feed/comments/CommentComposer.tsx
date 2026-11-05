@@ -16,12 +16,12 @@ import {
   EmojiIcon,
 } from "@/components/icons";
 import { useSession } from "@/components/session/SessionProvider";
+import { EmojiGroups } from "@/components/ui/EmojiPicker";
 import { useDismiss } from "@/hooks/use-dismiss";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import type { UserProfileResponse } from "@/lib/api/types";
 import { getFollowing, searchUsers } from "@/lib/api/users";
 import { codePointLength } from "@/lib/code-points";
-import { COMPOSER_EMOJI_GROUPS } from "@/lib/comments/emoji-groups";
 import {
   MENTION_DEBOUNCE_MS,
   MENTION_LIMIT,
@@ -347,26 +347,7 @@ export function CommentComposer({
 
           {emojiOpen && (
             <div className="no-scrollbar absolute bottom-10 right-0 z-20 max-h-[248px] w-[288px] animate-[tt-comment-in_150ms_ease-out] overflow-y-auto rounded-[8px] border border-[var(--tt-divider)] bg-[var(--tt-sheet-3)] p-2 shadow-lg">
-              {COMPOSER_EMOJI_GROUPS.map((group) => (
-                <div key={group.label} className="mb-1 last:mb-0">
-                  <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--tt-text-muted)]">
-                    {group.label}
-                  </p>
-                  <div className="grid grid-cols-8 gap-1">
-                    {group.emojis.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => insertAtCaret(emoji)}
-                        aria-label={emoji}
-                        className="flex h-8 w-8 items-center justify-center rounded-[6px] text-[18px] leading-none transition-colors hover:bg-[var(--tt-shape-neutral-3)]"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
+              <EmojiGroups onPick={insertAtCaret} />
             </div>
           )}
         </div>

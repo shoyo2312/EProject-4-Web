@@ -16,13 +16,13 @@ vi.mock("@/components/ui/toast", () => ({ toast: { error: vi.fn(), success: vi.f
 const createUploadUrl = vi.fn();
 const uploadToStorage = vi.fn();
 const createVideo = vi.fn();
-const pollUntilReady = vi.fn();
+const updateVideoCommentsSetting = vi.fn();
 vi.mock("@/lib/api/videos", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/videos")>()),
   createUploadUrl: (...args: unknown[]) => createUploadUrl(...args),
   uploadToStorage: (...args: unknown[]) => uploadToStorage(...args),
   createVideo: (...args: unknown[]) => createVideo(...args),
-  pollUntilReady: (...args: unknown[]) => pollUntilReady(...args),
+  updateVideoCommentsSetting: (...args: unknown[]) => updateVideoCommentsSetting(...args),
 }));
 
 const RAW = "s3://video-media/raw/1/7312.mp4";
@@ -111,7 +111,6 @@ describe("UploadPage", () => {
     createVideo
       .mockRejectedValueOnce(new ApiError(422, "VIDEO_TITLE_REJECTED", "caption refused"))
       .mockResolvedValueOnce(video("PROCESSING"));
-    pollUntilReady.mockResolvedValue(video("PUBLISHED"));
     const title = await chooseClip();
 
     fireEvent.click(screen.getByRole("button", { name: "Post" }));
@@ -119,10 +118,23 @@ describe("UploadPage", () => {
     fireEvent.change(title, { target: { value: "A fixed title" } });
     fireEvent.click(screen.getByRole("button", { name: "Post" }));
 
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/video/42"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/studio/content"));
     expect(uploadToStorage).toHaveBeenCalledTimes(1);
     expect(createVideo).toHaveBeenLastCalledWith(
       expect.objectContaining({ title: "A fixed title", rawFileUrl: RAW }),
     );
+  });
+
+  it("turns comments off on the new post when Comment is unticked", async () => {
+    createVideo.mockResolvedValue(video("PROCESSING"));
+    updateVideoCommentsSetting.mockResolvedValue(video("PROCESSING"));
+    await chooseClip();
+
+    fireEvent.click(screen.getByRole("button", { name: /Show more/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Comment" }));
+    fireEvent.click(screen.getByRole("button", { name: "Post" }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/studio/content"));
+    expect(updateVideoCommentsSetting).toHaveBeenCalledWith("42", true);
   });
 });

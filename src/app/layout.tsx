@@ -3,11 +3,16 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 
 import { TopBar } from "@/components/layout/TopBar";
+import { ChatUnreadProvider } from "@/components/messages/ChatUnreadProvider";
+import { FloatingChat } from "@/components/messages/floating/FloatingChat";
 import { PlayerSettingsProvider } from "@/components/player/PlayerSettingsProvider";
+import { ScreenTimeGuard } from "@/components/screen-time/ScreenTimeGuard";
+import { SleepHoursScreen } from "@/components/screen-time/SleepHoursScreen";
 import { SessionProvider } from "@/components/session/SessionProvider";
 import { HighContrastSync } from "@/components/settings/HighContrastSync";
 import { StoriesProvider } from "@/components/stories/StoriesProvider";
 import { Toaster } from "@/components/ui/toast";
+import { AccountSettingsProvider } from "@/hooks/use-account-settings";
 import { LOGIN_OPTIONS, SIGNUP_OPTIONS } from "@/lib/site-config";
 
 // TikTok ships a proprietary self-hosted webfont ("TikTokFont") that cannot be
@@ -54,21 +59,35 @@ export default function RootLayout({
               every route reads through the design tokens. */}
           <HighContrastSync />
 
-          {/* Sound is a viewer preference shared by the feed and /video/[id],
-              so it lives above the route that happens to be mounted. */}
-          <PlayerSettingsProvider>
-            {/* Story rings, and the player a ring opens. Avatars on /video/[id] and on every
-                shell page ask it, so it sits above the routes. */}
-            <StoriesProvider>
-              <div className="flex min-h-screen flex-col">
-                <div className="flex h-screen justify-between bg-[var(--tt-page)]">
-                  {children}
-                </div>
+          {/* The account's settings, read once: /setting shows them, and the
+              notification gates, the screen-time guard and the sleep screen act on
+              every page. */}
+          <AccountSettingsProvider>
+            {/* Renders nothing; counts the signed-in viewer's time on the site. */}
+            <ScreenTimeGuard />
 
-                <TopBar />
-              </div>
-            </StoriesProvider>
-          </PlayerSettingsProvider>
+            {/* Sound is a viewer preference shared by the feed and /video/[id],
+                so it lives above the route that happens to be mounted. */}
+            <PlayerSettingsProvider>
+              {/* Story rings, and the player a ring opens. Avatars on /video/[id] and on every
+                  shell page ask it, so it sits above the routes. */}
+              <StoriesProvider>
+                {/* One unread tally and one floating chat for every route, so a message counts, and
+                    the panel stays open, while the viewer moves between pages. */}
+                <ChatUnreadProvider>
+                  <div className="flex min-h-screen flex-col">
+                    <div className="flex h-screen justify-between bg-[var(--tt-page)]">
+                      {children}
+                    </div>
+
+                    <TopBar />
+                  </div>
+                  <FloatingChat />
+                </ChatUnreadProvider>
+              </StoriesProvider>
+            </PlayerSettingsProvider>
+            <SleepHoursScreen />
+          </AccountSettingsProvider>
           <Toaster />
         </SessionProvider>
       </body>

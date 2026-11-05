@@ -52,15 +52,20 @@ ENV NODE_ENV=production
 # inlined into the client bundle, and next.config.ts is evaluated here, so the
 # /api rewrite destination and the next/image hosts are baked into the build
 # manifests. Setting any of them only on the running container changes nothing.
-# The defaults are the ones the code falls back to, so a bare `docker build`
-# still produces the local-development image.
-ARG API_GATEWAY_URL=http://localhost:8080
+# The four below have no default on purpose: the code falls back to localhost, so a bare
+# `docker build` used to produce an image that proxies to the build host's loopback and
+# starts fine. Refuse instead (see docker-compose.prod.yml). Social sign-in stays optional.
+ARG API_GATEWAY_URL
 ARG MEDIA_CDN_HOST=cdn.tiktok-clone.local
-ARG MEDIA_ORIGIN=http://localhost:9000
-ARG NEXT_PUBLIC_WS_GATEWAY_URL=http://localhost:8080
+ARG MEDIA_ORIGIN
+ARG NEXT_PUBLIC_WS_GATEWAY_URL
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=
 ARG NEXT_PUBLIC_FACEBOOK_APP_ID=
-ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
+RUN for v in API_GATEWAY_URL MEDIA_ORIGIN NEXT_PUBLIC_WS_GATEWAY_URL NEXT_PUBLIC_TURNSTILE_SITE_KEY; do \
+  eval "val=\$$v"; \
+  [ -n "$val" ] || { echo "build arg $v is required (--build-arg $v=..., or a build variable in Coolify)"; exit 1; }; \
+  done
 ENV API_GATEWAY_URL=${API_GATEWAY_URL} \
   MEDIA_CDN_HOST=${MEDIA_CDN_HOST} \
   MEDIA_ORIGIN=${MEDIA_ORIGIN} \

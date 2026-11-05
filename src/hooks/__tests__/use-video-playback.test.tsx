@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render } from "@testing-library/react";
 
 import { useVideoPlayback } from "@/hooks/use-video-playback";
+import { holdPlayback } from "@/lib/playback-hold";
 
 let observe: IntersectionObserverCallback = () => {};
 const setVisible = (isIntersecting: boolean) =>
@@ -86,5 +87,39 @@ describe("useVideoPlayback autoplay fallback", () => {
 
     expect(onAutoplayBlocked).not.toHaveBeenCalled();
     expect(play).toHaveBeenCalledOnce();
+  });
+});
+
+describe("useVideoPlayback while playback is held", () => {
+  it("stays paused, and says so, until the hold is released", async () => {
+    play.mockResolvedValue();
+    const playing: boolean[] = [];
+    function Probe() {
+      const { containerRef, videoRef, isPlaying } = useVideoPlayback({
+        durationSeconds: 10,
+        muted: false,
+        volume: 1,
+        hasSource: true,
+      });
+      playing.push(isPlaying);
+      return (
+        <section ref={containerRef}>
+          <video ref={videoRef} />
+        </section>
+      );
+    }
+    const release = holdPlayback();
+    render(<Probe />);
+
+    try {
+      await setVisible(true);
+      expect(play).not.toHaveBeenCalled();
+      expect(playing.at(-1)).toBe(false);
+    } finally {
+      act(() => release());
+    }
+
+    expect(play).toHaveBeenCalled();
+    expect(playing.at(-1)).toBe(true);
   });
 });

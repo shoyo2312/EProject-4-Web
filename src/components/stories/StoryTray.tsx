@@ -1,20 +1,29 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
+import { MODAL_EXIT_MS } from "@/components/ui/modal";
+import { toast } from "@/components/ui/toast";
+import { usePresence } from "@/hooks/use-presence";
 import { useStoryFeed } from "@/hooks/use-story-feed";
 import { authorFromProfile, unknownAuthor } from "@/lib/api/adapters";
 import type { StoryGroup } from "@/lib/api/types";
 import { awaitingReview, firstUnseen, type StoryPosition } from "@/lib/stories/navigation";
 import { ringStateOf } from "@/lib/stories/ring-store";
+import { decidedSince } from "@/lib/stories/verdicts";
 import type { Author } from "@/types/tiktok";
 
 import { useStories } from "./StoriesProvider";
 import { StoryComposer } from "./StoryComposer";
 import { StoryRing } from "./StoryRing";
-import { StoryViewer } from "./StoryViewer";
+import { StoryViewer, VIEWER_EXIT_MS } from "./StoryViewer";
+
+/** How long the own bubble's pop plays. */
+const POP_MS = 600;
+/** Every bubble that opens stories lifts a little under the pointer. */
+const BUBBLE = "rounded-full motion-safe:transition-transform duration-150 hover:scale-105";
 
 /**
  * Stories on the Following page: the tray, the player it opens and the composer its "+" opens.
@@ -24,7 +33,23 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
   const { user } = useSession();
   const { invalidateOwnRing } = useStories();
   const [open, setOpen] = useState<StoryPosition | null>(null);
+  const player = usePresence(open !== null, VIEWER_EXIT_MS);
+  // Where the player was: it is still drawn, closing, after `open` is cleared.
+  const [lastOpen, setLastOpen] = useState<StoryPosition | null>(null);
+  if (open && open !== lastOpen) setLastOpen(open);
+  // The groups the closing frame plays: `close()` refreshes the feed, and a read landing inside the
+  // exit re-sorts the live groups under the player, onto a story that was never watched.
+  const [frozen, setFrozen] = useState<readonly StoryGroup[] | null>(null);
   const [composing, setComposing] = useState(false);
+  const composer = usePresence(composing, MODAL_EXIT_MS);
+  // The own bubble's one-shot pop: after a post, and when a story of theirs goes live.
+  const [popping, setPopping] = useState(false);
+  const pop = useCallback(() => setPopping(true), []);
+  useEffect(() => {
+    if (!popping) return;
+    const timer = window.setTimeout(() => setPopping(false), POP_MS);
+    return () => window.clearTimeout(timer);
+  }, [popping]);
   const { groups, profiles, refresh, markSeen } = useStoryFeed(
     followedIds,
     open !== null || composing,
@@ -47,11 +72,37 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
     wasAwaiting.current = awaiting;
   }, [awaiting, invalidateOwnRing]);
 
+  // The poster hears each verdict as it lands: compared read against read, by story id, so a second
+  // story still in review neither hides the first's verdict nor repeats it.
+  const previousGroups = useRef(groups);
+  useEffect(() => {
+    const previous = previousGroups.current;
+    previousGroups.current = groups;
+    if (!user || previous === groups) return;
+    const { live, hidden } = decidedSince(previous, groups, user.userId);
+    if (live.length > 0) {
+      toast.success("Your story is live");
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- a one-shot cue for a verdict that just arrived by poll, not a render-derived value
+      pop();
+    }
+    if (hidden.length > 0) {
+      const ownIndex = groups.findIndex((group) => group.userId === user.userId);
+      const storyIndex = groups[ownIndex]?.stories.findIndex((story) => story.id === hidden[0].id) ?? -1;
+      toast.warning("Your story couldn't be shown", {
+        action: {
+          label: "See why",
+          onClick: () => setOpen({ group: ownIndex, story: Math.max(storyIndex, 0) }),
+        },
+      });
+    }
+  }, [groups, user, pop]);
+
   if (!user) return null;
 
   // Read again on the way out: the order puts owners with nothing left unseen last, and a verdict
   // may have come in for the viewer's own story meanwhile.
   const close = () => {
+    setFrozen(groups);
     setOpen(null);
     refresh();
   };
@@ -61,27 +112,30 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
       <StoryTray
         groups={groups}
         authors={authors}
+        popping={popping}
         onOpen={(index) => setOpen({ group: index, story: firstUnseen(groups[index]) })}
         onCreate={() => setComposing(true)}
       />
-      {open && (
+      {player.mounted && lastOpen && (
         <StoryViewer
-          key={`${open.group}:${open.story}`}
-          groups={groups}
+          key={`${lastOpen.group}:${lastOpen.story}`}
+          groups={open ? groups : (frozen ?? groups)}
           authors={authors}
-          start={open}
+          start={lastOpen}
+          closing={player.closing}
           onClose={close}
           onSeen={markSeen}
           onOwnStoryChanged={refresh}
           onOwnStoryDeleted={close}
         />
       )}
-      {composing && (
+      {composer.mounted && (
         <StoryComposer
+          closing={composer.closing}
           onClose={() => setComposing(false)}
           onPosted={() => {
-            setComposing(false);
             refresh();
+            pop();
           }}
         />
       )}
@@ -97,11 +151,14 @@ export function StoryBar({ followedIds }: { followedIds: readonly string[] | nul
 export function StoryTray({
   groups,
   authors,
+  popping = false,
   onOpen,
   onCreate,
 }: {
   groups: readonly StoryGroup[];
   authors: Readonly<Record<string, Author>>;
+  /** Plays the own bubble's pop once. */
+  popping?: boolean;
   onOpen: (groupIndex: number) => void;
   onCreate: () => void;
 }) {
@@ -111,6 +168,8 @@ export function StoryTray({
   const ownIndex = groups.findIndex((group) => group.userId === user.userId);
   // Red while a story of theirs is live, grey while the only ones are in review, held or rejected.
   const ownState = ownIndex === -1 ? "none" : ringStateOf(groups[ownIndex].stories, true);
+  // The dash turns while nothing of theirs is live yet and a verdict is still to come.
+  const ownPending = ownState !== "unseen" && awaitingReview(groups, user.userId);
 
   return (
     <nav
@@ -122,9 +181,9 @@ export function StoryTray({
           type="button"
           onClick={() => (ownIndex === -1 ? onCreate() : onOpen(ownIndex))}
           aria-label={ownIndex === -1 ? "Create a story" : "Your story"}
-          className="rounded-full"
+          className={BUBBLE}
         >
-          <StoryRing state={ownState}>
+          <StoryRing state={ownState} spin pending={ownPending} pop={popping}>
             <Avatar src={user.avatarUrl} />
           </StoryRing>
         </button>
@@ -150,9 +209,9 @@ export function StoryTray({
             type="button"
             onClick={() => onOpen(index)}
             aria-label={`${author.nickname}'s story${group.hasUnseen ? ", new" : ""}`}
-            className="flex w-[72px] shrink-0 flex-col items-center gap-1"
+            className={`flex w-[72px] shrink-0 flex-col items-center gap-1 ${BUBBLE}`}
           >
-            <StoryRing state={group.hasUnseen ? "unseen" : "seen"}>
+            <StoryRing state={group.hasUnseen ? "unseen" : "seen"} spin>
               <Avatar src={author.avatarUrl} />
             </StoryRing>
             <span className="w-full truncate text-center text-[12px] leading-4 text-[var(--tt-text)]">

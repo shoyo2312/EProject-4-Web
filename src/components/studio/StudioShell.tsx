@@ -1,13 +1,23 @@
 "use client";
 
-import { ChevronLeft, FolderMinus, House, MessageCircleMore, SquareActivity, SquarePlus } from "lucide-react";
+import {
+  ChevronLeft,
+  FolderMinus,
+  House,
+  LogOut,
+  MessageCircleMore,
+  SquareActivity,
+  SquareArrowOutUpRight,
+  SquarePlus,
+  User,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { useSession } from "@/components/session/SessionProvider";
 import { StudioRangeProvider, useStudioRange } from "@/components/studio/StudioRange";
-import { RangeSelect } from "@/components/studio/ui";
+import { Popover, RangeSelect } from "@/components/studio/ui";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -54,7 +64,7 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <StudioHeader avatarUrl={user?.avatarUrl} />
+          <StudioHeader />
           <main className="min-h-0 flex-1 overflow-y-auto px-8 pt-8 pb-12">
             {isLoading ? null : user ? (
               children
@@ -86,7 +96,7 @@ function StudioNav() {
   return (
     <nav className="flex min-h-0 flex-1 flex-col px-5 pt-8 pb-12">
       <Link
-        href="/upload"
+        href="/studio/upload"
         className="flex h-9 items-center gap-2 rounded-[8px] bg-[#fe2c55] px-3 text-[14px] leading-5 font-medium text-white transition-colors hover:bg-[#ea284e]"
       >
         <SquarePlus className="h-4 w-4" strokeWidth={2} />
@@ -130,7 +140,7 @@ function StudioNav() {
   );
 }
 
-function StudioHeader({ avatarUrl }: { avatarUrl?: string }) {
+function StudioHeader() {
   const pathname = usePathname();
   const { days, setDays } = useStudioRange();
   const onAnalyticsTab = ANALYTICS_TABS.some((tab) => tab.href === pathname);
@@ -159,16 +169,76 @@ function StudioHeader({ avatarUrl }: { avatarUrl?: string }) {
 
       <div className="flex items-center gap-3">
         {onAnalyticsTab && <RangeSelect days={days} onChange={setDays} />}
-        {avatarUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- the viewer's own avatar, any host user-service allowed
-          <img
-            src={avatarUrl}
-            alt=""
-            referrerPolicy="no-referrer"
-            className="h-8 w-8 rounded-full object-cover"
-          />
-        )}
+        <StudioAccountMenu />
       </div>
     </header>
+  );
+}
+
+const MENU_ITEM =
+  "flex h-[50px] w-full items-center gap-2.5 rounded-[8px] px-3.5 text-left text-[16px] text-black transition-colors hover:bg-black/5";
+
+/**
+ * The avatar and the menu behind it, read off the live TikTok Studio: a 229px
+ * white card, radius 12, `0 5px 26px rgba(0,0,0,.1)`, 50px rows at 16/400 with
+ * 20px icons. Profile opens in a new tab, as the live one does. The live
+ * Settings row is left out on purpose. Log out asks first, the same confirm the
+ * feed's menu uses.
+ */
+function StudioAccountMenu() {
+  const { user, confirmSignOut } = useSession();
+  if (!user) return null;
+
+  return (
+    <Popover
+      align="end"
+      className="w-[229px] rounded-[12px] p-1 shadow-[0_5px_26px_rgba(0,0,0,0.1)]"
+      trigger={({ open, toggle }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label="Account menu"
+          className="flex rounded-full"
+        >
+          {user.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- the viewer's own avatar, any host user-service allowed
+            <img
+              src={user.avatarUrl}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="h-8 w-8 rounded-full object-cover"
+            />
+          ) : (
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black/8">
+              <User className="h-4 w-4" strokeWidth={2} />
+            </span>
+          )}
+        </button>
+      )}
+    >
+      {(close) => (
+        <div role="menu">
+          <Link href={`/@${user.username}`} target="_blank" role="menuitem" onClick={close} className={MENU_ITEM}>
+            <User className="h-5 w-5" strokeWidth={1.75} />
+            Profile
+            <SquareArrowOutUpRight className="h-4 w-4" strokeWidth={2} />
+          </Link>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              close();
+              confirmSignOut();
+            }}
+            className={MENU_ITEM}
+          >
+            <LogOut className="h-5 w-5" strokeWidth={1.75} />
+            Log out
+          </button>
+        </div>
+      )}
+    </Popover>
   );
 }

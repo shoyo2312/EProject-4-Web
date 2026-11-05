@@ -1,30 +1,32 @@
 "use client";
 
+import { ChevronDown, CircleCheck, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
+import { toast } from "@/components/ui/toast";
 import { DropZone } from "@/components/upload/page/DropZone";
-import { FIELD, Labelled, TextField } from "@/components/upload/page/Fields";
-import { Outcome } from "@/components/upload/page/Outcome";
+import { CaptionField } from "@/components/upload/page/Fields";
 import { Preview } from "@/components/upload/page/Preview";
-import { UploadSkeleton } from "@/components/upload/page/UploadSkeleton";
 import { isApiError, messageFor, retryAt } from "@/lib/api/errors";
-import type { VideoStatus, VideoVisibility } from "@/lib/api/types";
+import type { VideoVisibility } from "@/lib/api/types";
 import {
   ACCEPTED_UPLOAD_TYPES,
   createUploadUrl,
   createVideo,
-  pollUntilReady,
+  updateVideoCommentsSetting,
   uploadToStorage,
 } from "@/lib/api/videos";
-import { formatDateTime } from "@/lib/format";
-import { uploadSchema } from "@/lib/forms/schemas";
+import { formatBytes, formatDateTime } from "@/lib/format";
+import { UPLOAD_LIMITS, uploadSchema } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
-import { toast } from "@/components/ui/toast";
+import { cn } from "@/lib/utils";
 
 /**
- * `/upload` — pick a video file and post it, the way TikTok Studio does.
+ * `/studio/upload` — TikTok Studio's upload page, measured off the live one,
+ * minus what has no backend here: edit / sound / text, location, schedule,
+ * HQ upload, content disclosure, AI label, audience controls and the checks.
  *
  * Three hops, because the bytes never go through the API:
  *
@@ -32,40 +34,20 @@ import { toast } from "@/components/ui/toast";
  *   2. the browser POSTs the file straight there (progress comes from XHR);
  *   3. `POST /videos` publishes it with the `s3://` location step 1 handed back.
  *
+ * Then, as on the live site, it goes straight to `/studio/content`: the post
+ * is listed there with its status while it transcodes and is checked, so this
+ * page has nothing left to wait for.
+ *
  * Only step 3 creates anything, so a page closed mid-upload leaves an orphan
  * object the bucket's lifecycle rule expires — nothing to clean up here.
  */
 
 /** video-service refuses anything else, and would only do so after the upload. */
 const ACCEPT = ACCEPTED_UPLOAD_TYPES.join(",");
-const MAX_BYTES = 500 * 1024 * 1024;
-const MAX_DURATION_SECONDS = 600;
 
 /**
- * What the uploader is told when the poll ends on anything but PUBLISHED.
- *
- * A rejection says what happened and what to do about it, without explaining
- * which frames tripped the classifier — that is a map for getting the next
- * upload past it. PENDING_REVIEW is deliberately not framed as a problem: most
- * videos that land there are fine, and the honest thing to say is that a person
- * is looking.
- */
-const OUTCOME_MESSAGE: Record<VideoStatus, string> = {
-  PROCESSING: "Still processing. It will appear on your profile when it is done.",
-  PENDING_MODERATION:
-    "Still being reviewed. It will appear on your profile when the check finishes.",
-  PENDING_REVIEW:
-    "This video is waiting on a moderator before it goes live. You will see it on your profile once it is approved.",
-  PUBLISHED: "",
-  FAILED: "Transcoding failed. Try uploading the file again.",
-  REJECTED:
-    "This video was removed automatically for likely adult content. If that is wrong, contact support to have it reviewed.",
-  TAKEN_DOWN: "This video was taken down by a moderator.",
-};
-
-/**
- * The field a caption refused at publish belongs under. The form has no tag
- * box: tags only come from the description's hashtags, so they answer there.
+ * The field a caption refused at publish belongs under. Tags only come from
+ * the description's hashtags, so they answer there.
  */
 const CAPTION_FIELD: Record<string, "title" | "description"> = {
   VIDEO_TITLE_REJECTED: "title",
@@ -73,38 +55,40 @@ const CAPTION_FIELD: Record<string, "title" | "description"> = {
   VIDEO_TAGS_REJECTED: "description",
 };
 
+const VISIBILITY: { value: VideoVisibility; label: string }[] = [
+  { value: "PUBLIC", label: "Everyone" },
+  { value: "FRIENDS", label: "Friends" },
+  { value: "PRIVATE", label: "Only you" },
+];
+
+const SECTION = "rounded-[8px] border border-black/8 bg-white";
+const HEADING = "text-[16px] leading-[21px] font-bold text-black";
+const LABEL = "block text-[14px] leading-[21px] font-medium text-black";
+
 export function UploadPage() {
-  const { user, isLoading, openLogin } = useSession();
+  const { user } = useSession();
   const router = useRouter();
 
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  /** "720P" and the like, off the shorter side once the cover has read the metadata. */
+  const [resolution, setResolution] = useState<string | null>(null);
+  const [allowComments, setAllowComments] = useState(true);
+  const [showMore, setShowMore] = useState(false);
   /** 0–1 while the POST runs, null otherwise — it is also what drives the bar. */
   const [progress, setProgress] = useState<number | null>(null);
-  /** True from the moment the post exists until transcoding finishes. */
-  const [processing, setProcessing] = useState(false);
-  /** The verdict of the last post that did not end PUBLISHED; null before the first one. */
-  const [outcome, setOutcome] = useState<{
-    status: VideoStatus;
-    message: string;
-  } | null>(null);
 
   /**
-   * The upload and the poll outlive their handler, so unmounting is what
-   * stops them. The controller is made **per submit**, never up front: React
-   * StrictMode mounts, unmounts and remounts in dev, so a controller created in
-   * the ref initialiser is already aborted by the time anything uses it — and
-   * an aborted controller cannot be reset. That was an upload stuck on
-   * "Uploading… 0%" forever, because the POST was cancelled before it was sent.
+   * The upload outlives its handler, so unmounting is what stops it. Made **per submit**: StrictMode's dev remount aborts a controller
+   * created up front, and an aborted controller cannot be reset.
    */
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
 
   /**
    * The file already in storage and where it landed. A caption refused at
-   * publish stores nothing, so Post after the fix publishes these same bytes
-   * instead of sending them again.
+   * publish stores nothing, so Post after the fix publishes these same bytes.
    */
   const uploaded = useRef<{ file: File; fileUrl: string } | null>(null);
 
@@ -116,15 +100,10 @@ export function UploadPage() {
     return () => window.clearTimeout(id);
   }, [postAgainAt]);
 
-  /**
-   * The bytes are still on their way to storage. Only this stretch can be
-   * cancelled or lost: once the post exists, transcoding carries on without
-   * the page, so leaving then costs nothing.
-   */
-  const uploading = progress !== null && !processing;
+  /** The bytes are on their way, or the post is being made — the stretch a reload would lose. */
+  const uploading = progress !== null;
 
   // A reload or a closed tab mid-upload throws the transfer away — ask first.
-  // In-app navigation unmounts the page, which aborts the upload above.
   useEffect(() => {
     if (!uploading) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault();
@@ -132,8 +111,7 @@ export function UploadPage() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [uploading]);
 
-  // The object URL is the preview's source; letting it leak pins the whole file
-  // in memory for as long as the tab lives.
+  // A leaked object URL pins the whole file in memory for as long as the tab lives.
   useEffect(() => {
     if (!previewUrl) return;
     return () => URL.revokeObjectURL(previewUrl);
@@ -173,59 +151,22 @@ export function UploadPage() {
         });
         uploaded.current = null;
 
-        /**
-         * Stay put and keep the bar on screen. The poll is awaited on purpose:
-         * `submitting` stays true, so the file, the fields and Post are all
-         * frozen — there is no empty upload screen to re-post from, and no
-         * navigation until the video is actually watchable.
-         */
-        setProcessing(true);
-        const latest = await pollUntilReady(created.id, undefined, signal);
-        if (signal.aborted) return;
-
-        if (latest.status === "PUBLISHED") {
-          toast.success("Video posted.");
-          router.replace(`/video/${created.id}`);
-          return;
+        // Comments are a setting on the video, not a field of the post, so
+        // they go off in a second call. The post already exists either way.
+        if (!allowComments) {
+          await updateVideoCommentsSetting(created.id, true).catch(() =>
+            toast.error("Posted, but comments are still on. Turn them off from Posts."),
+          );
         }
 
-        // Anything that is not PUBLISHED: a broken transcode, a moderation
-        // verdict, or still unfinished when the five-minute budget ran out.
-        setProcessing(false);
-        setProgress(null);
-
-        /**
-         * The post exists whatever the verdict came back as, so the file is done
-         * here. Leaving it in the form makes Post a button that uploads the same
-         * bytes again — and a rejected video re-posted is just a second rejected
-         * video, plus another raw file in the bucket. Clearing it drops back to
-         * the drop zone with the verdict above it, where the message stays put
-         * instead of leaving with a toast that is gone before it is read.
-         */
-        setOutcome({
-          status: latest.status,
-          message:
-            latest.status === "FAILED"
-              ? (latest.failureReason ?? OUTCOME_MESSAGE.FAILED)
-              : OUTCOME_MESSAGE[latest.status],
-        });
-        setFile(null);
-        setPreviewUrl(null);
-        form.reset({
-          title: "",
-          description: "",
-          visibility: values.visibility,
-        });
-        return;
+        // `submitting` stays true until the page is gone, so Post cannot fire twice.
+        toast.success("Video posted. It will go live once processing finishes.");
+        router.replace("/studio/content");
       } catch (cause) {
-        // An abort is the page going away, not a failure to report; anything
-        // else `useForm` turns into the form-level message.
+        // An abort is the page going away, not a failure to report.
         setProgress(null);
-        setProcessing(false);
         if (signal.aborted) return;
-        // Over the account's hourly or daily limit: hold Post and say until when.
-        const again =
-          isApiError(cause) && cause.is("UPLOAD_RATE_LIMITED") ? retryAt(cause) : null;
+        const again = isApiError(cause) && cause.is("UPLOAD_RATE_LIMITED") ? retryAt(cause) : null;
         if (again) {
           setPostAgainAt(again);
           return;
@@ -241,163 +182,282 @@ export function UploadPage() {
     },
   });
 
+  function clearFile() {
+    setFile(null);
+    setPreviewUrl(null);
+    setResolution(null);
+  }
+
   async function chooseFile(next: File | null) {
     if (!next) return;
     if (!ACCEPTED_UPLOAD_TYPES.includes(next.type as never)) {
       setFileError("That file isn’t a supported video. Use MP4, MOV or WebM.");
       return;
     }
-    if (next.size > MAX_BYTES) {
+    if (next.size > UPLOAD_LIMITS.maxBytes) {
       setFileError("That file is over 500 MB.");
       return;
     }
 
-    // A best-effort pre-check over a server backstop that already enforces this. The browser
-    // cannot decode every accepted container (an HEVC .mov from an iPhone fails here but
-    // transcodes fine), so a read failure must not block the upload — only a duration we
-    // actually measured and that is over the limit does.
+    // Best effort over a server backstop: the browser cannot decode every
+    // accepted container (an iPhone HEVC .mov fails here but transcodes fine),
+    // so only a duration actually measured over the limit blocks the upload.
     let seconds: number | null = null;
     try {
       seconds = await readDuration(next);
     } catch {
-      // undecodable in this browser ≠ undecodable server-side; let media-worker be the judge.
+      // undecodable here ≠ undecodable server-side; media-worker is the judge.
     }
-    if (seconds !== null && seconds > MAX_DURATION_SECONDS) {
+    if (seconds !== null && seconds > UPLOAD_LIMITS.maxSeconds) {
       setFileError("That video is longer than 10 minutes.");
       return;
     }
 
     setFileError(null);
-    setOutcome(null);
+    setResolution(null);
     setFile(next);
     setPreviewUrl(URL.createObjectURL(next));
     // Same courtesy the real Studio does: the filename is a usable first title.
     if (!form.values.title) {
-      form.setValue("title", next.name.replace(/\.[^.]+$/, "").slice(0, 150));
+      form.setValue("title", [...next.name.replace(/\.[^.]+$/, "")].slice(0, UPLOAD_LIMITS.title).join(""));
     }
   }
 
-  if (isLoading) return <UploadSkeleton />;
+  if (!user) return null;
 
-  if (!user) {
+  if (!file || !previewUrl) {
     return (
-      <Shell>
-        <p className="mb-4 text-[16px] text-[var(--tt-text)]">
-          Log in to upload a video.
-        </p>
-        <button
-          type="button"
-          onClick={openLogin}
-          className="h-10 rounded-[4px] bg-[var(--tt-red-active)] px-4 text-[15px] font-semibold text-white"
-        >
-          Log in
-        </button>
-      </Shell>
+      <div className="px-8">
+        <DropZone accept={ACCEPT} onFile={chooseFile} error={fileError} />
+      </div>
     );
   }
 
+  const caption = [form.values.title, form.values.description].filter(Boolean).join(" ");
+
   return (
-    <main className="h-screen flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-[1000px] px-8 py-10">
-        <h1 className="mb-6 text-[24px] leading-8 font-bold text-[var(--tt-text)]">
-          Upload video
-        </h1>
+    <form onSubmit={form.handleSubmit} noValidate className="px-8">
+      <FileCard
+        file={file}
+        resolution={resolution}
+        progress={progress}
+        error={fileError}
+        disabled={form.submitting}
+        onReplace={chooseFile}
+      />
 
-        {outcome && !file ? (
-          <Outcome status={outcome.status} message={outcome.message} />
-        ) : null}
-
-        {!file ? (
-          <DropZone accept={ACCEPT} onFile={chooseFile} error={fileError} />
-        ) : (
-          <div className="flex flex-col gap-8 lg:flex-row">
-            <Preview
-              accept={ACCEPT}
-              file={file}
-              url={previewUrl}
-              progress={progress}
-              processing={processing}
-              onReplace={chooseFile}
-              disabled={form.submitting}
+      <div className="mt-8 flex flex-col gap-6 lg:flex-row">
+        <div className="min-w-0 flex-1">
+          <h2 className={HEADING}>Details</h2>
+          <div className={cn(SECTION, "mt-4 flex flex-col gap-7 p-5")}>
+            <CaptionField
+              {...form.field("title")}
+              label="Title"
+              max={UPLOAD_LIMITS.title}
+              placeholder="Give it a title"
             />
-
-            <form
-              onSubmit={form.handleSubmit}
-              noValidate
-              className="flex flex-1 flex-col gap-5"
-            >
-              <TextField
-                {...form.field("title")}
-                label="Title"
-                maxLength={150}
-                placeholder="Give it a title"
+            <CaptionField
+              {...form.field("description")}
+              label="Description"
+              max={UPLOAD_LIMITS.description}
+              placeholder="Share more about your video here. #hashtags become tags."
+              multiline
+            />
+            <div>
+              <span className={LABEL}>Cover</span>
+              {/* media-worker picks the thumbnail; this is the frame it starts from. */}
+              <video
+                src={`${previewUrl}#t=0.1`}
+                muted
+                playsInline
+                preload="metadata"
+                onLoadedMetadata={(event) => {
+                  const { videoWidth, videoHeight } = event.currentTarget;
+                  if (videoWidth && videoHeight) setResolution(`${Math.min(videoWidth, videoHeight)}P`);
+                }}
+                className="mt-3 h-[176px] w-[132px] rounded-[8px] bg-black/5 object-cover"
               />
-
-              <TextField
-                {...form.field("description")}
-                label="Description"
-                multiline
-                maxLength={2000}
-                placeholder="Optional"
-              />
-
-              <Labelled label="Who can watch this video">
-                <select
-                  value={form.values.visibility}
-                  onChange={(event) =>
-                    form.setValue("visibility", event.target.value as VideoVisibility)
-                  }
-                  className={FIELD}
-                >
-                  <option value="PUBLIC">Everyone</option>
-                  <option value="FRIENDS">Friends</option>
-                  <option value="PRIVATE">Only you</option>
-                </select>
-              </Labelled>
-
-              <div className="flex gap-3">
-                <button
-                  type="submit"
-                  disabled={form.submitting || postAgainAt !== null}
-                  className="h-11 w-40 rounded-[4px] bg-[var(--tt-red-active)] text-[15px] font-semibold text-white disabled:bg-white/[0.08] disabled:text-white/[0.34]"
-                >
-                  {processing
-                    ? "Processing…"
-                    : form.submitting
-                      ? "Posting…"
-                      : "Post"}
-                </button>
-                <button
-                  type="button"
-                  disabled={form.submitting && !uploading}
-                  onClick={() => {
-                    // Mid-upload this stops the transfer and keeps the file and
-                    // fields, so Post retries it; otherwise it drops the file.
-                    if (uploading) {
-                      abort.current?.abort();
-                      toast.success("Upload canceled.");
-                      return;
-                    }
-                    setFile(null);
-                    setPreviewUrl(null);
-                  }}
-                  className="h-11 w-28 rounded-[4px] bg-white/[0.12] text-[15px] font-semibold text-[var(--tt-text)] disabled:text-white/[0.34]"
-                >
-                  {uploading ? "Cancel" : "Discard"}
-                </button>
-              </div>
-              {postAgainAt && (
-                <p className="text-[14px] leading-5 text-[var(--tt-text-secondary)]">
-                  You’ve reached the posting limit for now. You can post again on{" "}
-                  {formatDateTime(postAgainAt)}.
-                </p>
-              )}
-            </form>
+            </div>
           </div>
-        )}
 
+          <h2 className={cn(HEADING, "mt-8")}>Settings</h2>
+          <div className={cn(SECTION, "mt-4 overflow-hidden")}>
+            <div className="flex flex-col gap-6 p-5">
+              <div>
+                <label htmlFor="upload-visibility" className={LABEL}>
+                  Who can watch this video
+                </label>
+                <div className="relative mt-3 w-[280px]">
+                  <select
+                    id="upload-visibility"
+                    value={form.values.visibility}
+                    onChange={(event) => form.setValue("visibility", event.target.value as VideoVisibility)}
+                    className="h-9 w-full cursor-pointer appearance-none rounded-[8px] bg-black/5 pr-9 pl-3 text-[14px] text-black outline-none focus-visible:ring-1 focus-visible:ring-black/20"
+                  >
+                    {VISIBILITY.map(({ value, label }) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute top-2.5 right-3 h-4 w-4" strokeWidth={2} />
+                </div>
+              </div>
+
+              {showMore && (
+                <div>
+                  <span className={LABEL}>Allow users to:</span>
+                  <label className="mt-2.5 flex w-fit cursor-pointer items-center gap-2 text-[14px] leading-[21px] text-black">
+                    <input
+                      type="checkbox"
+                      checked={allowComments}
+                      onChange={(event) => setAllowComments(event.target.checked)}
+                      className="h-4 w-4 cursor-pointer accent-[#fe2c55]"
+                    />
+                    Comment
+                  </label>
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              aria-expanded={showMore}
+              onClick={() => setShowMore((open) => !open)}
+              className="flex h-11 w-full items-center justify-center gap-1 border-t border-black/8 text-[14px] leading-[18px] font-medium text-black hover:bg-black/3"
+            >
+              {showMore ? "Show less" : "Show more"}
+              <ChevronDown className={cn("h-4 w-4 transition-transform", showMore && "rotate-180")} strokeWidth={2} />
+            </button>
+          </div>
+
+          <div className="mt-8 flex gap-2">
+            <button
+              type="submit"
+              disabled={form.submitting || postAgainAt !== null}
+              className="h-9 w-[200px] rounded-[8px] bg-[#fe2c55] px-3 text-[14px] leading-5 font-medium text-white transition-colors hover:bg-[#ea284e] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {form.submitting ? "Posting…" : "Post"}
+            </button>
+            <button
+              type="button"
+              disabled={form.submitting && !uploading}
+              onClick={() => {
+                // Mid-upload this stops the transfer and keeps the file and
+                // fields, so Post retries it; otherwise it drops the file.
+                if (uploading) {
+                  abort.current?.abort();
+                  toast.success("Upload canceled.");
+                  return;
+                }
+                clearFile();
+              }}
+              className="h-9 rounded-[8px] bg-black/5 px-3 text-[14px] leading-5 font-medium text-black transition-colors hover:bg-black/8 disabled:cursor-not-allowed disabled:text-black/34"
+            >
+              {uploading ? "Cancel" : "Discard"}
+            </button>
+          </div>
+          {postAgainAt && (
+            <p className="mt-3 text-[14px] leading-5 text-black/65">
+              You’ve reached the posting limit for now. You can post again on {formatDateTime(postAgainAt)}.
+            </p>
+          )}
+        </div>
+
+        <aside className="flex-none lg:mt-[37px] lg:w-[288px]">
+          <Preview url={previewUrl} caption={caption} author={{ name: user.nickname, avatarUrl: user.avatarUrl }} />
+        </aside>
       </div>
-    </main>
+    </form>
+  );
+}
+
+/**
+ * The live page's top card: filename at 16/700 with a 10px resolution badge,
+ * a 14px status line, Replace at the top right, and a 4px bar along the bottom
+ * edge in the live `#0be09b`.
+ */
+function FileCard({
+  file,
+  resolution,
+  progress,
+  error,
+  disabled,
+  onReplace,
+}: {
+  file: File;
+  resolution: string | null;
+  progress: number | null;
+  error: string | null;
+  disabled: boolean;
+  onReplace: (file: File | null) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const percent = progress === null ? null : Math.round(progress * 100);
+  const done = percent === 100;
+
+  return (
+    <section className={cn(SECTION, "relative overflow-hidden py-[27px] pr-[136px] pl-5")}>
+      <p className="flex items-center gap-3">
+        <span className="truncate text-[16px] leading-[21px] font-bold text-black">{file.name}</span>
+        {resolution && (
+          <span className="flex h-5 flex-none items-center rounded-[4px] border border-black/12 px-1 text-[10px] font-medium text-black">
+            {resolution}
+          </span>
+        )}
+      </p>
+      <p
+        className={cn(
+          "mt-[9px] flex items-center gap-1 text-[14px] leading-[18px]",
+          error ? "text-[#fe2c55]" : done ? "text-[#008568]" : "text-black/48",
+        )}
+      >
+        {error ? (
+          error
+        ) : done ? (
+          <>
+            <CircleCheck className="h-4 w-4" strokeWidth={2} />
+            Uploaded ({formatBytes(file.size)})
+          </>
+        ) : percent !== null ? (
+          `Uploading… ${percent}%`
+        ) : (
+          `Ready to post (${formatBytes(file.size)})`
+        )}
+      </p>
+
+      <input
+        ref={input}
+        type="file"
+        accept={ACCEPT}
+        className="hidden"
+        onChange={(event) => {
+          onReplace(event.target.files?.[0] ?? null);
+          event.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => input.current?.click()}
+        className="absolute top-4 right-4 flex h-9 items-center gap-1 rounded-[8px] bg-black/5 px-3 text-[14px] leading-5 font-medium text-black transition-colors hover:bg-black/8 disabled:cursor-not-allowed disabled:text-black/34"
+      >
+        <RefreshCw className="h-4 w-4" strokeWidth={2} />
+        Replace
+      </button>
+
+      {percent !== null && (
+        <progress
+          value={percent}
+          max={100}
+          aria-label="Upload progress"
+          className={cn(
+            "absolute inset-x-0 bottom-0 block h-1 w-full appearance-none bg-transparent",
+            "[&::-webkit-progress-bar]:bg-transparent [&::-webkit-progress-value]:bg-[#0be09b] [&::-webkit-progress-value]:transition-[width]",
+            "[&::-moz-progress-bar]:bg-[#0be09b]",
+          )}
+        />
+      )}
+    </section>
   );
 }
 
@@ -419,12 +479,4 @@ function readDuration(file: File): Promise<number> {
     };
     probe.src = url;
   });
-}
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="flex h-screen flex-1 flex-col items-center justify-center">
-      {children}
-    </main>
-  );
 }

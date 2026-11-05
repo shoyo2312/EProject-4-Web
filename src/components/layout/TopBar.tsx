@@ -101,7 +101,7 @@ export function TopBar() {
  * blacklists the access token server-side, so a token that leaked before the
  * click stops working immediately instead of living out its 15 minutes.
  */
-function AccountMenu() {
+export function AccountMenu() {
   const { user, confirmSignOut } = useSession();
   const [open, setOpen] = useState(false);
 
@@ -147,7 +147,7 @@ function AccountMenu() {
               View profile
             </Link>
             <Link
-              href="/upload"
+              href="/studio/upload"
               role="menuitem"
               onClick={() => setOpen(false)}
               className="block px-4 py-2 text-[15px] text-[var(--tt-text)] hover:bg-white/10"

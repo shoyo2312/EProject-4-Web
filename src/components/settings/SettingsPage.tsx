@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -14,10 +14,22 @@ import {
   AccountSwitchRow,
   AudienceRow,
   CommentFiltersRow,
-  ScreenTimeLimitRow,
-  SleepHoursRow,
 } from "@/components/settings/rows/AccountRows";
 import { AddEmailRow } from "@/components/settings/rows/AddEmailModal";
+import { PreferenceExpandRow } from "@/components/settings/rows/NotificationPreferenceRows";
+import { ScreenTimeSummaryRow } from "@/components/settings/rows/ScreenTimeSummary";
+import {
+  DailyScreenTimePage,
+  DailyScreenTimeRow,
+} from "@/components/settings/rows/screen-time/DailyScreenTimePage";
+import {
+  SleepHoursPage,
+  SleepHoursRow,
+} from "@/components/settings/rows/screen-time/SleepHoursPage";
+import {
+  KeywordFiltersPage,
+  KeywordFiltersRow,
+} from "@/components/settings/rows/keyword-filters/KeywordFiltersPage";
 import {
   CloseAccountPanel,
   CloseAccountRow,
@@ -40,11 +52,14 @@ import {
 import { useBrowserNotifications } from "@/hooks/use-browser-notifications";
 import { useLocalSettings } from "@/hooks/use-local-settings";
 import { setHighContrast } from "@/lib/settings/local-settings";
+import {
+  IN_APP_SWITCHES,
+  PUSH_SWITCHES,
+} from "@/lib/settings/notification-preferences";
 import { toast } from "@/components/ui/toast";
 import {
   AccessibilityIcon,
   ArrowLeftIcon,
-  BusinessVerificationIcon,
   ContentPreferencesIcon,
   ManageAccountIcon,
   PrivacyLockIcon,
@@ -63,13 +78,20 @@ import type {
 type SwitchSettingsRow = Extract<SettingsRow, { kind: "switch" }>;
 
 /** The pages that take over the panel in place of the sections. */
-type Subpage = "close-account" | "download-data";
+type Subpage =
+  | "close-account"
+  | "download-data"
+  | "daily-screen-time"
+  | "sleep-hours"
+  | "keyword-filters";
+
+/** Screen time → Summary, which a weekly update in the inbox opens. */
+const SUMMARY_TITLE = "Summary";
 
 const ICONS: Record<SettingsIconName, typeof ManageAccountIcon> = {
   "manage-account": ManageAccountIcon,
   privacy: PrivacyLockIcon,
   "push-notifications": PushNotificationsIcon,
-  "business-verification": BusinessVerificationIcon,
   "screen-time": ScreenTimeIcon,
   "content-preferences": ContentPreferencesIcon,
   accessibility: AccessibilityIcon,
@@ -97,11 +119,14 @@ const ICONS: Record<SettingsIconName, typeof ManageAccountIcon> = {
  */
 export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const account = useAccountSettings();
   const panelRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const [active, setActive] = useState(sections[0]?.id ?? "");
   const [subpage, setSubpage] = useState<Subpage | null>(null);
+  /** The title of the one row open in place, as on the live panel. */
+  const [openExpand, setOpenExpand] = useState<string | null>(null);
   const subpageRef = useRef(false);
   const savedScroll = useRef(0);
   const pendingSection = useRef<string | null>(null);
@@ -198,11 +223,38 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
     setSubpage(null);
   };
 
+  // A weekly screen time update in the inbox links to `?summary=<its Monday>`:
+  // open the Summary chart on that week — during render, the way a prop change
+  // adjusts state — then scroll to it and spend the link, so the next one opens
+  // it again even when it arrives with the page already showing.
+  const summaryLink = searchParams.get("summary");
+  const [summaryHandled, setSummaryHandled] = useState<string | null>(null);
+  /** The week the last link named; a Summary opened by hand starts on this week. */
+  const [summaryWeek, setSummaryWeek] = useState<string | null>(null);
+  if (summaryLink !== summaryHandled) {
+    setSummaryHandled(summaryLink);
+    if (summaryLink) {
+      setOpenExpand(SUMMARY_TITLE);
+      setSummaryWeek(summaryLink);
+    }
+  }
+  useEffect(() => {
+    if (!summaryLink) return;
+    // Next frame, once the opened chart is laid out.
+    requestAnimationFrame(() => {
+      goTo("screen-time");
+      router.replace("/setting", { scroll: false });
+    });
+  }, [summaryLink, router]);
+
   return (
-    <main className="relative h-screen flex-1 overflow-hidden">
+    // Below `SettingsHeader`'s fixed 60px — the live container is viewport − 60.
+    <main className="relative mt-15 h-[calc(100vh-60px)] flex-1 overflow-hidden">
+      {/* Live, each page in the panel is a route under /setting, so the arrow
+          leaves it for the sections before it leaves the settings. */}
       <button
         type="button"
-        onClick={() => router.back()}
+        onClick={() => (subpage ? leaveSubpage() : router.back())}
         aria-label="Back"
         className="absolute top-8 left-[max(0.75rem,calc(50%-611px))] flex h-10 w-10 items-center justify-center rounded-full text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-field)]"
       >
@@ -248,6 +300,13 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
             />
           )}
           {subpage === "download-data" && <DownloadDataPanel onLeave={leaveSubpage} />}
+          {subpage === "daily-screen-time" && (
+            <DailyScreenTimePage account={account} onLeave={leaveSubpage} />
+          )}
+          {subpage === "sleep-hours" && (
+            <SleepHoursPage account={account} onLeave={leaveSubpage} />
+          )}
+          {subpage === "keyword-filters" && <KeywordFiltersPage onLeave={leaveSubpage} />}
           <div className={cn(subpage && "hidden")}>
             {sections.map((section, index) => (
               <section
@@ -268,6 +327,12 @@ export function SettingsPage({ sections }: { sections: SettingsSection[] }) {
                     group={group}
                     account={account}
                     onOpen={openSubpage}
+                    openExpand={openExpand}
+                    summaryWeek={summaryWeek}
+                    onToggleExpand={(title) => {
+                      setOpenExpand((open) => (open === title ? null : title));
+                      if (title === SUMMARY_TITLE) setSummaryWeek(null);
+                    }}
                   />
                 ))}
               </section>
@@ -283,10 +348,16 @@ function Group({
   group,
   account,
   onOpen,
+  openExpand,
+  summaryWeek,
+  onToggleExpand,
 }: {
   group: SettingsGroup;
   account: AccountSettings;
   onOpen: (page: Subpage) => void;
+  openExpand: string | null;
+  summaryWeek: string | null;
+  onToggleExpand: (title: string) => void;
 }) {
   return (
     <div className="mb-4">
@@ -308,6 +379,9 @@ function Group({
             row={row}
             account={account}
             onOpen={onOpen}
+            expanded={openExpand === row.title}
+            summaryWeek={summaryWeek}
+            onToggle={() => onToggleExpand(row.title)}
           />
         ))}
       </div>
@@ -316,23 +390,58 @@ function Group({
 }
 
 /**
- * One row, dispatched on `row.action`.
- *
- * A row without an action is still rendered exactly and left inert: it is the
- * entry point to a flow whose state no backend service stores yet, and a
- * control that pretends to save something is worse than one that visibly does
- * nothing. The wired ones need a hook each, so each is its own component
- * rather than a branch inside one.
+ * One row, dispatched on `row.action` — every row has one. The wired ones need
+ * a hook each, so each is its own component rather than a branch inside one.
  */
 function Row({
   row,
   account,
   onOpen,
+  expanded,
+  summaryWeek,
+  onToggle,
 }: {
   row: SettingsRow;
   account: AccountSettings;
   onOpen: (page: Subpage) => void;
+  expanded: boolean;
+  summaryWeek: string | null;
+  onToggle: () => void;
 }) {
+  if (row.kind === "expand") {
+    switch (row.action) {
+      case "push-preferences":
+        return (
+          <PreferenceExpandRow
+            row={row}
+            account={account}
+            expanded={expanded}
+            onToggle={onToggle}
+            switches={PUSH_SWITCHES}
+          />
+        );
+      case "in-app-preferences":
+        return (
+          <PreferenceExpandRow
+            row={row}
+            account={account}
+            expanded={expanded}
+            onToggle={onToggle}
+            switches={IN_APP_SWITCHES}
+          />
+        );
+      case "screen-time-summary":
+        return (
+          <ScreenTimeSummaryRow
+            row={row}
+            expanded={expanded}
+            onToggle={onToggle}
+            week={summaryWeek}
+          />
+        );
+    }
+  }
+
   if (row.kind === "switch") {
     switch (row.action) {
       case "high-contrast":
@@ -356,7 +465,7 @@ function Row({
           />
         );
       default:
-        return <SessionSwitchRow row={row} />;
+        return null;
     }
   }
 
@@ -374,9 +483,17 @@ function Row({
     case "dm-audience":
       return <AudienceRow row={row} account={account} field="dmAudience" />;
     case "screen-time-limit":
-      return <ScreenTimeLimitRow row={row} account={account} />;
+      return (
+        <DailyScreenTimeRow
+          row={row}
+          account={account}
+          onOpen={() => onOpen("daily-screen-time")}
+        />
+      );
     case "sleep-hours":
-      return <SleepHoursRow row={row} account={account} />;
+      return (
+        <SleepHoursRow row={row} account={account} onOpen={() => onOpen("sleep-hours")} />
+      );
     case "add-email":
       return <AddEmailRow row={row} />;
     case "password":
@@ -385,30 +502,12 @@ function Row({
       return <CloseAccountRow row={row} onOpen={() => onOpen("close-account")} />;
     case "download-data":
       return <DownloadDataRow row={row} onOpen={() => onOpen("download-data")} />;
+    case "keyword-filters":
+      return <KeywordFiltersRow row={row} onOpen={() => onOpen("keyword-filters")} />;
   }
 
-  return (
-    <button type="button" className={cn(ROW_CLASS, "hover:bg-white/[0.03]")}>
-      <RowBody row={row} />
-      <Accessory row={row} />
-    </button>
-  );
-}
-
-/**
- * The unwired switch — business verification. It holds its position for the
- * session and is forgotten on reload, which is the honest rendering of a
- * control with nowhere to save to.
- */
-function SessionSwitchRow({ row }: { row: SwitchSettingsRow }) {
-  const [on, setOn] = useState(row.on);
-
-  return (
-    <div className={ROW_CLASS}>
-      <RowBody row={row} />
-      <Switch on={on} label={row.title} onToggle={() => setOn((w) => !w)} />
-    </div>
-  );
+  // An action that does not belong to its row's kind — a data mistake.
+  return null;
 }
 
 /** Accessibility → "Increase color contrast". Browser-local, by its own copy. */

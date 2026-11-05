@@ -72,6 +72,80 @@ All pills: `border-radius: 9999px`, horizontal padding 16px.
 Label: **16px / 600 / lh 20.8** (the TUX button wrapper reports 14px — read `.tux-web-canary
 Headline-*`, the leaf that owns the text, or you will get this wrong).
 
+## Suggested accounts
+
+Measured live on **2026-10-28** on `@tiktok`, 1920×936, signed in. The add-friend icon button
+(`data-e2e="show-suggested-accounts"`, `aria-label="Suggested accounts"`) is a **toggle** with no
+pressed style. The panel sits between the header and the tab bar; while it is open the header's
+`margin-bottom` goes 20 → 12px with no transition. Closing leaves the panel in the DOM at
+`max-height: 0; opacity: 0`. "View all" opens the Followers dialog on its Suggested tab. Cards
+have no dismiss ✕.
+
+### Open/close animation
+
+Wrapper has `overflow: hidden` and two transitions, read from `document.getAnimations()`:
+
+| | closed | open | transition |
+|---|---|---|---|
+| `max-height` | `0` | `300px` | `400ms ease` |
+| `opacity` | `0` | `1` | `400ms ease` |
+
+Content is 282px tall, so opening reaches full height before 400ms and closing starts ~30ms late.
+`ease` is `cubic-bezier(.25,.1,.25,1)` — Tailwind's `ease-[ease]`, not its default curve.
+
+### Layout (1296 wide; 282 = title 40 + cards 227 + spacer 15)
+
+```
+DivUserCardListContainer         position: relative; width: 100%; min-height: 265px
+├ title row                      height 40; flex; space-between; align-items center;
+│                                padding-left 14; padding-bottom 8; z-index 10
+│ ├ label group                  flex; align-items center; gap 8; cursor pointer
+│ │ ├ "Suggested accounts"       14px / 18.2 / 700, rgba(255,255,255,.6)
+│ │ └ ⓘ                          14×14, rgba(255,255,255,.6)
+│ └ "View all"                   13px / 16.9 / 700, rgba(255,255,255,.6); wrapper padding-right 12
+├ card row (DivFadeScrollContainer)
+│                                flex; align-items center; gap 10; overflow-x scroll;
+│                                scrollbar hidden; padding-bottom 5; max-height 250; min-height 100;
+│                                first and last card inset 10 from the ends
+├ bottom spacer                  15px
+└ arrow × 2                      absolute over the whole container
+```
+
+Edge fade: `mask-image: linear-gradient(to right, rgba(255,255,255,S) 0%, #000 125px,
+#000 calc(100% - 125px), rgba(255,255,255,E) 100%)`, S = 1 at the start, E = 1 at the end.
+The 150ms transition TikTok declares on those two custom properties never runs (they are not
+registered with `@property`), so the fade switches instantly.
+
+### Card (`DivCardContainer`, 160×222)
+
+`padding 16`, `border-radius 12`, `#1E1E1E`, hover `rgba(255,255,255,.13)` instantly. Flex
+column, centred, gap 14.
+
+| Part | Measurement |
+|---|---|
+| Avatar | 96×96 circle, link to the profile |
+| Text block | width 132; column, centred, gap 4 |
+| Name | 14px / 18.2 / 500, `#FAFAFA`, one line, ellipsis |
+| Reason | 12px / 15.6 / 400, `rgba(255,255,255,.6)`, 20px-tall row, one line |
+| Follow | 110×28 pill, `#FE2C55`, white 13px / 16.9 / 500, padding `1px 8px` |
+
+The parts add up to 226.2 but the card is 222: the button ends 12px from the card edge. Fixed
+height, not trimmed padding.
+
+### Arrows
+
+Container `position: absolute; top: 0; height: 100%; padding-top: 15px` (from `padding: inherit`),
+`align-items: center`, 37px wide (5px inset + icon). Icon 32×32 circle `#1E1E1E`, 16px chevron
+offset `padding-left 3.555px` (right) / `12.445px` + `rotateY(180deg)` (left). No hover change.
+Right arrow shows while not at the end, left only once scrolled. Click:
+`scrollBy({ left: ±clientWidth / 4, behavior: "smooth" })` — 324px at 1296, lands in ~300ms.
+
+### Tooltip (on the label group or ⓘ)
+
+White, radius 12, `max-width 240px`, padding `9px 12px`, 14px / 18.2 / 500 black, shadow
+`0 2px 10px rgba(0,0,0,.21)`, placed right of the label group, top-aligned, 4px gap. Appears
+instantly (computed `transition` is a bare `opacity`, i.e. 0s).
+
 ## Tab bar
 
 `.DivFeedTabWrapper` (46px tall, `position: relative`) wraps `.DivVideoFeedTab` (44px).

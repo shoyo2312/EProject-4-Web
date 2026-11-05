@@ -40,7 +40,7 @@ export function LiveFeed() {
       <Centered>
         <p className="text-[16px] text-[var(--tt-text)]">No videos yet.</p>
         <Link
-          href="/upload"
+          href="/studio/upload"
           className="mt-3 rounded-[4px] bg-[var(--tt-red-active)] px-4 py-2 text-[14px] font-semibold text-white"
         >
           Upload the first one

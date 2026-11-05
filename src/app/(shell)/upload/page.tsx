@@ -1,9 +1,0 @@
-import type { Metadata } from "next";
-
-import { UploadPage } from "@/components/upload/UploadPage";
-
-export const metadata: Metadata = { title: "Upload | Nowa" };
-
-export default function UploadRoute() {
-  return <UploadPage />;
-}

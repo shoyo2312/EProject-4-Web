@@ -132,6 +132,13 @@ const MESSAGES: Record<string, string> = {
   INVALID_AVATAR: "That photo must be a JPEG, PNG, or WebP under 5 MB.",
   PRIVATE_ACCOUNT: "This account is private. Follow it to see its videos.",
   DISPLAY_NAME_CHANGE_TOO_SOON: "Your nickname can only be changed once every 7 days.",
+  // The daily limit's passcode, locked for 15 minutes after five wrong tries.
+  // A 429 without this code is the gateway's own rate limit, read below.
+  TOO_MANY_PASSCODE_ATTEMPTS: "Too many incorrect passcodes. Try again in 15 minutes.",
+  // Filter keywords.
+  KEYWORD_FILTER_DUPLICATE: "You've already added this keyword",
+  TOO_MANY_KEYWORD_FILTERS: "You can filter up to 100 keywords.",
+  KEYWORD_FILTER_NOT_FOUND: "This keyword was already removed.",
   // Download your data. The panel re-reads the list after these, so the card
   // underneath already shows what happened instead.
   DATA_EXPORT_IN_PROGRESS: "You already have a request being processed.",
@@ -158,6 +165,8 @@ const MESSAGES: Record<string, string> = {
     "This description goes against our Community Guidelines. Edit it and post again.",
   VIDEO_TAGS_REJECTED:
     "A hashtag here goes against our Community Guidelines. Edit it and post again.",
+  VIDEO_CAPTION_HELD: "This caption can’t be used on a posted video. Try different wording.",
+  PIN_LIMIT_REACHED: "You can pin up to 3 videos. Unpin one first.",
   // Retry-After says when; the upload page shows that beside a held Post button.
   UPLOAD_RATE_LIMITED: "You’ve posted a lot in a short time. Try again later.",
 

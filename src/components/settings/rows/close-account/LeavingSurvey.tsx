@@ -51,7 +51,7 @@ function reasonsFor(username: string): Reason[] {
       suggestions: [
         { label: "Setting up your profile", to: { href: `/@${username}` } },
         { label: "Exploring videos", to: { href: "/explore" } },
-        { label: "Creating your first video", to: { href: "/upload" } },
+        { label: "Creating your first video", to: { href: "/studio/upload" } },
       ],
     },
     { label: "I have multiple accounts" },

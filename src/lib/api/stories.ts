@@ -1,6 +1,7 @@
 import { apiFetch } from "./client";
 import type {
   StoryGroup,
+  StoryReaction,
   StoryResponse,
   StoryRing,
   StoryViewer,
@@ -69,6 +70,15 @@ export function getStoryViewers(storyId: string, before?: string): Promise<Story
     query: { before },
     auth: "required",
   });
+}
+
+/** One reaction per viewer per story; calling again replaces it. */
+export function setStoryReaction(storyId: string, reaction: StoryReaction): Promise<void> {
+  return apiFetch<void>(`/stories/${storyId}/reaction`, { method: "PUT", body: { reaction }, auth: "required" });
+}
+
+export function clearStoryReaction(storyId: string): Promise<void> {
+  return apiFetch<void>(`/stories/${storyId}/reaction`, { method: "DELETE", auth: "required" });
 }
 
 export function updateStoryVisibility(

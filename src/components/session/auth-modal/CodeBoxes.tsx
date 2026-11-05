@@ -2,12 +2,13 @@
 
 import { useRef } from "react";
 
-import { CODE_LENGTH, enterDigits } from "@/lib/forms/code-digits";
+import { enterDigits } from "@/lib/forms/code-digits";
 import { cn } from "@/lib/utils";
 
 /**
- * `.PinWrapper` — the six code boxes. Typing moves right, Backspace on an empty
- * box moves left and clears it, and a pasted code fills every box at once.
+ * `.PinWrapper` — one box per entry of `digits` (six for a code). Typing moves
+ * right, Backspace on an empty box moves left and clears it, and a pasted code
+ * fills every box at once.
  */
 export function CodeBoxes({
   digits,
@@ -31,8 +32,8 @@ export function CodeBoxes({
   };
 
   return (
-    <div className="flex gap-1.5" role="group" aria-label="6-digit code">
-      {Array.from({ length: CODE_LENGTH }, (_, index) => (
+    <div className="flex gap-1.5" role="group" aria-label={`${digits.length}-digit code`}>
+      {digits.map((digit, index) => (
         <input
           key={index}
           ref={(node) => {
@@ -41,7 +42,7 @@ export function CodeBoxes({
             if (typeof firstRef === "function") firstRef(node);
             else firstRef.current = node;
           }}
-          value={digits[index]}
+          value={digit}
           disabled={disabled}
           inputMode="numeric"
           autoComplete={index === 0 ? "one-time-code" : "off"}
@@ -63,7 +64,7 @@ export function CodeBoxes({
             } else if (event.key === "ArrowLeft" && index > 0) {
               event.preventDefault();
               focusBox(index - 1);
-            } else if (event.key === "ArrowRight" && index < CODE_LENGTH - 1) {
+            } else if (event.key === "ArrowRight" && index < digits.length - 1) {
               event.preventDefault();
               focusBox(index + 1);
             }

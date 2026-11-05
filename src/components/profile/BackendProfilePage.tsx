@@ -500,6 +500,8 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
 
   return (
     <ProfilePage
+      // Per-profile state (the suggestions row, dialogs) starts fresh on another /@handle.
+      key={shown.author.userId}
       profile={shown}
       onSaveProfile={isOwner ? saveProfile : undefined}
       onToggleFollow={toggleFollow}

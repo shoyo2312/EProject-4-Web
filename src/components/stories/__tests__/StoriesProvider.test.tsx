@@ -45,6 +45,8 @@ function story(id: string, overrides: Partial<StoryResponse> = {}): StoryRespons
     durationSeconds: null,
     viewCount: null,
     viewedByMe: false,
+    myReaction: null,
+    reactionCounts: null,
     createdAt: "2026-10-20T10:00:00Z",
     expiresAt: "2026-10-21T10:00:00Z",
     ...overrides,
@@ -73,7 +75,7 @@ function Open({ author }: { author: Author }) {
 
 const ring = (id: string) => screen.getByTestId(`ring-${id}`).textContent;
 /** The classes of the ring a `StoryRing` button draws: its colour is the state. */
-const ringClasses = (button: HTMLElement) => button.firstElementChild?.className ?? "";
+const ringStateOf = (button: HTMLElement) => button.querySelector("[data-ring]")?.getAttribute("data-ring");
 
 /** The tab going to the background or coming back, as the browser reports it. */
 function setPageHidden(hidden: boolean) {
@@ -257,7 +259,8 @@ describe("StoriesProvider", () => {
     );
     const { rerender } = render(page());
     await waitFor(() => expect(ring("2")).toBe("unseen"));
-    fireEvent.click(await screen.findByRole("button", { name: "Watch Bob's stories" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Bob's avatar" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "View story" }));
     await screen.findByRole("dialog", { name: "Bob's story" });
 
     // The session ends in this tab. As a guest they cannot see the story (it was for friends), so the
@@ -334,7 +337,8 @@ describe("StoriesProvider", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     await waitFor(() => expect(ring("2")).toBe("seen"));
-    expect(screen.queryByRole("dialog")).toBeNull();
+    // The player lingers for its exit, then goes.
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
   it("deleting your own story from the player asks for your ring again instead of keeping the old one", async () => {
@@ -352,7 +356,8 @@ describe("StoriesProvider", () => {
 
     // The server has nothing left to show for them once the story is gone.
     getStoryRings.mockResolvedValueOnce([]);
-    fireEvent.click(await screen.findByRole("button", { name: "Delete story" }));
+    fireEvent.click(await screen.findByRole("button", { name: "More" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete story" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(deleteStory).toHaveBeenCalledWith("mine"));
@@ -371,9 +376,8 @@ describe("StoriesProvider", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "open Me" }));
 
-    fireEvent.change(await screen.findByRole("combobox", { name: "Who can see this story" }), {
-      target: { value: "FRIENDS" },
-    });
+    fireEvent.click(await screen.findByRole("button", { name: "More" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Who can see this story" }), { target: { value: "FRIENDS" } });
 
     await waitFor(() => expect(getUserStories).toHaveBeenCalledTimes(2));
     expect(screen.getByRole("dialog", { name: "Me's story" })).toBeTruthy();
@@ -437,7 +441,8 @@ describe("a profile header's avatar", () => {
     );
     await waitFor(() => expect(ring("2")).toBe("unseen"));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Watch Bob's stories" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Bob's avatar" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "View story" }));
     await screen.findByRole("dialog", { name: "Bob's story" });
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
@@ -451,7 +456,7 @@ describe("a profile header's avatar", () => {
         <ProfileStoryAvatar author={me} />
       </StoriesProvider>,
     );
-    expect(ringClasses(await screen.findByRole("button", { name: "Watch Me's stories" }))).toContain("tt-red");
+    expect(ringStateOf(await screen.findByRole("button", { name: "Me's avatar" }))).toBe("unseen");
     live.unmount();
 
     getUserStories.mockResolvedValue([story("mine", { userId: "1", status: "PENDING_MODERATION" })]);
@@ -460,6 +465,6 @@ describe("a profile header's avatar", () => {
         <ProfileStoryAvatar author={me} />
       </StoriesProvider>,
     );
-    expect(ringClasses(await screen.findByRole("button", { name: "Watch Me's stories" }))).toContain("bg-white/30");
+    expect(ringStateOf(await screen.findByRole("button", { name: "Me's avatar" }))).toBe("seen");
   });
 });

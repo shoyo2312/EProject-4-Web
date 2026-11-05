@@ -18,7 +18,9 @@ export type NotificationType =
   | "FOLLOW_REQUEST"
   | "FOLLOW_REQUEST_ACCEPTED"
   | "STORY"
-  | "SYSTEM";
+  | "SYSTEM"
+  | "REPOST"
+  | "SCREEN_TIME";
 
 /**
  * The types whose `referenceId` is an account, not a video: the new follower,
@@ -34,6 +36,14 @@ export function referencesUser(type: NotificationType): boolean {
   );
 }
 
+/**
+ * The `referenceId` of the `SYSTEM` notice "Your account logged in from a new device"
+ * (notification-service `NewDeviceSignInEventConsumer.REFERENCE`). Not a type of its own, because
+ * the mobile app fails its inbox on a type it does not know; this is how the web tells it apart
+ * and offers the way to secure the account.
+ */
+export const ACCOUNT_SECURITY_REFERENCE = "account-security";
+
 export interface NotificationResponse {
   id: string;
   /** Who did the thing (liked/commented/shared/followed). Null for SYSTEM. */
@@ -43,9 +53,10 @@ export interface NotificationResponse {
   body: string;
   /**
    * What the notification points at, type-dependent: a videoId for
-   * LIKE/COMMENT/COMMENT_LIKE/SHARE, a userId for the three follow types and
-   * STORY (see `referencesUser`) — for STORY the story's owner, not a story id —
-   * null for SYSTEM. Opaque to the service, so the client decides what it means.
+   * LIKE/COMMENT/COMMENT_LIKE/SHARE/REPOST, a userId for the three follow types
+   * and STORY (see `referencesUser`) — for STORY the story's owner, not a story
+   * id — the Monday of the week covered ("YYYY-MM-DD") for SCREEN_TIME, null for
+   * SYSTEM. Opaque to the service, so the client decides what it means.
    */
   referenceId: string | null;
   read: boolean;

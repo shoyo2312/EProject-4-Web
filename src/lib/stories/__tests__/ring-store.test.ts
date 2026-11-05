@@ -443,6 +443,8 @@ function story(overrides: Partial<StoryResponse> = {}): StoryResponse {
     durationSeconds: null,
     viewCount: null,
     viewedByMe: false,
+    myReaction: null,
+    reactionCounts: null,
     createdAt: "2026-10-20T10:00:00Z",
     expiresAt: "2026-10-21T10:00:00Z",
     ...overrides,

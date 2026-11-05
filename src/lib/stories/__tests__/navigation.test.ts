@@ -16,6 +16,8 @@ function story(id: string, overrides: Partial<StoryResponse> = {}): StoryRespons
     durationSeconds: null,
     viewCount: null,
     viewedByMe: false,
+    myReaction: null,
+    reactionCounts: null,
     createdAt: "2026-10-20T10:00:00Z",
     expiresAt: "2026-10-21T10:00:00Z",
     ...overrides,
@@ -56,8 +58,8 @@ describe("previous", () => {
 });
 
 describe("displayMs", () => {
-  it("shows an image for five seconds", () => {
-    expect(displayMs(story("a"))).toBe(5000);
+  it("shows an image for thirty seconds", () => {
+    expect(displayMs(story("a"))).toBe(30000);
   });
 
   it("shows a video for its own length", () => {

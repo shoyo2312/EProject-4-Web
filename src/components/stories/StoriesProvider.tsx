@@ -16,7 +16,9 @@ import {
 } from "@/lib/stories/ring-store";
 import type { Author } from "@/types/tiktok";
 
-import { StoryViewer } from "./StoryViewer";
+import { usePresence } from "@/hooks/use-presence";
+
+import { StoryViewer, VIEWER_EXIT_MS } from "./StoryViewer";
 
 interface Stories {
   /**
@@ -113,6 +115,11 @@ export function StoriesProvider({ children }: { children: React.ReactNode }) {
 
   const [playing, setPlaying] = useState<Playing | null>(null);
   const viewing = playing?.store === store ? playing : null;
+  const player = usePresence(viewing !== null, VIEWER_EXIT_MS);
+  // What was playing: still drawn, closing, after `playing` is cleared.
+  const [lastViewing, setLastViewing] = useState<Playing | null>(null);
+  if (viewing && viewing !== lastViewing) setLastViewing(viewing);
+  const shown = viewing ?? (player.mounted ? lastViewing : null);
 
   const openStories = useCallback(
     async (author: Author) => {
@@ -177,15 +184,16 @@ export function StoriesProvider({ children }: { children: React.ReactNode }) {
   return (
     <StoriesContext.Provider value={value}>
       {children}
-      {viewing && (
+      {shown && (
         <StoryViewer
-          key={viewing.author.userId}
-          groups={viewing.groups}
-          authors={{ [viewing.author.userId]: viewing.author }}
-          start={{ group: 0, story: viewing.start }}
+          key={shown.author.userId}
+          groups={shown.groups}
+          authors={{ [shown.author.userId]: shown.author }}
+          start={{ group: 0, story: shown.start }}
+          closing={player.closing}
           onClose={close}
           onSeen={markSeen}
-          onOwnStoryChanged={() => reload(viewing.author)}
+          onOwnStoryChanged={() => reload(shown.author)}
           onOwnStoryDeleted={close}
         />
       )}

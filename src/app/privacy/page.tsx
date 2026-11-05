@@ -43,7 +43,13 @@ export default function PrivacyPage() {
           time you sign in we record the time, your IP address, your browser&rsquo;s user agent
           and, where your browser provides them, your device model and operating system
           version. We use this to show you where your account is signed in and to detect
-          suspicious activity.
+          suspicious activity. We look up the approximate place of that address — usually a city
+          and a country — in a database kept on our own servers (
+          <a href="https://db-ip.com" className="underline">
+            IP Geolocation by DB-IP
+          </a>
+          ), and we let you know in your notifications when your account is signed in from a
+          device it has not used before.
         </p>
         <p>
           <strong className="text-[var(--tt-text)]">Usage data.</strong> The videos you watch
@@ -53,7 +59,9 @@ export default function PrivacyPage() {
         <p>
           <strong className="text-[var(--tt-text)]">Data stored in your browser.</strong> We
           keep your sign-in tokens and display preferences (such as sound and layout settings)
-          in your browser&rsquo;s local storage and cookies. We do not use advertising or
+          in your browser&rsquo;s local storage and cookies, along with a random identifier for
+          your browser that lets us tell a device you have used before from a new one. We do not
+          use advertising or
           third-party tracking cookies.
         </p>
       </LegalSection>

@@ -1,105 +1,124 @@
 "use client";
 
-import { codePointLength, fitEdit } from "@/lib/code-points";
+import { Hash } from "lucide-react";
+import { useId, useRef } from "react";
 
+import { codePointLength, fitEdit } from "@/lib/code-points";
+import { cn } from "@/lib/utils";
+
+/** The feed's dark input, still used by the story composer. */
 export const FIELD =
   "h-11 w-full rounded-[4px] border border-transparent bg-white/[0.12] px-3 text-[15px] text-[var(--tt-text)] caret-[var(--tt-red)] outline-none placeholder:text-[rgb(255_255_255/0.34)]";
 
+type Box = HTMLInputElement & HTMLTextAreaElement;
+
+const TEXT = "w-full bg-transparent text-[16px] leading-[21px] text-black outline-none placeholder:text-black/34";
+
 /**
- * A labelled input wired to `useForm`. Spread a field onto it:
- *   `<TextField {...form.field("title")} label="Title" />`
+ * TikTok Studio's caption box, read off the live upload page: 14/500 label,
+ * then an 8px-radius `rgba(0,0,0,.05)` box with the text at 16/21 inside 12px
+ * of padding. The multiline one grows from 105px and carries the footer row —
+ * "# Hashtags" on the left, the 13px `rgba(0,0,0,.34)` counter on the right.
  *
- * It is a component rather than three inline elements so the field object is
- * never held in a local variable — `ref` in it makes the React Compiler lint
- * read the whole object as a ref, and reading `.value` off one during render is
- * (rightly) an error.
+ * Spread a `useForm` field onto it. `max` is video-service's `@MaxCodePoints`
+ * limit; the native `maxLength` counts UTF-16 units and would stop a caption
+ * of emoji at half of it.
  */
-export function TextField({
+export function CaptionField({
   label,
   value,
   onChange,
   error,
   ref,
+  max,
   placeholder,
-  maxLength,
   multiline,
 }: {
   label: string;
   value: string;
   onChange: (next: string) => void;
   error?: string;
-  ref?: React.Ref<HTMLInputElement & HTMLTextAreaElement>;
+  ref?: React.Ref<Box>;
+  max: number;
   placeholder?: string;
-  maxLength?: number;
   multiline?: boolean;
 }) {
-  const className = error ? `${FIELD} border-[var(--tt-red-active)]` : FIELD;
-  // `maxLength` is video-service's, in code points. The native attribute counts
-  // UTF-16 units and would stop a caption of emoji at half of it.
+  const id = useId();
+  const local = useRef<Box | null>(null);
+  const length = codePointLength(value);
+
   const shared = {
-    ref,
+    id,
     value,
     placeholder,
-    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      onChange(
-        maxLength === undefined
-          ? event.target.value
-          : fitEdit(value, event.target.value, maxLength),
-      ),
+    ref: (node: Box | null) => {
+      local.current = node;
+      if (typeof ref === "function") ref(node);
+    },
+    onChange: (event: React.ChangeEvent<Box>) => onChange(fitEdit(value, event.target.value, max)),
     "aria-invalid": error ? true : undefined,
+    "aria-describedby": `${id}-count`,
   } as const;
 
-  const length = codePointLength(value);
-  const atLimit = maxLength !== undefined && length >= maxLength;
-  const counterId = maxLength !== undefined ? `${label}-count` : undefined;
-
-  return (
-    <Labelled label={label} error={error}>
-      {multiline ? (
-        <textarea
-          {...shared}
-          aria-describedby={counterId}
-          className={`${className} no-scrollbar h-24 resize-none py-2`}
-        />
-      ) : (
-        <input {...shared} aria-describedby={counterId} className={className} />
-      )}
-      {maxLength !== undefined && (
-        <p
-          id={counterId}
-          className={`mt-1 text-right text-[13px] leading-[18px] ${
-            atLimit
-              ? "text-[var(--tt-red-active)]"
-              : "text-[var(--tt-text-secondary)]"
-          }`}
-        >
-          {length} / {maxLength}
-        </p>
-      )}
-    </Labelled>
+  const counter = (
+    <span
+      id={`${id}-count`}
+      className={cn("text-[13px] leading-[17px]", length >= max ? "text-[#fe2c55]" : "text-black/34")}
+    >
+      {length}/{max}
+    </span>
   );
-}
 
-export function Labelled({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
+  /** Like the live button: drops a `#` at the end and hands the caret back. */
+  function addHashtag() {
+    const next = fitEdit(value, value && !/\s$/.test(value) ? `${value} #` : `${value}#`, max);
+    onChange(next);
+    requestAnimationFrame(() => {
+      const box = local.current;
+      if (!box) return;
+      box.focus();
+      box.setSelectionRange(next.length, next.length);
+    });
+  }
+
   return (
-    <label className="block">
-      <span className="mb-2 block text-[15px] leading-[22px] font-semibold text-[var(--tt-text)]">
+    <div>
+      <label htmlFor={id} className="block text-[14px] leading-[21px] font-medium text-black">
         {label}
-      </span>
-      {children}
+      </label>
+      <div
+        className={cn(
+          "mt-[11px] rounded-[8px] border bg-black/5 transition-colors",
+          error ? "border-[#fe2c55]" : "border-transparent focus-within:border-black/12",
+        )}
+      >
+        {multiline ? (
+          <>
+            <textarea {...shared} className={cn(TEXT, "block min-h-[115px] resize-none px-3 pt-3 field-sizing-content")} />
+            <div className="flex items-center justify-between px-3 pt-2 pb-2.5">
+              <button
+                type="button"
+                onClick={addHashtag}
+                className="flex items-center gap-0.5 text-[14px] leading-[18px] font-medium text-black/65 hover:text-black"
+              >
+                <Hash className="h-4 w-4" strokeWidth={2} />
+                Hashtags
+              </button>
+              {counter}
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center gap-3 px-3">
+            <input {...shared} className={cn(TEXT, "h-[45px] min-w-0 flex-1")} />
+            {counter}
+          </div>
+        )}
+      </div>
       {error && (
-        <p role="alert" className="mt-1.5 text-[13px] leading-[18px] text-[var(--tt-red-active)]">
+        <p role="alert" className="mt-1.5 text-[13px] leading-[17px] text-[#fe2c55]">
           {error}
         </p>
       )}
-    </label>
+    </div>
   );
 }
