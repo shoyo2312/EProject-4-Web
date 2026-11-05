@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+import { useMessagesPanel } from "@/components/messages/panel/MessagesPanelProvider";
 import { ChatBubble } from "@/components/messages/floating/ChatBubble";
 import { FloatingPanel } from "@/components/messages/floating/FloatingPanel";
 import { useChatUnreadContext } from "@/components/messages/ChatUnreadProvider";
@@ -35,8 +36,10 @@ export function FloatingChat() {
   const pathname = usePathname();
   const unread = useChatUnreadContext();
   const [dock, setDock] = useState(EMPTY_DOCK);
+  const panel = useMessagesPanel();
 
-  if (!user || pathname.startsWith("/messages")) return null;
+  // The Messages panel shows these same threads; two live copies would double the read receipts.
+  if (!user || pathname.startsWith("/messages") || panel.mode !== "closed") return null;
 
   // A muted conversation does not raise a bubble by itself; the viewer's own opens still stay.
   const items = dockConversations(unread.conversations, unread.byConversation, dock, (conversation) =>

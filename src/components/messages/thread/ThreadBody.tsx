@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { WarningIcon } from "@/components/icons";
 import { ChatAvatar } from "@/components/messages/ChatAvatar";
 import { BlockedByOtherNotice } from "@/components/messages/thread/BlockedByOtherNotice";
 import { BlockedNotice } from "@/components/messages/thread/BlockedNotice";
 import { useChatUnreadContext } from "@/components/messages/ChatUnreadProvider";
-import { Composer } from "@/components/messages/thread/Composer";
+import { Composer, type ImageSend, type ImageSendResult } from "@/components/messages/thread/Composer";
 import { DeleteMessageDialog } from "@/components/messages/thread/DeleteMessageDialog";
 import { MessageList } from "@/components/messages/thread/MessageList";
 import { RequestPrompt } from "@/components/messages/thread/RequestPrompt";
@@ -21,7 +21,9 @@ import type { ChatThread } from "@/hooks/use-chat-thread";
 import { useTypingSender } from "@/hooks/use-typing-sender";
 import {
   getConversation,
+  uploadChatImage,
   type ConversationResponse,
+  type ImageView,
   type MessageResponse,
   type SendPayload,
   type StickerView,
@@ -36,6 +38,7 @@ import {
   quoteText,
   retryAvailableAfter,
 } from "@/lib/chat";
+import { firstImage } from "@/lib/chat-image";
 import { isWindowActive, setViewing } from "@/lib/chat-viewing";
 import { isApiError } from "@/lib/api/errors";
 import { unblock } from "@/lib/api/users";
@@ -82,6 +85,9 @@ export function ThreadBody({
   const [deleting, setDeleting] = useState<MessageResponse | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const { markSeen } = thread;
+  /** A file dropped on the thread, handed to the composer; a new object per drop. */
+  const [dropped, setDropped] = useState<{ file: File } | null>(null);
+  const lastSendError = useRef<unknown>(null);
 
   /**
    * "Seen" is a message the list has drawn and the browser reports in view, while the tab is shown and
@@ -179,8 +185,26 @@ export function ThreadBody({
     setSendError(result.error);
     if (isThreadLocked(result.error)) setLocked(true);
     if (isReplyTargetGone(result.error)) setReplyId(null);
+    lastSendError.current = result.error;
     return false;
   };
+
+  /** The composer shows a picture's failure in its own tray, so the thread's alert line is not used for it. */
+  const sendImage = async (image: ImageSend): Promise<ImageSendResult> => {
+    lastSendError.current = null;
+    const ok = await send({
+      type: "IMAGE",
+      imageId: image.imageId,
+      content: image.content,
+      clientRequestId: image.clientRequestId,
+    });
+    if (ok) return { ok: true };
+    setSendError(null);
+    return { ok: false, error: lastSendError.current };
+  };
+  const uploadImage = (file: File, signal: AbortSignal) => uploadChatImage(conversationId, file, signal);
+
+  const hasFiles = (event: React.DragEvent) => Array.from(event.dataTransfer.types).includes("Files");
 
   const unblockNow = async () => {
     if (unblocking) return;
@@ -222,7 +246,18 @@ export function ThreadBody({
   };
 
   return (
-    <>
+    <div
+      className="contents"
+      onDragOver={(event) => {
+        if (hasFiles(event)) event.preventDefault();
+      }}
+      onDrop={(event) => {
+        if (!hasFiles(event)) return;
+        event.preventDefault();
+        const file = firstImage(event.dataTransfer.files);
+        if (file) setDropped({ file });
+      }}
+    >
       {thread.status === "loading" ? (
         <ThreadBodySkeleton />
       ) : thread.status === "error" ? (
@@ -238,7 +273,7 @@ export function ThreadBody({
         </div>
       ) : thread.messages.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <ChatAvatar src={avatar} className="h-20 w-20" />
+          <ChatAvatar userId={otherId} src={avatar} className="h-20 w-20" />
           <p className="mt-3 text-[16px] font-semibold text-[var(--tt-text)]">{name}</p>
           <p className="mt-1 text-[14px] text-[var(--tt-text-muted)]">Say hello to start the conversation.</p>
         </div>
@@ -253,6 +288,7 @@ export function ThreadBody({
           peerName={name}
           peerAvatar={avatar}
           receipt={thread.receipt ?? null}
+          liveIds={thread.liveIds}
           onVisibleNewestChange={(id) => setVisible({ conversationId, id })}
           onReact={(message, emoji) => {
             setSendError(null);
@@ -294,6 +330,7 @@ export function ThreadBody({
         onCancelReply={() => setReplyId(null)}
         onSend={(content) => send({ type: "TEXT", content })}
         onSendSticker={(sticker) => send({ type: "STICKER", stickerId: sticker.stickerId })}
+        photos={{ onUploadImage: uploadImage, onSendImage: sendImage, incomingFile: dropped }}
       />
 
       {deleting && (
@@ -305,8 +342,14 @@ export function ThreadBody({
           onRecall={() => void confirmDelete(true)}
         />
       )}
-    </>
+    </div>
   );
+}
+
+interface PhotoProps {
+  onUploadImage?: (file: File, signal: AbortSignal) => Promise<ImageView>;
+  onSendImage?: (image: ImageSend) => Promise<ImageSendResult>;
+  incomingFile?: { file: File } | null;
 }
 
 function ThreadFooter({
@@ -326,6 +369,7 @@ function ThreadFooter({
   onCancelReply,
   onSend,
   onSendSticker,
+  photos,
 }: {
   conversation: ConversationResponse;
   name: string;
@@ -343,6 +387,7 @@ function ThreadFooter({
   onCancelReply: () => void;
   onSend: (content: string) => Promise<boolean>;
   onSendSticker: (sticker: StickerView) => Promise<boolean>;
+  photos: PhotoProps;
 }) {
   // The viewer's own block comes first: whatever the request state, there is nothing to send into.
   if (blockedByMe) {
@@ -363,6 +408,7 @@ function ThreadFooter({
     case "REOPEN_ON_SEND":
       return (
         <ReopenComposer
+          conversationKey={conversation.id}
           name={name}
           draft={draft}
           onDraftChange={onDraftChange}
@@ -371,11 +417,13 @@ function ThreadFooter({
           onCancelReply={onCancelReply}
           onSend={onSend}
           onSendSticker={onSendSticker}
+          photos={photos}
         />
       );
     default:
       return (
         <Composer
+          key={conversation.id}
           draft={draft}
           onDraftChange={onDraftChange}
           onTyping={onTyping}
@@ -385,6 +433,7 @@ function ThreadFooter({
           onCancelReply={onCancelReply}
           onSend={onSend}
           onSendSticker={onSendSticker}
+          {...photos}
         />
       );
   }
@@ -396,6 +445,7 @@ function ThreadFooter({
  * everything back as it was.
  */
 function ReopenComposer({
+  conversationKey,
   name,
   draft,
   onDraftChange,
@@ -404,7 +454,9 @@ function ReopenComposer({
   onCancelReply,
   onSend,
   onSendSticker,
+  photos: { onUploadImage, onSendImage, incomingFile },
 }: {
+  conversationKey: string;
   name: string;
   draft: string;
   onDraftChange: (text: string) => void;
@@ -413,15 +465,17 @@ function ReopenComposer({
   onCancelReply: () => void;
   onSend: (content: string) => Promise<boolean>;
   onSendSticker: (sticker: StickerView) => Promise<boolean>;
+  photos: PhotoProps;
 }) {
-  const [asking, setAsking] = useState<{ send: () => Promise<boolean>; settle: (sent: boolean) => void } | null>(null);
+  const [asking, setAsking] = useState<{ send: () => Promise<unknown>; settle: (result: unknown) => void; cancelled: unknown } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  /** Holds whatever is being sent — text or a sticker — until the viewer answers the question. */
-  const ask = (send: () => Promise<boolean>) => new Promise<boolean>((settle) => setAsking({ send, settle }));
+  /** Holds whatever is being sent — text, a sticker or a photo — until the viewer answers the question. */
+  const ask = <T,>(send: () => Promise<T>, cancelled: T) =>
+    new Promise<T>((settle) => setAsking({ send, settle: settle as (result: unknown) => void, cancelled }));
 
   const cancel = () => {
-    asking?.settle(false);
+    asking?.settle(asking.cancelled);
     setAsking(null);
   };
 
@@ -437,13 +491,19 @@ function ReopenComposer({
   return (
     <>
       <Composer
+        key={conversationKey}
         draft={draft}
         onDraftChange={onDraftChange}
         disabled={disabled}
         reply={reply}
         onCancelReply={onCancelReply}
-        onSend={(content) => ask(() => onSend(content))}
-        onSendSticker={(sticker) => ask(() => onSendSticker(sticker))}
+        onSend={(content) => ask(() => onSend(content), false)}
+        onSendSticker={(sticker) => ask(() => onSendSticker(sticker), false)}
+        onUploadImage={onUploadImage}
+        onSendImage={
+          onSendImage && ((image) => ask(() => onSendImage(image), { ok: false, error: null } as ImageSendResult))
+        }
+        incomingFile={incomingFile}
       />
       {asking && <ReopenConfirm name={name} busy={busy} onCancel={cancel} onConfirm={() => void confirm()} />}
     </>

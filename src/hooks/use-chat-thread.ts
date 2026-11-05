@@ -57,6 +57,8 @@ export interface ChatThread {
   receipt?: Receipt | null;
   /** The other participant is typing here right now; false the moment they stop, send, or the dots time out. */
   peerTyping?: boolean;
+  /** Messages that arrived live (a frame, or the viewer's own send) while this thread was open — the only ones that animate in. */
+  liveIds?: ReadonlySet<string>;
   /**
    * `messageId`, a message of the other side, is on screen in a thread being looked at: tells the
    * server so, once per position, and retries a failure. A no-op while the tab is hidden or unfocused.
@@ -90,6 +92,8 @@ export function useChatThread(
   const [attempt, setAttempt] = useState(0);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [peerTyping, setPeerTyping] = useState(false);
+  const [liveIds, setLiveIds] = useState<ReadonlySet<string>>(() => new Set());
+  const markLive = useCallback((id: string) => setLiveIds((current) => (current.has(id) ? current : new Set(current).add(id))), []);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursor = useRef<string | null>(null);
   const olderInFlight = useRef(false);
@@ -162,6 +166,7 @@ export function useChatThread(
     setMessages([]);
     setReceipt(null);
     setPeerTyping(false);
+    setLiveIds(new Set());
     setHasMore(false);
     setLoadingOlder(false);
     setStatus("loading");
@@ -245,10 +250,11 @@ export function useChatThread(
         const message = parseMessageFrame(body);
         if (!message) return;
         setMessages((current) => mergeIn(current, [message]));
+        markLive(message.id);
         // They sent it, so they are not typing it any more.
         if (message.senderId !== me) showPeerTyping(false);
       }),
-    [conversationId, me, mergeIn, showPeerTyping],
+    [conversationId, me, mergeIn, showPeerTyping, markLive],
   );
 
   /**
@@ -263,6 +269,7 @@ export function useChatThread(
         if (!event || event.conversationId !== conversationId) return;
         if (event.type === "MESSAGE") {
           setMessages((current) => mergeIn(current, [event.message]));
+          markLive(event.message.id);
           if (event.message.senderId !== me) showPeerTyping(false);
         } else if (event.type === "MESSAGE_UPDATED") {
           setMessages((current) => applyUpdate(current, event.update));
@@ -275,7 +282,7 @@ export function useChatThread(
           setMessages((current) => removeMessage(current, event.messageId));
         }
       }),
-    [conversationId, me, mergeIn, showPeerTyping],
+    [conversationId, me, mergeIn, showPeerTyping, markLive],
   );
 
   const loadOlder = useCallback(() => {
@@ -302,12 +309,13 @@ export function useChatThread(
       try {
         const sent = await sendMessage(conversationId, payload);
         setMessages((current) => mergeIn(current, [sent]));
+        markLive(sent.id);
         return { ok: true, message: sent };
       } catch (error) {
         return { ok: false, error };
       }
     },
-    [conversationId, mergeIn],
+    [conversationId, mergeIn, markLive],
   );
 
   /** What the server answered is applied the same way a pushed update is, so the two cannot disagree. */
@@ -362,6 +370,7 @@ export function useChatThread(
     retry,
     receipt,
     peerTyping,
+    liveIds,
     markSeen,
     send,
     react,
