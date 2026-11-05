@@ -16,7 +16,7 @@ export interface ReplyDraft {
  */
 export function ReplyBar({ draft, onCancel }: { draft: ReplyDraft; onCancel: () => void }) {
   return (
-    <div className="flex items-center gap-3 border-b border-[var(--chat-line)] py-2.5 pr-2.5 pl-4">
+    <div key={draft.messageId} className="flex items-center gap-3 motion-safe:animate-chat-bar-in border-b border-[var(--chat-line)] py-2.5 pr-2.5 pl-4">
       <span aria-hidden className="h-8 w-[3px] flex-none rounded-full bg-[var(--chat-own)]" />
       <p className="min-w-0 flex-1">
         <span className="block truncate text-[12px] leading-4 font-semibold text-[var(--tt-text-secondary)]">{draft.author}:</span>

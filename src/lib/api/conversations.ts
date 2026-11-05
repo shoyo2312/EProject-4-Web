@@ -1,6 +1,6 @@
 "use client";
 
-import { apiFetch } from "@/lib/api/client";
+import { apiFetch, apiFetchBlob } from "@/lib/api/client";
 import { parseJsonPreservingIds } from "@/lib/api/json";
 
 /**
@@ -36,7 +36,34 @@ export type MuteMode = "NONE" | "TIMED" | "INDEFINITE";
 export type MuteLength = "ONE_HOUR" | "EIGHT_HOURS" | "TWENTY_FOUR_HOURS" | "INDEFINITE";
 
 /** Emoji are not a type: they are characters inside a TEXT message's content. */
-export type MessageType = "TEXT" | "STICKER" | "VIDEO";
+export type MessageType = "TEXT" | "STICKER" | "VIDEO" | "STORY_REPLY" | "IMAGE";
+
+/**
+ * A picture sent in a conversation. `url` is a path under `/api/v1` that needs the viewer's token, so
+ * it is fetched with `fetchChatImage`, never put in an `<img src>`. `width` and `height` are the
+ * display size, known before the bytes arrive, so the space can be reserved.
+ */
+export interface ImageView {
+  imageId: string;
+  url: string;
+  mime: string;
+  width: number;
+  height: number;
+  size: number;
+}
+
+/**
+ * The story a STORY_REPLY answers, as the viewer may see it right now (read by the server on every
+ * load, `mediaUrl` presigned for this viewer). Anything but AVAILABLE carries the id and the state
+ * alone: the reply text stays, the story does not.
+ */
+export interface StoryCard {
+  storyId: string;
+  state: "AVAILABLE" | "UNAVAILABLE" | "UNKNOWN";
+  ownerId: string | null;
+  mediaType: "IMAGE" | "VIDEO" | null;
+  mediaUrl: string | null;
+}
 
 /**
  * A shared video as the viewer may see it right now, read by the server on every load — never a
@@ -60,12 +87,6 @@ export interface StickerView {
   url: string;
   width: number;
   height: number;
-}
-
-export interface StickerPack {
-  packId: string;
-  name: string;
-  stickers: StickerView[];
 }
 
 export interface ConversationResponse {
@@ -154,6 +175,8 @@ export interface ReplyQuote {
   sticker: StickerView | null;
   /** On a quoted video: its card, with only the id and state when it cannot be shown. */
   video?: VideoCard | null;
+  /** On a quoted picture. */
+  image?: ImageView | null;
 }
 
 export interface MessageResponse {
@@ -169,6 +192,10 @@ export interface MessageResponse {
   sticker: StickerView | null;
   /** Present only on a video; `content` is then its optional note. */
   video?: VideoCard | null;
+  /** Present only on a story reply; `content` is then the reply text. */
+  story?: StoryCard | null;
+  /** Present only on a picture; `content` is then its optional caption. */
+  image?: ImageView | null;
   sentAt: string;
   replyToMessageId: string | null;
   replyTo: ReplyQuote | null;
@@ -197,6 +224,7 @@ export type SendPayload = (
   | { type: "TEXT"; content: string }
   | { type: "STICKER"; stickerId: string }
   | { type: "VIDEO"; videoId: string; content?: string; clientRequestId: string }
+  | { type: "IMAGE"; imageId: string; content?: string; clientRequestId: string }
 ) & { replyToMessageId?: string };
 
 export interface MessagePage {
@@ -262,6 +290,13 @@ type RawVideo = Omit<VideoCard, "ownerId" | "thumbnailUrl" | "title" | "duration
   title?: string | null;
   durationSeconds?: number | null;
 };
+type RawStory = {
+  storyId: string | number;
+  state: StoryCard["state"];
+  ownerId?: string | number | null;
+  mediaType?: StoryCard["mediaType"];
+  mediaUrl?: string | null;
+};
 type RawQuote = Omit<ReplyQuote, "senderId" | "video"> & {
   senderId?: string | number | null;
   video?: RawVideo | null;
@@ -278,6 +313,7 @@ type RawMessage = Omit<
   | "stickerId"
   | "sticker"
   | "video"
+  | "story"
   | "replyToMessageId"
   | "replyTo"
   | "recalledAt"
@@ -285,6 +321,7 @@ type RawMessage = Omit<
   | "revision"
 > & {
   video?: RawVideo | null;
+  story?: RawStory | null;
   senderId: string | number;
   replyToMessageId?: string | null;
   replyTo?: RawQuote | null;
@@ -348,6 +385,17 @@ function normalizeVideo(raw: RawVideo | null | undefined): VideoCard | null {
   };
 }
 
+function normalizeStory(raw: RawStory | null | undefined): StoryCard | null {
+  if (!raw) return null;
+  return {
+    storyId: String(raw.storyId),
+    state: raw.state,
+    ownerId: raw.ownerId == null ? null : String(raw.ownerId),
+    mediaType: raw.mediaType ?? null,
+    mediaUrl: raw.mediaUrl ?? null,
+  };
+}
+
 export function normalizeUpdate(raw: RawUpdate): MessageUpdate {
   return { ...raw, recalledAt: raw.recalledAt ?? null, reactions: normalizeReactions(raw.reactions) };
 }
@@ -361,6 +409,7 @@ export function normalizeMessage(raw: RawMessage): MessageResponse {
     stickerId: raw.stickerId ?? null,
     sticker: raw.sticker ?? null,
     video: normalizeVideo(raw.video),
+    story: normalizeStory(raw.story),
     replyToMessageId: raw.replyToMessageId ?? null,
     replyTo: normalizeQuote(raw.replyTo),
     recalledAt: raw.recalledAt ?? null,
@@ -519,9 +568,78 @@ export async function sendMessage(
   return normalizeMessage(raw);
 }
 
-/** The stickers that can be sent. The images are public URLs on the media store, not API calls. */
-export function listStickerPacks(): Promise<StickerPack[]> {
-  return apiFetch<StickerPack[]>("/conversations/stickers", { auth: "required" });
+/** Step one of sending a picture: the file is checked and stored by the server, which answers with its id. */
+export async function uploadChatImage(
+  conversationId: string,
+  file: File,
+  signal?: AbortSignal,
+): Promise<ImageView> {
+  const form = new FormData();
+  form.append("file", file);
+  return apiFetch<ImageView>(`/conversations/${conversationId}/images`, {
+    method: "POST",
+    body: form,
+    auth: "required",
+    signal,
+  });
+}
+
+/** The bytes of a chat picture, with the viewer's token. `url` is an `ImageView.url`. */
+export function fetchChatImage(url: string, signal?: AbortSignal): Promise<Blob> {
+  return apiFetchBlob(url.replace(/^\/api\/v1/, ""), signal);
+}
+
+/**
+ * Answers a story: the server finds the story's owner, opens (or reuses) the thread with them and
+ * stores one message holding the story and the text. Sending the same `clientRequestId` again
+ * returns that message instead of a second one.
+ */
+export async function sendStoryReply(payload: {
+  storyId: string;
+  content: string;
+  clientRequestId: string;
+}): Promise<MessageResponse> {
+  const raw = await apiFetch<RawMessage>("/conversations/story-replies", {
+    method: "POST",
+    body: payload,
+    auth: "required",
+  });
+  return normalizeMessage(raw);
+}
+
+/**
+ * GIPHY stickers through chat-service, which keeps the API key: the trending ones for a blank query,
+ * a search otherwise. Each comes with a `giphy:<id>` stickerId that is sent like any other sticker.
+ */
+export function searchGiphyStickers(query: string, signal?: AbortSignal): Promise<StickerView[]> {
+  const params = new URLSearchParams({ limit: "24" });
+  if (query.trim()) params.set("q", query.trim());
+  return apiFetch<StickerView[]>(`/conversations/stickers/giphy?${params.toString()}`, { auth: "required", signal });
+}
+
+/**
+ * A word list that earns a sticker suggestion while typing. The browser matches what is typed against
+ * `keywords` and `patterns` itself and names a topic by `id`, so the text never reaches the server.
+ */
+export interface SuggestionTopic {
+  id: string;
+  /** Words or phrases as written, with diacritics; both sides are normalised before they are compared. */
+  keywords: string[];
+  /** Regular expressions over one normalised word ("hahaha"). */
+  patterns: string[];
+}
+
+/** The topics that can earn a suggestion; changes rarely, so callers keep the answer. */
+export function fetchSuggestionTopics(signal?: AbortSignal): Promise<SuggestionTopic[]> {
+  return apiFetch<SuggestionTopic[]>("/conversations/stickers/suggestions/topics", { auth: "required", signal });
+}
+
+/** A few stickers for one topic, from a pool the server refreshes a few times a day. */
+export function fetchStickerSuggestions(topicId: string, signal?: AbortSignal): Promise<StickerView[]> {
+  return apiFetch<StickerView[]>(`/conversations/stickers/suggestions/${encodeURIComponent(topicId)}`, {
+    auth: "required",
+    signal,
+  });
 }
 
 /** The other participant's markers, for a sender to show "Delivered" and "Seen". */

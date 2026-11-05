@@ -1,25 +1,24 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { StickerPack, StickerView } from "@/lib/api/conversations";
+import type { StickerView } from "@/lib/api/conversations";
 
-const { listStickerPacks } = vi.hoisted(() => ({ listStickerPacks: vi.fn<() => Promise<StickerPack[]>>() }));
+const { searchGiphyStickers } = vi.hoisted(() => ({ searchGiphyStickers: vi.fn<() => Promise<StickerView[]>>() }));
 
 vi.mock("@/lib/api/conversations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/conversations")>()),
-  listStickerPacks: () => listStickerPacks(),
+  searchGiphyStickers: () => searchGiphyStickers(),
 }));
 
 import { Composer } from "@/components/messages/thread/Composer";
-import { resetStickerPacksCache } from "@/hooks/use-sticker-packs";
 
 const FIRE: StickerView = { stickerId: "fire", name: "Fire", url: "http://x/fire.png", width: 256, height: 256 };
 const SPARKLES: StickerView = { stickerId: "sparkles", name: "Sparkles", url: "http://x/sparkles.png", width: 256, height: 256 };
 const flush = () => act(async () => {});
 
 beforeEach(() => {
-  listStickerPacks.mockReset().mockResolvedValue([{ packId: "fluent-3d", name: "Fluent 3D", stickers: [FIRE, SPARKLES] }]);
-  resetStickerPacksCache();
+  window.localStorage.clear();
+  searchGiphyStickers.mockReset().mockResolvedValue([FIRE, SPARKLES]);
   // In a browser the frame runs after React has committed the new value; a microtask is the closest jsdom gets.
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
     queueMicrotask(() => callback(0));
@@ -152,9 +151,7 @@ describe("Composer picker", () => {
   });
 
   it("says so and offers a retry when the stickers cannot be loaded", async () => {
-    listStickerPacks.mockReset().mockRejectedValueOnce(new Error("down")).mockResolvedValueOnce([
-      { packId: "fluent-3d", name: "Fluent 3D", stickers: [FIRE] },
-    ]);
+    searchGiphyStickers.mockReset().mockRejectedValueOnce(new Error("down")).mockResolvedValueOnce([FIRE]);
     const { openPicker } = mount();
     openPicker();
     fireEvent.click(screen.getByRole("tab", { name: "Sticker" }));
@@ -188,6 +185,22 @@ describe("Composer stickers", () => {
     expect(onSendSticker).toHaveBeenCalledWith(FIRE);
     expect(onSend).not.toHaveBeenCalled();
     expect(box().value).toBe("half-written thought");
+  });
+
+  it("opens on Recent, with the stickers sent before, the next time", async () => {
+    const { openPicker } = await openStickers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Send sticker: Sparkles" }));
+    });
+
+    openPicker();
+    fireEvent.click(screen.getByRole("tab", { name: "Sticker" }));
+    await flush();
+
+    expect(screen.getByRole("button", { name: "Recent stickers" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("heading", { name: "Recent" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Send sticker: Sparkles" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Send sticker: Fire" })).toBeNull();
   });
 
   it("closes the picker once the sticker is sent", async () => {

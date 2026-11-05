@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, BellOff, Bell, Pin, PinOff, Timer, Trash2 } from "lucide-react";
+import { Ban, BellOff, Bell, Flag, Pin, PinOff, Timer, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -9,6 +9,7 @@ import { MoreHorizontalIcon } from "@/components/icons";
 import { ConfirmDialog } from "@/components/messages/ConfirmDialog";
 import { useChatUnreadContext } from "@/components/messages/ChatUnreadProvider";
 import { MuteDialog } from "@/components/messages/MuteDialog";
+import { ReportFlow } from "@/components/messages/report/ReportFlow";
 import { toast } from "@/components/ui/toast";
 import { useAnchoredPosition } from "@/hooks/use-anchored-position";
 import { useEscapeKey } from "@/hooks/use-escape-key";
@@ -19,14 +20,14 @@ import { block, unblock } from "@/lib/api/users";
 import { chatErrorMessage, isMuted } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 
-type Dialog = "mute" | "block" | "delete" | null;
+type Dialog = "mute" | "block" | "delete" | "report" | null;
 
 const itemClass =
   "flex h-11 w-full items-center gap-3 rounded-[var(--chat-radius-control)] px-3 text-left text-[14.5px] font-medium text-[var(--tt-text)] transition-colors hover:bg-[var(--chat-active)] focus-visible:bg-[var(--chat-active)] focus-visible:outline-none";
 
 /**
- * The "…" on a conversation in the inbox: mute, pin, block, delete — each one the viewer's own doing.
- * There is no Report: nothing behind it exists for a conversation.
+ * The "…" on a conversation in the inbox: mute, pin, report, block, delete. Report is the one that
+ * reaches someone else (a moderator) and, like the rest, changes nothing about the conversation itself.
  *
  * The button is a sibling of the row's link, never inside it, so pressing it cannot open the thread
  * or touch the unread state. The menu is drawn in `document.body` at fixed coordinates, so the inbox's
@@ -248,6 +249,10 @@ export function ConversationMenu({
               {pinned ? <PinOff aria-hidden className="h-5 w-5" /> : <Pin aria-hidden className="h-5 w-5" />}
               {pinned ? "Unpin" : "Pin to top"}
             </button>
+            <button type="button" role="menuitem" className={itemClass} onClick={() => choose("report")}>
+              <Flag aria-hidden className="h-5 w-5" />
+              Report
+            </button>
             <button
               type="button"
               role="menuitem"
@@ -270,6 +275,7 @@ export function ConversationMenu({
           document.body,
         )}
 
+      {dialog === "report" && <ReportFlow conversationId={item.id} name={name} onClose={() => setDialog(null)} />}
       {dialog === "mute" && (
         <MuteDialog name={name} busy={busy} error={error} onCancel={closeDialog} onConfirm={(length) => void confirmMute(length)} />
       )}
