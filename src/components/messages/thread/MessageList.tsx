@@ -247,7 +247,7 @@ export function MessageList({
         role="log"
         aria-live="polite"
         aria-label="Messages"
-        className="h-full overflow-y-auto overscroll-contain px-3 pt-3 pb-1 [scrollbar-color:transparent_transparent] data-[above=true]:[mask-image:linear-gradient(to_bottom,#000_calc(100%-24px),transparent)] data-[scrolling=true]:[scrollbar-color:rgb(255_255_255/0.3)_transparent] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/30 "
+        className="no-scrollbar h-full overflow-y-auto overscroll-contain px-3 pt-3 pb-1 data-[above=true]:[mask-image:linear-gradient(to_bottom,#000_calc(100%-24px),transparent)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/30 "
       >
         <div ref={content}>
           {loadingOlder && (
