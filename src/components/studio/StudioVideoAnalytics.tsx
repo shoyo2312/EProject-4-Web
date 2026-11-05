@@ -3,6 +3,7 @@
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 
+import { StudioLineChart } from "@/components/studio/charts/StudioLineChart";
 import { MetricTabs } from "@/components/studio/MetricTabs";
 import { PostCell, StatusNote } from "@/components/studio/PostCell";
 import { useStudioRange } from "@/components/studio/StudioRange";
@@ -14,10 +15,7 @@ import { getVideoCounts } from "@/lib/api/interactions";
 import { getCreatorVideo } from "@/lib/api/studio";
 import { getVideo } from "@/lib/api/videos";
 import { formatCount, formatDuration } from "@/lib/format";
-import { formatPercent, formatWatchTime, linePath } from "@/lib/studio/metrics";
-
-const CHART_W = 1000;
-const CHART_H = 200;
+import { formatPercent, formatWatchTime, retentionInsight } from "@/lib/studio/metrics";
 
 /**
  * `/studio/analytics/{videoId}` — one post: lifetime totals, how far people
@@ -30,9 +28,6 @@ export function StudioVideoAnalytics({ videoId }: { videoId: string }) {
   const video = useStudioQuery(`video:${videoId}`, (signal) => getVideo(videoId, signal));
   const stats = useStudioQuery(`video-stats:${videoId}:${days}`, (signal) => getCreatorVideo(videoId, days, signal));
   const data = stats.data;
-
-  const sum = (pick: (day: { views: number; likes: number; comments: number; shares: number }) => number) =>
-    data?.daily.reduce((total, day) => total + pick(day), 0) ?? 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -61,12 +56,13 @@ export function StudioVideoAnalytics({ videoId }: { videoId: string }) {
         <>
           <section className="flex flex-col gap-4">
             <SectionTitle>Overview</SectionTitle>
-            <StudioCard className="grid grid-cols-4 divide-x divide-black/8">
+            <StudioCard className="grid grid-cols-5 divide-x divide-black/8">
               {[
                 ["Video views", data && formatCount(data.views)],
                 ["Total play time", data && formatWatchTime(data.totalWatchMs)],
                 ["Average watch time", data && formatWatchTime(data.avgWatchMs)],
                 ["Watched full video", data && formatPercent(data.completionRate)],
+                ["New followers", data && formatCount(data.newFollowers)],
               ].map(([label, value]) => (
                 <div key={label} className="flex flex-col items-center gap-1 py-5">
                   <span className="text-[14px] leading-[18px] font-medium">{label}</span>
@@ -101,12 +97,22 @@ export function StudioVideoAnalytics({ videoId }: { videoId: string }) {
             </div>
             <MetricTabs
               metrics={
-                data && [
-                  { key: "views", label: "Video views", value: sum((d) => d.views), series: data.daily.map((d) => d.views) },
-                  { key: "likes", label: "Likes", value: sum((d) => d.likes), series: data.daily.map((d) => d.likes) },
-                  { key: "comments", label: "Comments", value: sum((d) => d.comments), series: data.daily.map((d) => d.comments) },
-                  { key: "shares", label: "Shares", value: sum((d) => d.shares), series: data.daily.map((d) => d.shares) },
-                ]
+                data &&
+                (
+                  [
+                    ["views", "Video views"],
+                    ["likes", "Likes"],
+                    ["comments", "Comments"],
+                    ["shares", "Shares"],
+                    ["saves", "Saves"],
+                  ] as const
+                ).map(([key, label]) => ({
+                  key,
+                  label,
+                  value: data.current[key],
+                  previous: data.previous[key],
+                  series: data.daily.map((d) => d[key]),
+                }))
               }
               days={data?.daily.map((d) => d.day) ?? []}
             />
@@ -150,48 +156,30 @@ function VideoCounts({ videoId }: { videoId: string }) {
   );
 }
 
-/** Share of views still watching at each 5% of the video, with times under it when the length is known. */
+/**
+ * Share of views still watching at each 5% of the video, with times under it
+ * when the length is known, and under that where most people left.
+ */
 function RetentionChart({ points, durationSeconds }: { points: number[]; durationSeconds: number | null }) {
-  const marks = [0, 0.25, 0.5, 0.75, 1];
+  const mark = (i: number) => (durationSeconds ? formatDuration((durationSeconds * i) / 20) : `${i * 5}%`);
+  const insight = retentionInsight(points);
 
   return (
-    <div className="flex gap-3">
-      <div className="min-w-0 flex-1">
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} preserveAspectRatio="none" className="h-[200px] w-full overflow-visible">
-          {[0, 0.5, 1].map((share) => (
-            <line
-              key={share}
-              x1={0}
-              x2={CHART_W}
-              y1={CHART_H * share}
-              y2={CHART_H * share}
-              stroke="rgba(0,0,0,0.12)"
-              strokeDasharray={share === 1 ? undefined : "4 4"}
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-          <path
-            d={linePath(points, CHART_W, CHART_H, 1)}
-            fill="none"
-            stroke="#0075db"
-            strokeWidth={2}
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-        <div className="mt-2 flex justify-between text-[12px] leading-4 text-black/50">
-          {marks.map((mark) => (
-            <span key={mark}>
-              {durationSeconds ? formatDuration(durationSeconds * mark) : `${mark * 100}%`}
-            </span>
-          ))}
-        </div>
-      </div>
-      <div className="flex h-[200px] w-10 flex-none flex-col justify-between text-[12px] leading-none text-black/34">
-        <span>100%</span>
-        <span>50%</span>
-        <span>0%</span>
-      </div>
+    <div className="flex flex-col gap-3">
+      <StudioLineChart
+        points={points.map((value, i) => ({ label: String(i), value }))}
+        height={200}
+        yDomain={[0, 1]}
+        formatLabel={(_, i) => mark(i)}
+        formatValue={(value) => `${Math.round(value * 100)}% still watching`}
+      />
+      {insight !== null && (
+        <p className="text-[14px] leading-5 text-black/65">
+          {insight === 1
+            ? "Most viewers left in the first few seconds."
+            : `Most viewers stopped watching at ${mark(insight)}.`}
+        </p>
+      )}
     </div>
   );
 }
