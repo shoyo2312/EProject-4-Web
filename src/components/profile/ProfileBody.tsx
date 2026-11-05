@@ -24,6 +24,7 @@ import { getLastWatchedId } from "@/lib/last-watched";
 import { markOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
 import type { ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
+import { videoHref } from "@/lib/watch-source";
 
 const TABS: { id: ProfileTab; label: string; Icon: typeof PlayIcon }[] = [
   { id: "videos", label: "Videos", Icon: ProfileVideosIcon },
@@ -446,7 +447,7 @@ function ProfileTile({
   return (
     <Link
       ref={ref}
-      href={`/video/${encodeURIComponent(post.id)}`}
+      href={videoHref(post.id, "profile")}
       onClick={onOpen}
       onMouseEnter={() => preview(true)}
       onMouseLeave={() => preview(false)}

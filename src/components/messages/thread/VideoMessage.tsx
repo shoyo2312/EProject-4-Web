@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import type { VideoCard } from "@/lib/api/conversations";
 import { cn } from "@/lib/utils";
+import { videoHref } from "@/lib/watch-source";
 
 /**
  * A shared video in the history: a portrait card with its thumbnail, a play mark and its title, that
@@ -55,7 +56,7 @@ export function VideoMessage({
   const broken = !video.thumbnailUrl || failed === video.thumbnailUrl;
   return (
     <Link
-      href={`/video/${video.videoId}`}
+      href={videoHref(video.videoId, "message")}
       onClick={onOpen}
       aria-label={video.title ? `Open video: ${video.title}` : "Open video"}
       className="group/video relative block h-[320px] w-[180px] flex-none overflow-hidden rounded-[var(--chat-radius-bubble)] bg-[var(--chat-raised)] ring-1 ring-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"

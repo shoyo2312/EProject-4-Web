@@ -24,6 +24,7 @@ import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useLikeStatuses } from "@/hooks/use-like-statuses";
 import { useVideoLike } from "@/hooks/use-video-like";
 import type { VideoPlayback } from "@/hooks/use-video-playback";
+import type { WatchSource } from "@/lib/api/types";
 import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
 import { useVideoSave } from "@/hooks/use-video-save";
 import { COMMENT_PANEL_COOKIE } from "@/lib/comment-panel";
@@ -72,8 +73,13 @@ export function VideoDetail({
   previousId,
   nextId,
   initialPanelOpen = true,
+  source = "DIRECT",
+  searchQuery,
 }: {
   video: FeedVideo;
+  /** Where the page was opened from, reported with the watch; see `watch-source`. */
+  source?: WatchSource;
+  searchQuery?: string;
   /** Neighbours in the same collection; `null` at either end of it. */
   previousId?: string | null;
   nextId?: string | null;
@@ -177,7 +183,9 @@ export function VideoDetail({
       // `replace`, not `push`: stepping between videos is a swap inside the same
       // overlay, so it must not stack history entries — otherwise Close walks
       // back through every video visited instead of returning to the grid.
-      router.replace(`/video/${id}`);
+      // The query string carries where the viewer came from, so the next video
+      // is credited to the same surface.
+      router.replace(`/video/${id}${window.location.search}`);
     },
     [router, nextId, previousId],
   );
@@ -345,6 +353,8 @@ export function VideoDetail({
           >
             <VideoCard
               video={video}
+              source={source}
+              searchQuery={searchQuery}
               onLike={like.likeOnly}
               showCaption={false}
               showVolumeControl={false}

@@ -18,11 +18,16 @@ import { useHlsSource, isHlsManifest } from "@/hooks/use-hls-source";
 import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useVideoPlayback, type VideoPlayback } from "@/hooks/use-video-playback";
 import { useWatchSession } from "@/hooks/use-watch-session";
+import type { WatchSource } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import type { FeedVideo } from "@/types/tiktok";
 
 interface VideoCardProps {
   video: FeedVideo;
+  /** Where the viewer is — the feed, a profile, search — reported with the watch. */
+  source: WatchSource;
+  /** What they searched, when `source` is `SEARCH`. */
+  searchQuery?: string;
   /**
    * Double-tap only ever likes — it never un-likes. The state itself lives in
    * the page's `useVideoLike` so the action rail's heart reflects it.
@@ -90,6 +95,8 @@ interface VideoCardProps {
  */
 export function VideoCard({
   video,
+  source,
+  searchQuery,
   distance = 0,
   onLike,
   showCaption = true,
@@ -188,6 +195,8 @@ export function VideoCard({
     isPlaying,
     duration,
     enabled: isSignedIn && hasSource,
+    source,
+    searchQuery,
   });
 
   const fraction = duration > 0 ? currentTime / duration : 0;

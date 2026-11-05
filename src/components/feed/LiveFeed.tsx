@@ -49,7 +49,7 @@ export function LiveFeed() {
     );
   }
 
-  return <Feed videos={videos} onReachEnd={loadMore} />;
+  return <Feed videos={videos} onReachEnd={loadMore} source="FOR_YOU" />;
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

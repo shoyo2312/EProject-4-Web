@@ -7,6 +7,7 @@ import { useVideoLike } from "@/hooks/use-video-like";
 import type { VideoFrame } from "@/hooks/use-video-realtime";
 import type { LikeStatusResponse } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
+import type { WatchSource } from "@/lib/api/types";
 import type { FeedVideo } from "@/types/tiktok";
 
 /**
@@ -18,6 +19,7 @@ import type { FeedVideo } from "@/types/tiktok";
  */
 export function FeedVideoCard({
   video,
+  source,
   index,
   activeIndex,
   isActive,
@@ -35,6 +37,7 @@ export function FeedVideoCard({
   onToggleSave,
 }: {
   video: FeedVideo;
+  source: WatchSource;
   index: number;
   activeIndex: number;
   /** The card on screen — the one L likes. */
@@ -115,6 +118,7 @@ export function FeedVideoCard({
       >
         <VideoCard
           video={video}
+          source={source}
           distance={index - activeIndex}
           onLike={likeOnly}
           onActive={onActive}

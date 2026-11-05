@@ -12,6 +12,7 @@ import { formatCount } from "@/lib/format";
 import { markOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
 import type { ExploreItem } from "@/types/tiktok";
+import { videoHref } from "@/lib/watch-source";
 
 /**
  * `.DivShareLayoutV2` — the Explore page body: a horizontally scrollable
@@ -257,7 +258,7 @@ function ExploreTile({
         onMouseLeave={() => onHoverChange(false)}
       >
         <Link
-          href={`/video/${item.id}`}
+          href={videoHref(item.id, "explore")}
           className="block h-full w-full"
           onClick={() => markOverlayOrigin("/explore")}
         >

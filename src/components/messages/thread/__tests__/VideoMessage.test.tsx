@@ -29,7 +29,7 @@ describe("VideoMessage", () => {
   it("is a link to the video's own page and does not play anything", () => {
     const { container } = render(<VideoMessage video={card()} mine={false} />);
     const link = screen.getByRole("link", { name: /Cake/ });
-    expect(link.getAttribute("href")).toBe("/video/77");
+    expect(link.getAttribute("href")).toBe("/video/77?src=message");
     expect(container.querySelector("video")).toBeNull();
     expect(container.querySelector("img")?.getAttribute("src")).toBe("https://cdn.example/t.jpg");
   });
