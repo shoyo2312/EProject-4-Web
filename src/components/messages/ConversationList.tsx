@@ -37,8 +37,8 @@ export function ConversationList({ openId, inPanel = false }: { openId: string |
 
   return (
     <>
-      <header className={cn("flex-none px-5 pb-2", inPanel ? "pt-5 pr-24" : "pt-16 tt-768:pt-5")}>
-        <h1 className="text-[22px] leading-7 font-bold tracking-[-0.01em] text-[var(--tt-text)]">Messages</h1>
+      <header className={cn("flex-none px-5 pb-2", inPanel ? "pt-5" : "pt-16 tt-768:pt-5")}>
+        <h1 className={cn("text-[22px] leading-7 font-bold tracking-[-0.01em] text-[var(--tt-text)]", inPanel && "pr-24")}>Messages</h1>
         <ConversationSearch value={query} onChange={setQuery} />
       </header>
 
