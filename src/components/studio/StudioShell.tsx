@@ -56,7 +56,9 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
 
   return (
     <StudioRangeProvider>
-      <div className="flex h-screen w-full overflow-hidden bg-[#f8f8f8] font-sans text-black">
+      {/* globals.css gives every element the feed's scrollbar — pale thumb on a black track —
+          which is a black bar on this light theme; every scroller in here gets a dark-on-clear one. */}
+      <div className="flex h-screen w-full overflow-hidden bg-[#f8f8f8] font-sans text-black [&_*]:[scrollbar-color:rgb(0_0_0/0.2)_transparent]">
         <aside className="flex w-[248px] flex-none flex-col border-r border-black/8">
           <Link href="/studio" className="flex h-[68px] flex-none items-center gap-1.5 px-5">
             <Image

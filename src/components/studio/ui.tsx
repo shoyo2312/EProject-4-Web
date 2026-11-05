@@ -191,9 +191,11 @@ export function MenuOption({
     <button
       type="button"
       onClick={onClick}
+      title={label}
       className="flex h-10 w-full items-center justify-between gap-6 px-4 text-left text-[14px] whitespace-nowrap text-black hover:bg-black/4"
     >
-      {label}
+      {/* Ellipsised only past the menu's cap; the full text is the tooltip. */}
+      <span className="min-w-0 truncate">{label}</span>
       {selected && <Check className="h-4 w-4 flex-none" />}
     </button>
   );

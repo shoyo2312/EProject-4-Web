@@ -162,7 +162,8 @@ function MenuChip({
 }) {
   return (
     <Popover
-      className="max-h-[320px] w-[260px] overflow-y-auto"
+      // As wide as the longest title, capped so a 150-character one cannot run off the screen.
+      className="max-h-[320px] w-max max-w-[min(560px,calc(100vw-64px))] min-w-[260px] overflow-y-auto"
       trigger={({ open, toggle }) => <FilterChip label={label} active={active} open={open} onClick={toggle} />}
     >
       {(close) =>
