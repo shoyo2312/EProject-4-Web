@@ -89,12 +89,6 @@ export interface StickerView {
   height: number;
 }
 
-export interface StickerPack {
-  packId: string;
-  name: string;
-  stickers: StickerView[];
-}
-
 export interface ConversationResponse {
   id: string;
   participantIds: string[];
@@ -611,11 +605,6 @@ export async function sendStoryReply(payload: {
     auth: "required",
   });
   return normalizeMessage(raw);
-}
-
-/** The stickers that can be sent. The images are public URLs on the media store, not API calls. */
-export function listStickerPacks(): Promise<StickerPack[]> {
-  return apiFetch<StickerPack[]>("/conversations/stickers", { auth: "required" });
 }
 
 /**

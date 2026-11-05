@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ChatThread } from "@/hooks/use-chat-thread";
-import type { ConversationResponse, MessageResponse, StickerPack } from "@/lib/api/conversations";
+import type { ConversationResponse, MessageResponse, StickerView } from "@/lib/api/conversations";
 import { ApiError } from "@/lib/api/errors";
 import { isViewing } from "@/lib/chat-viewing";
 
@@ -11,7 +11,7 @@ import { isViewing } from "@/lib/chat-viewing";
  * logic for deciding that is tested in MessageList.test.tsx. What is tested here is what ThreadBody
  * does with the report: the thread is only "viewed", and only marked read, at the bottom.
  */
-const { list, listStickerPacks, applyConversation, blocked, unblock, publish } = vi.hoisted(() => ({
+const { list, searchGiphyStickers, applyConversation, blocked, unblock, publish } = vi.hoisted(() => ({
   publish: vi.fn(),
   blocked: { users: new Set<string>(), set: vi.fn() },
   unblock: vi.fn(),
@@ -24,14 +24,13 @@ const { list, listStickerPacks, applyConversation, blocked, unblock, publish } =
       onReact: (message: MessageResponse, emoji: string) => void;
     } | null,
   },
-  listStickerPacks: vi.fn<() => Promise<StickerPack[]>>(),
+  searchGiphyStickers: vi.fn<() => Promise<StickerView[]>>(),
   applyConversation: vi.fn(),
 }));
 
 vi.mock("@/lib/api/conversations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/conversations")>()),
-  listStickerPacks: () => listStickerPacks(),
-  searchGiphyStickers: () => Promise.resolve([]),
+  searchGiphyStickers: () => searchGiphyStickers(),
 }));
 vi.mock("@/lib/api/users", () => ({ unblock: (...a: unknown[]) => unblock(...a) }));
 vi.mock("@/components/ui/toast", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -70,7 +69,6 @@ vi.mock("@/lib/realtime/stompClient", () => ({
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
 
 import { ThreadBody } from "@/components/messages/thread/ThreadBody";
-import { resetStickerPacksCache } from "@/hooks/use-sticker-packs";
 
 const msg: MessageResponse = {
   id: "1",
@@ -240,10 +238,8 @@ describe("ThreadBody stickers", () => {
   }
 
   beforeEach(() => {
-    listStickerPacks.mockReset().mockResolvedValue([
-      { packId: "fluent-3d", name: "Fluent 3D", stickers: [stickerReply.sticker!] },
-    ]);
-    resetStickerPacksCache();
+    window.localStorage.clear();
+    searchGiphyStickers.mockReset().mockResolvedValue([stickerReply.sticker!]);
   });
 
   it("sends a sticker as a STICKER payload by id", async () => {
