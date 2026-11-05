@@ -53,7 +53,7 @@ describe("useGiphyStickers", () => {
 
   it("waits for a pause in typing and searches once, with the trimmed text", async () => {
     searchGiphyStickers.mockResolvedValue([sticker("bbbbb")]);
-    const { result, rerender } = renderHook(({ q }) => useGiphyStickers(q, true), { initialProps: { q: "b" } });
+    const { result, rerender } = renderHook(({ q }) => useGiphyStickers(q, true, 350), { initialProps: { q: "b" } });
     rerender({ q: "bu" });
     rerender({ q: " bunny " });
     await act(async () => {

@@ -9,15 +9,13 @@ type State =
   | { status: "ready"; stickers: StickerView[] }
   | { status: "error" };
 
-/** A pause after the last keystroke, so typing "bunny" is one search, not five. */
-const DEBOUNCE_MS = 350;
-
 /**
- * GIPHY stickers for the picker: the trending ones while `query` is blank, a search otherwise. The
+ * GIPHY stickers for the picker: the trending ones while `query` is blank, a search otherwise.
+ * `debounceMs` waits for a pause in typing, so "bunny" is one search, not five; 0 asks at once. The
  * answer is kept with the query it belongs to, so an old answer is never shown for a newer query
  * while the new one is still on its way.
  */
-export function useGiphyStickers(query: string, enabled: boolean): State & { reload: () => void } {
+export function useGiphyStickers(query: string, enabled: boolean, debounceMs = 0): State & { reload: () => void } {
   const q = query.trim();
   const [attempt, setAttempt] = useState(0);
   const key = `${attempt}:${q}`;
@@ -26,22 +24,21 @@ export function useGiphyStickers(query: string, enabled: boolean): State & { rel
   useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
-    const timer = setTimeout(
-      () => {
-        searchGiphyStickers(q, controller.signal).then(
-          (stickers) => setResult({ key, stickers }),
-          () => {
-            if (!controller.signal.aborted) setResult({ key, stickers: null });
-          },
-        );
-      },
-      q ? DEBOUNCE_MS : 0,
-    );
+    const run = () => {
+      searchGiphyStickers(q, controller.signal).then(
+        (stickers) => setResult({ key, stickers }),
+        () => {
+          if (!controller.signal.aborted) setResult({ key, stickers: null });
+        },
+      );
+    };
+    const timer = debounceMs > 0 ? setTimeout(run, debounceMs) : undefined;
+    if (debounceMs <= 0) run();
     return () => {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [enabled, q, key]);
+  }, [enabled, q, key, debounceMs]);
 
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
 
