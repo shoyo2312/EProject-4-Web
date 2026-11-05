@@ -29,6 +29,7 @@ import {
   onSessionEnded,
   onSessionStarted,
 } from "@/lib/api/tokens";
+import { BirthdayPrompt } from "@/components/session/BirthdayPrompt";
 import { linkedProviders } from "@/lib/account/closure";
 import { awaitProfile } from "@/lib/auth/await-profile";
 import type { SocialProvider } from "@/lib/auth/social";
@@ -60,6 +61,8 @@ export interface SessionUser extends Author {
   /** With `hasPassword` and `providers`, how the owner reconfirms before closing the account. */
   emailVerified: boolean;
   providers: SocialProvider[];
+  /** `YYYY-MM-DD`; null until given, which `BirthdayPrompt` asks for once. */
+  birthDate: string | null;
 }
 
 interface SessionValue {
@@ -160,6 +163,7 @@ function toSessionUser(me: MeResponse): SessionUser {
     hasPassword: me.hasPassword ?? true,
     emailVerified: me.emailVerified ?? me.email !== null,
     providers: linkedProviders(me.providers),
+    birthDate: me.birthDate ?? null,
   };
 }
 
@@ -453,6 +457,8 @@ export function SessionProvider({
   return (
     <SessionContext.Provider value={value}>
       {children}
+
+      <BirthdayPrompt />
 
       {loginModal.mounted && (
         <AuthModal

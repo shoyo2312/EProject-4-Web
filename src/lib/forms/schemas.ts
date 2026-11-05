@@ -138,6 +138,9 @@ export const signupDetailsSchema = z
   .object({ ...birthdayFields, email: emailField })
   .superRefine(checkBirthday);
 
+/** The birthday on its own, for the prompt that asks a signed-in viewer for it. */
+export const birthdaySchema = z.object(birthdayFields).superRefine(checkBirthday);
+
 export const passwordSchema = z.object({ password: strongPasswordField });
 
 export const usernameSchema = z.object({ username: usernameField });

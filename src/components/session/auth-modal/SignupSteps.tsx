@@ -8,14 +8,13 @@ import { toast } from "@/components/ui/toast";
 import { messageFor } from "@/lib/api/errors";
 import { meetsPasswordRules } from "@/lib/auth/password-rules";
 import {
-  MONTHS,
   passwordSchema,
   signupDetailsSchema,
   usernameSchema,
 } from "@/lib/forms/schemas";
 import { useForm } from "@/lib/forms/use-form";
 
-import { Dropdown } from "./Dropdown";
+import { BirthdayFields } from "./BirthdayFields";
 import {
   FieldHeading,
   ModalTitle,
@@ -56,11 +55,6 @@ type DraftProps = {
   draft: SignupDraft;
   onChange: (patch: Partial<SignupDraft>) => void;
 };
-
-/** 1–31, and a hundred years back from this one, the way the live lists run. */
-const DAYS = Array.from({ length: 31 }, (_, index) => String(index + 1));
-const THIS_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: 100 }, (_, index) => String(THIS_YEAR - index));
 
 /**
  * Birthday and email, then "Send code". auth-service stores no birthday, but
@@ -104,7 +98,6 @@ export function SignupDetailsStep({
     },
   });
 
-  const birthdayInvalid = Boolean(form.errors.birthday);
   const complete =
     form.values.birthMonth &&
     form.values.birthDay &&
@@ -117,32 +110,7 @@ export function SignupDetailsStep({
       <ModalTitle className="mb-6">Sign up</ModalTitle>
 
       <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-2 pb-2">
-        <FieldHeading required className="mb-0.5 leading-[22px]">
-          When&rsquo;s your birthday?
-        </FieldHeading>
-        <div className="flex gap-2">
-          <Dropdown
-            {...form.field("birthMonth", { focusKey: "birthday" })}
-            label="Month"
-            options={MONTHS}
-            invalid={birthdayInvalid}
-          />
-          <Dropdown
-            {...form.field("birthDay")}
-            label="Day"
-            options={DAYS}
-            invalid={birthdayInvalid}
-          />
-          <Dropdown
-            {...form.field("birthYear")}
-            label="Year"
-            options={YEARS}
-            invalid={birthdayInvalid}
-          />
-        </div>
-        <p className="mb-2 ml-2 text-[12px] leading-5 text-[var(--tt-text-muted)]">
-          Your birthday won&rsquo;t be shown publicly.
-        </p>
+        <BirthdayFields form={form} />
 
         <FieldHeading required htmlFor={emailId} className="mb-1">
           Enter your email
