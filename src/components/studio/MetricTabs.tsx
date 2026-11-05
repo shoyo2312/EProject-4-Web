@@ -88,11 +88,11 @@ export function MetricTabs({
             formatValue={formatCount}
           />
         </div>
-      ) : (
+      ) : metrics === null ? (
         <div className="px-6 pt-6 pb-4">
           <StudioSkeleton className="h-[220px]" />
         </div>
-      )}
+      ) : null}
     </StudioCard>
   );
 }

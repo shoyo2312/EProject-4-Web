@@ -205,6 +205,69 @@ describe("StudioVideoAnalytics traffic", () => {
   });
 });
 
+const audience = (patch: Partial<CreatorVideoDetail["audience"]>): CreatorVideoDetail["audience"] => ({
+  ...detail().audience,
+  ...patch,
+});
+
+describe("StudioVideoAnalytics viewers", () => {
+  it("viewersBreakdownIsWithheldBelowTheThreshold", async () => {
+    getVideo.mockResolvedValueOnce(video("PUBLISHED"));
+    getCreatorVideo.mockResolvedValueOnce(detail({ audience: audience({ total: 5, newViewers: 2 }) }));
+
+    render(<StudioVideoAnalytics videoId="1001" />);
+
+    expect(await screen.findByText(/once you have enough viewers to analyze/)).toBeTruthy();
+    expect(screen.queryByText("Returning")).toBeNull();
+  });
+
+  it("viewersBreakdownShowsAllSevenAgeGroupsInOrder", async () => {
+    getVideo.mockResolvedValueOnce(video("PUBLISHED"));
+    getCreatorVideo.mockResolvedValueOnce(
+      detail({
+        audience: audience({
+          total: 700,
+          newViewers: 100,
+          breakdownAvailable: true,
+          returning: 600,
+          followers: 300,
+          nonFollowers: 400,
+          ageGroups: { "13-17": 100, "18-24": 100, "25-34": 100, "35-44": 100, "45-54": 100, "55+": 100, UNKNOWN: 100 },
+        }),
+      }),
+    );
+
+    render(<StudioVideoAnalytics videoId="1001" />);
+
+    const age = (await screen.findByText("Age")).closest("div")!;
+    const labels = Array.from(age.querySelectorAll("li > span:first-child")).map((el) => el.textContent);
+    expect(labels).toEqual(["13-17", "18-24", "25-34", "35-44", "45-54", "55+", "Unknown"]);
+  });
+
+  it("newAndReturningSplitTheTotal", async () => {
+    getVideo.mockResolvedValueOnce(video("PUBLISHED"));
+    getCreatorVideo.mockResolvedValueOnce(
+      detail({
+        audience: audience({
+          total: 1800,
+          newViewers: 900,
+          breakdownAvailable: true,
+          returning: 900,
+          followers: 1800,
+          nonFollowers: 0,
+          ageGroups: { "13-17": 0, "18-24": 0, "25-34": 0, "35-44": 0, "45-54": 0, "55+": 0, UNKNOWN: 1800 },
+        }),
+      }),
+    );
+
+    render(<StudioVideoAnalytics videoId="1001" />);
+
+    const card = (await screen.findByText("Viewer type")).closest("div")!;
+    expect(card.textContent).toContain("New50%");
+    expect(card.textContent).toContain("Returning50%");
+  });
+});
+
 describe("PostThumb", () => {
   // A <span> ignores width and height while inline, so inside a parent that is not flex (the
   // Latest comments row) the cover rendered at the image's own size, 1280×720 for a landscape clip.

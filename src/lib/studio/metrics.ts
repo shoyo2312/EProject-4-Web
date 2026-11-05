@@ -1,6 +1,19 @@
 /** Studio's number formatting and chart geometry. No data, no React. */
 
-import type { TrafficSource } from "@/lib/api/types";
+import type { AgeGroup, TrafficSource } from "@/lib/api/types";
+
+/** The age groups in the order Studio lists them. */
+export const AGE_GROUPS: AgeGroup[] = ["13-17", "18-24", "25-34", "35-44", "45-54", "55+", "UNKNOWN"];
+
+export const AGE_GROUP_LABELS: Record<AgeGroup, string> = {
+  "13-17": "13-17",
+  "18-24": "18-24",
+  "25-34": "25-34",
+  "35-44": "35-44",
+  "45-54": "45-54",
+  "55+": "55+",
+  UNKNOWN: "Unknown",
+};
 
 /** TikTok Studio's names for where a view came from. */
 export const TRAFFIC_SOURCE_LABELS: Record<TrafficSource, string> = {

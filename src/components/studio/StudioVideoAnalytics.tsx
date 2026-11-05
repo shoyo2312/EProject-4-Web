@@ -11,6 +11,7 @@ import { useOpenStudioVideo } from "@/components/studio/StudioVideoModal";
 import { EmptyState, RangeSelect, SectionTitle, StudioCard, StudioSkeleton } from "@/components/studio/ui";
 import { SearchQueries } from "@/components/studio/video/SearchQueries";
 import { TrafficSources } from "@/components/studio/video/TrafficSources";
+import { ViewerBreakdown } from "@/components/studio/video/ViewerBreakdown";
 import { BookmarkIcon, CommentIcon, HeartIcon, PlayIcon, ShareIcon } from "@/components/icons";
 import { useStudioQuery } from "@/hooks/use-studio-query";
 import { getVideoCounts } from "@/lib/api/interactions";
@@ -121,10 +122,13 @@ export function StudioVideoAnalytics({ videoId }: { videoId: string }) {
           </section>
 
           {data && (
-            <div className="grid grid-cols-2 gap-6">
-              <TrafficSources rows={data.trafficSources} />
-              <SearchQueries rows={data.searchQueries} />
-            </div>
+            <>
+              <ViewerBreakdown viewers={data.audience} />
+              <div className="grid grid-cols-2 gap-6">
+                <TrafficSources rows={data.trafficSources} />
+                <SearchQueries rows={data.searchQueries} />
+              </div>
+            </>
           )}
         </>
       )}
