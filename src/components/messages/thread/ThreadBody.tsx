@@ -433,6 +433,7 @@ function ThreadFooter({
           onCancelReply={onCancelReply}
           onSend={onSend}
           onSendSticker={onSendSticker}
+          suggestionScope={conversation.id}
           {...photos}
         />
       );
@@ -504,6 +505,7 @@ function ReopenComposer({
           onSendImage && ((image) => ask(() => onSendImage(image), { ok: false, error: null } as ImageSendResult))
         }
         incomingFile={incomingFile}
+        suggestionScope={conversationKey}
       />
       {asking && <ReopenConfirm name={name} busy={busy} onCancel={cancel} onConfirm={() => void confirm()} />}
     </>
