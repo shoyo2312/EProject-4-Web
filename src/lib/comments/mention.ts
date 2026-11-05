@@ -43,7 +43,8 @@ export function mentionHandle(profile: UserProfileResponse): string {
  * word, so "mail@x.com" stays plain text.
  */
 export function splitMentions(text: string): { text: string; mention: boolean }[] {
-  const parts = text.split(/(@[\p{L}\p{N}_.]+)/gu);
+  // Never ends on a period: in "thanks @bob." the period ends the sentence.
+  const parts = text.split(/(@[\p{L}\p{N}_.]*[\p{L}\p{N}_])/gu);
   return parts
     .map((part, i) => ({
       text: part,

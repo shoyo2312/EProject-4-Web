@@ -115,4 +115,27 @@ describe("Studio comment thread", () => {
     await waitFor(() => expect(addComment).toHaveBeenCalledWith("v", "thanks", "r1"));
     expect(await screen.findByText("thanks")).toBeTruthy();
   });
+
+  /** Replies read oldest first, so the one just posted is on the last page too. */
+  it("shows a reply posted before the last page once, when that page brings it again", async () => {
+    const posted = comment("r9", "1", { parentId: "c1", content: "thanks" });
+    listReplies
+      .mockResolvedValueOnce({ items: [comment("r1", "3", { parentId: "c1" })], nextCursor: "p2", hasMore: true })
+      .mockResolvedValueOnce({ items: [comment("r2", "3", { parentId: "c1" }), posted], nextCursor: null, hasMore: false });
+    addComment.mockResolvedValueOnce(posted);
+    mount(comment("c1", "2", { replyCount: 2 }));
+
+    fireEvent.click(screen.getByRole("button", { name: /View 2 replies/ }));
+    await screen.findByText("text r1");
+    fireEvent.click(screen.getAllByRole("button", { name: /Reply/ })[0]);
+    const box = screen.getByPlaceholderText(/Reply to/);
+    fireEvent.change(box, { target: { value: "thanks" } });
+    fireEvent.submit(box.closest("form")!);
+    await screen.findByText("thanks");
+
+    fireEvent.click(screen.getByRole("button", { name: /View more replies/ }));
+    await screen.findByText("text r2");
+
+    expect(screen.getAllByText("thanks")).toHaveLength(1);
+  });
 });

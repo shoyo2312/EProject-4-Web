@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { DateRangeChip, type DayRange } from "@/components/studio/DateRangeChip";
 import { PostThumb } from "@/components/studio/PostCell";
@@ -26,6 +26,7 @@ import { toast } from "@/components/ui/toast";
 import { useCommentContext } from "@/hooks/use-comment-context";
 import { useDebounced } from "@/hooks/use-debounced";
 import { useEscapeKey } from "@/hooks/use-escape-key";
+import { useFocusTrap } from "@/hooks/use-focus-trap";
 import { useInboxComments } from "@/hooks/use-inbox-comments";
 import { usePresence } from "@/hooks/use-presence";
 import { useStudioQuery } from "@/hooks/use-studio-query";
@@ -44,6 +45,7 @@ import { type InboxSort, listStudioPosts } from "@/lib/api/studio";
 import type { CommentResponse, CountRange, VideoResponse } from "@/lib/api/types";
 import { getVideo } from "@/lib/api/videos";
 import { formatCount, formatDateTime, formatDuration, formatRelativeTime } from "@/lib/format";
+import { appendUnique } from "@/lib/paging";
 import { dayRangeToInstants } from "@/lib/studio/metrics";
 import { COUNT_RANGES } from "@/lib/studio/posts";
 import { cn } from "@/lib/utils";
@@ -516,7 +518,10 @@ export function Thread({
   const loadReplies = (after: string | null) =>
     listReplies(comment.videoId, comment.commentId, after ?? undefined, REPLY_PAGE)
       .then((page) => {
-        setReplies((current) => (after ? [...(current ?? []), ...page.items] : page.items));
+        // Oldest first: a reply posted here already sits in the list, and its page brings it again.
+        setReplies((current) =>
+          after ? appendUnique(current ?? [], page.items, (reply) => reply.commentId) : page.items,
+        );
         setReplyCursor(page.hasMore ? page.nextCursor : null);
       })
       .catch(fail);
@@ -659,6 +664,8 @@ function LikeButton({ comment, onChanged }: { comment: CommentResponse; onChange
  */
 function ChoosePostDrawer({ open, current, onClose }: { open: boolean; current: string; onClose: () => void }) {
   useEscapeKey(onClose, open);
+  const sheetRef = useRef<HTMLElement>(null);
+  useFocusTrap(sheetRef, open);
   const [opened, setOpened] = useState(open);
   if (open && !opened) setOpened(true);
   const posts = useStudioQuery(opened ? "choose-post" : "", (signal) =>
@@ -676,7 +683,9 @@ function ChoosePostDrawer({ open, current, onClose }: { open: boolean; current: 
       )}
     >
       <aside
+        ref={sheetRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Choose another post"
         onClick={(event) => event.stopPropagation()}
         className={cn(

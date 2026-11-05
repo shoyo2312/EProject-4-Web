@@ -268,6 +268,10 @@ async function performRefresh(): Promise<string | null> {
     return endSession(refreshToken);
   }
 
+  // Another tab signed out (or in) while this was in flight: writing the late pair over that
+  // would sign every tab back in. Its pair, or none, wins.
+  if (getRefreshToken() !== refreshToken) return getAccessToken();
+
   // Persisted here, synchronously, before any waiting request is replayed.
   storeTokens({
     accessToken: envelope.data.accessToken,

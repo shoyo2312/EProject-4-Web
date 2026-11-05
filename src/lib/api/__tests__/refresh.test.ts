@@ -83,6 +83,23 @@ describe("refreshAccessToken", () => {
     expect(getRefreshToken()).toBe("login-refresh");
   });
 
+  it("does not sign back in when another tab signed out while its refresh was in flight", async () => {
+    fetchMock.mockImplementation(async () => {
+      window.localStorage.clear();
+      return reply(
+        200,
+        JSON.stringify({
+          success: true,
+          data: { accessToken: "late-access", refreshToken: "late-refresh" },
+        }),
+      );
+    });
+
+    await expect(refreshAccessToken()).resolves.toBeNull();
+    expect(getAccessToken()).toBeNull();
+    expect(getRefreshToken()).toBeNull();
+  });
+
   it("turns a non-JSON 200 into an ApiError", async () => {
     fetchMock.mockResolvedValue(reply(200, "<html>proxy page</html>"));
 

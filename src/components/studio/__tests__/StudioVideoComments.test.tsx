@@ -136,4 +136,18 @@ describe("Reply to comments box", () => {
 
     expect(screen.getByText("2/150")).toBeTruthy();
   });
+  it("takes focus into the post drawer and hands it back to its button on close", async () => {
+    listInboxComments.mockResolvedValue({ items: [], nextCursor: null, hasMore: false });
+    render(<StudioVideoComments videoId="1001" />);
+
+    const opener = screen.getByRole("button", { name: "Choose another post" });
+    opener.focus();
+    fireEvent.click(opener);
+    const drawer = screen.getByRole("dialog", { name: "Choose another post" });
+    expect(drawer.getAttribute("aria-modal")).toBe("true");
+    await waitFor(() => expect(drawer.contains(document.activeElement)).toBe(true));
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+  });
 });
