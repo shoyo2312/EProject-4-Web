@@ -1,18 +1,20 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 
-import { CommentRow } from "@/components/studio/CommentRow";
 import { DateRangeChip, type DayRange } from "@/components/studio/DateRangeChip";
+import { PostThumb } from "@/components/studio/PostCell";
+import { Thread } from "@/components/studio/StudioVideoComments";
+import { useOpenStudioVideo } from "@/components/studio/StudioVideoModal";
 import { EmptyState, FilterChip, MenuOption, Popover, StudioCard, StudioSkeleton } from "@/components/studio/ui";
 import { toast } from "@/components/ui/toast";
 import { useCommentContext } from "@/hooks/use-comment-context";
 import { useDebounced } from "@/hooks/use-debounced";
+import { useInboxComments } from "@/hooks/use-inbox-comments";
 import { useStudioQuery } from "@/hooks/use-studio-query";
 import { messageFor } from "@/lib/api/errors";
-import { addComment, approveComment, deleteComment } from "@/lib/api/interactions";
-import { listInboxComments, listStudioPosts } from "@/lib/api/studio";
+import { listStudioPosts } from "@/lib/api/studio";
 import type { CommentResponse } from "@/lib/api/types";
 import { dayRangeToInstants } from "@/lib/studio/metrics";
 
@@ -34,38 +36,15 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
  * only seeds the filter, so the route keys this on it: another post in the URL is a fresh inbox.
  */
 export function StudioComments({ initialVideoId }: { initialVideoId?: string }) {
+  const openVideo = useOpenStudioVideo();
   const [status, setStatus] = useState<StatusFilter>();
   const [videoId, setVideoId] = useState<string | undefined>(initialVideoId);
   const [range, setRange] = useState<DayRange>({ start: null, end: null });
   const [search, setSearch] = useState("");
   const q = useDebounced(search.trim(), 300);
 
-  const [comments, setComments] = useState<CommentResponse[] | null>(null);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const query = { status, videoId, q, ...dayRangeToInstants(range.start, range.end) };
-  const queryKey = JSON.stringify(query);
-
-  const load = useCallback(
-    (after: string | null, signal?: AbortSignal) =>
-      listInboxComments(JSON.parse(queryKey), after ?? undefined, 20, signal).then((page) => {
-        setComments((current) => (after ? [...(current ?? []), ...page.items] : page.items));
-        setCursor(page.nextCursor);
-        setHasMore(page.hasMore);
-        setError(null);
-      }),
-    [queryKey],
-  );
-
-  useEffect(() => {
-    const controller = new AbortController();
-    load(null, controller.signal).catch((cause: unknown) => {
-      if (!controller.signal.aborted) setError(messageFor(cause));
-    });
-    return () => controller.abort();
-  }, [load]);
+  const { comments, setComments, hasMore, error, loadMore, loadingMore } = useInboxComments(JSON.stringify(query));
 
   const { authors, videos } = useCommentContext(comments ?? []);
   const posts = useStudioQuery("comment-posts", (signal) => listStudioPosts({ size: 50 }, signal));
@@ -123,13 +102,26 @@ export function StudioComments({ initialVideoId }: { initialVideoId?: string }) 
         ) : (
           <ul className="divide-y divide-black/8">
             {comments.map((comment) => (
-              <li key={comment.commentId}>
-                <CommentRow
-                  comment={comment}
-                  author={authors.get(comment.userId)}
-                  video={videos.get(comment.videoId)}
-                  actions={<CommentActions comment={comment} onApproved={replace} onDeleted={drop} />}
-                />
+              // The thread as on the post's own comment page — the owner's replies under the comment,
+              // Creator and "A ▸ B" labels, delete asked first — with the post beside it.
+              <li key={comment.commentId} className="flex items-start gap-3 px-3">
+                <div className="min-w-0 flex-1">
+                  <Thread
+                    comment={comment}
+                    ownerId={videos.get(comment.videoId)?.userId}
+                    authors={authors}
+                    onChanged={replace}
+                    onDeleted={drop}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openVideo(comment.videoId)}
+                  className="mt-4 flex-none hover:opacity-80"
+                  aria-label="Open the post"
+                >
+                  <PostThumb url={videos.get(comment.videoId)?.thumbnailUrl ?? null} className="h-14 w-[42px]" />
+                </button>
               </li>
             ))}
           </ul>
@@ -139,8 +131,9 @@ export function StudioComments({ initialVideoId }: { initialVideoId?: string }) 
       {hasMore && comments && (
         <button
           type="button"
-          onClick={() => load(cursor).catch((cause: unknown) => toast.error(messageFor(cause)))}
-          className="mx-auto h-9 rounded-[8px] border border-black/8 bg-white px-5 text-[14px] font-semibold hover:bg-black/3"
+          onClick={() => loadMore().catch((cause: unknown) => toast.error(messageFor(cause)))}
+          disabled={loadingMore}
+          className="mx-auto h-9 rounded-[8px] border border-black/8 bg-white px-5 text-[14px] font-semibold hover:bg-black/3 disabled:opacity-50"
         >
           {comments.length === 0 ? "Keep looking" : "Load more"}
         </button>
@@ -160,7 +153,7 @@ function MenuChip({
 }) {
   return (
     <Popover
-      className="max-h-[320px] w-[260px] overflow-y-auto"
+      className="max-h-[320px] w-max max-w-[480px] min-w-[260px] overflow-y-auto"
       trigger={({ open, toggle }) => <FilterChip label={label} active={active} open={open} onClick={toggle} />}
     >
       {(close) =>
@@ -177,80 +170,5 @@ function MenuChip({
         ))
       }
     </Popover>
-  );
-}
-
-function CommentActions({
-  comment,
-  onApproved,
-  onDeleted,
-}: {
-  comment: CommentResponse;
-  onApproved: (comment: CommentResponse) => void;
-  onDeleted: (commentId: string) => void;
-}) {
-  const [replying, setReplying] = useState(false);
-  const [reply, setReply] = useState("");
-  const fail = (cause: unknown) => toast.error(messageFor(cause));
-  const action = "font-semibold text-black/65 hover:text-black";
-
-  return (
-    <>
-      {comment.status === "HELD" ? (
-        <button
-          type="button"
-          className={action}
-          onClick={() => approveComment(comment.videoId, comment.commentId).then(onApproved).catch(fail)}
-        >
-          Approve
-        </button>
-      ) : (
-        <button type="button" className={action} onClick={() => setReplying((open) => !open)}>
-          Reply
-        </button>
-      )}
-      <button
-        type="button"
-        className={action}
-        onClick={() =>
-          deleteComment(comment.videoId, comment.commentId)
-            .then(() => onDeleted(comment.commentId))
-            .catch(fail)
-        }
-      >
-        Delete
-      </button>
-      {replying && (
-        <form
-          className="flex flex-1 gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            addComment(comment.videoId, reply.trim(), comment.parentId ?? comment.commentId)
-              .then(() => {
-                setReply("");
-                setReplying(false);
-                toast.success("Reply posted");
-              })
-              .catch(fail);
-          }}
-        >
-          <input
-            autoFocus
-            value={reply}
-            onChange={(event) => setReply(event.target.value)}
-            maxLength={150}
-            placeholder="Add a reply…"
-            className="h-8 min-w-0 flex-1 rounded-[4px] border border-black/12 px-2 text-[14px] text-black outline-none focus:border-black/34"
-          />
-          <button
-            type="submit"
-            disabled={!reply.trim()}
-            className="h-8 rounded-[4px] bg-[#fe2c55] px-3 text-[13px] font-semibold text-white disabled:opacity-40"
-          >
-            Post
-          </button>
-        </form>
-      )}
-    </>
   );
 }

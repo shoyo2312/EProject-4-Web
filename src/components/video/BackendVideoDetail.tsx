@@ -16,6 +16,7 @@ import { getVideoCounts } from "@/lib/api/interactions";
 import { getUserVideos, getVideo, pollUntilReady } from "@/lib/api/videos";
 import { getOverlayCollection } from "@/lib/overlay-origin";
 import type { VideoStatus } from "@/lib/api/types";
+import { STATUS_NOTE } from "@/lib/studio/overview";
 import type { FeedVideo } from "@/types/tiktok";
 
 /**
@@ -137,19 +138,6 @@ export function BackendVideoDetail({
     </>
   );
 }
-
-/** Only the owner ever sees any of these — everyone else got a 404. */
-const STATUS_NOTE: Record<VideoStatus, string> = {
-  PROCESSING: "Still processing — it will play once transcoding finishes.",
-  PENDING_MODERATION:
-    "Being checked — it goes live as soon as the check clears.",
-  PENDING_REVIEW: "Waiting on a moderator. It goes live once it is approved.",
-  PUBLISHED: "",
-  FAILED: "Transcoding failed. Delete this video and upload it again.",
-  REJECTED:
-    "Removed automatically for likely adult content. Contact support to have it reviewed.",
-  TAKEN_DOWN: "This video was taken down by a moderator.",
-};
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (

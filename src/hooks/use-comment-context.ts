@@ -20,7 +20,9 @@ export function useCommentContext(comments: CommentResponse[]): {
   const [authors, setAuthors] = useState<Map<string, Author>>(() => new Map());
   const [videos, setVideos] = useState<Map<string, VideoResponse>>(() => new Map());
 
-  const authorIds = [...new Set(comments.map((c) => c.userId))].filter((id) => !authors.has(id));
+  // Whom a reply answers is named too: "A ▸ B" needs B.
+  const people = comments.flatMap((c) => (c.replyToUserId ? [c.userId, c.replyToUserId] : [c.userId]));
+  const authorIds = [...new Set(people)].filter((id) => !authors.has(id));
   const videoIds = [...new Set(comments.map((c) => c.videoId))].filter((id) => !videos.has(id));
   const authorKey = authorIds.join(",");
   const videoKey = videoIds.join(",");

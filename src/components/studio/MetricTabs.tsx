@@ -4,7 +4,13 @@ import { useState } from "react";
 
 import { StudioCard, StudioSkeleton } from "@/components/studio/ui";
 import { formatCount } from "@/lib/format";
-import { changeLine, dayLabel, labelIndexes, linePath, niceMax } from "@/lib/studio/metrics";
+import {
+  changeLine,
+  dayLabel,
+  labelIndexes,
+  linePath,
+  niceMax,
+} from "@/lib/studio/metrics";
 import { cn } from "@/lib/utils";
 
 export interface Metric {
@@ -24,7 +30,13 @@ const BLUE = "#0075db";
  * TikTok's metric strip: one cell per metric, the picked one blue with a bar
  * on top, and the picked metric's days drawn underneath.
  */
-export function MetricTabs({ metrics, days }: { metrics: Metric[] | null; days: string[] }) {
+export function MetricTabs({
+  metrics,
+  days,
+}: {
+  metrics: Metric[] | null;
+  days: string[];
+}) {
   const [picked, setPicked] = useState(0);
   const metric = metrics?.[Math.min(picked, metrics.length - 1)];
 
@@ -41,16 +53,25 @@ export function MetricTabs({ metrics, days }: { metrics: Metric[] | null; days: 
               onClick={() => setPicked(index)}
               className={cn(
                 "relative flex flex-1 flex-col items-center gap-1 py-5 text-center",
-                active ? "bg-white" : "border-b border-black/12 bg-[#fcfcfc] hover:bg-white",
+                active
+                  ? "bg-white"
+                  : "border-b border-black/12 bg-[#fcfcfc] hover:bg-white",
                 index > 0 && "border-l border-black/8",
               )}
             >
-              {active && <span className="absolute inset-x-0 top-0 h-1 bg-[#0075db]" />}
-              <span className="px-5 text-[14px] leading-[18px] font-medium text-black">{item.label}</span>
+              {active && (
+                <span className="absolute inset-x-0 top-0 h-1 bg-[#0075db]" />
+              )}
+              <span className="px-5 text-[14px] leading-[18px] font-medium text-black">
+                {item.label}
+              </span>
               {metrics ? (
                 <>
                   <span
-                    className={cn("text-[24px] leading-[30px] font-medium", active ? "text-[#0075db]" : "text-black")}
+                    className={cn(
+                      "text-[24px] leading-[30px] font-medium",
+                      active ? "text-[#0075db]" : "text-black",
+                    )}
                   >
                     {formatCount(item.value)}
                   </span>
@@ -68,19 +89,37 @@ export function MetricTabs({ metrics, days }: { metrics: Metric[] | null; days: 
         })}
       </div>
 
-      {metric?.series && <LineChart values={metric.series} days={days} />}
+      {metric?.series ? (
+        <LineChart values={metric.series} days={days} />
+      ) : (
+        <div className="px-6 pt-6 pb-4">
+          <StudioSkeleton className="h-[220px]" />
+        </div>
+      )}
     </StudioCard>
   );
 }
 
-const PLACEHOLDER: Metric[] = ["Video views", "Likes", "Comments", "Shares", "Followers"].map((label) => ({
+const PLACEHOLDER: Metric[] = [
+  "Video views",
+  "Likes",
+  "Comments",
+  "Shares",
+  "Followers",
+].map((label) => ({
   key: label,
   label,
   value: 0,
 }));
 
 /** The picked metric over the window: gridlines, the line, and day labels under it. */
-export function LineChart({ values, days }: { values: number[]; days: string[] }) {
+export function LineChart({
+  values,
+  days,
+}: {
+  values: number[];
+  days: string[];
+}) {
   // At least 2, so the middle gridline is a whole number.
   const max = Math.max(2, niceMax(Math.max(0, ...values)));
   const labels = labelIndexes(days.length);
@@ -88,7 +127,11 @@ export function LineChart({ values, days }: { values: number[]; days: string[] }
   return (
     <div className="px-6 pt-6 pb-4">
       <div className="flex gap-3">
-        <svg viewBox={`0 0 ${CHART_W} ${CHART_H}`} preserveAspectRatio="none" className="h-[220px] min-w-0 flex-1 overflow-visible">
+        <svg
+          viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+          preserveAspectRatio="none"
+          className="h-[220px] min-w-0 flex-1 overflow-visible"
+        >
           {[0, 0.5, 1].map((share) => (
             <line
               key={share}

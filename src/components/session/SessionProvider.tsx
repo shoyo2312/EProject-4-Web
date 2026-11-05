@@ -23,7 +23,12 @@ import { clearCommentCache } from "@/lib/comment-cache";
 import { resetRealtime } from "@/lib/realtime/stompClient";
 import * as authApi from "@/lib/api/auth";
 import { isApiError } from "@/lib/api/errors";
-import { getAccessToken, getRefreshToken, onSessionEnded } from "@/lib/api/tokens";
+import {
+  getAccessToken,
+  getRefreshToken,
+  onSessionEnded,
+  onSessionStarted,
+} from "@/lib/api/tokens";
 import { linkedProviders } from "@/lib/account/closure";
 import { awaitProfile } from "@/lib/auth/await-profile";
 import type { SocialProvider } from "@/lib/auth/social";
@@ -300,6 +305,9 @@ export function SessionProvider({
     }
     if (close) setLoginOpen(false);
   }, [loadMe]);
+
+  /** Another tab signed in: this one holds the same pair now, so it settles the same way. */
+  useEffect(() => onSessionStarted(() => void settleSignIn()), [settleSignIn]);
 
   const signIn = useCallback(
     async (

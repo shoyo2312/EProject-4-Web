@@ -78,6 +78,8 @@ export function UploadPage() {
   const [showMore, setShowMore] = useState(false);
   /** 0–1 while the POST runs, null otherwise — it is also what drives the bar. */
   const [progress, setProgress] = useState<number | null>(null);
+  /** The bytes are stored and the post is being made: nothing left that Cancel could stop. */
+  const [publishing, setPublishing] = useState(false);
 
   /**
    * The upload outlives its handler, so unmounting is what stops it. Made **per submit**: StrictMode's dev remount aborts a controller
@@ -143,6 +145,7 @@ export function UploadPage() {
           uploaded.current = { file, fileUrl };
         }
 
+        setPublishing(true);
         const created = await createVideo({
           title: values.title.trim(),
           description: values.description.trim() || undefined,
@@ -165,7 +168,19 @@ export function UploadPage() {
       } catch (cause) {
         // An abort is the page going away, not a failure to report.
         setProgress(null);
+        setPublishing(false);
         if (signal.aborted) return;
+        // The first Post went through and only its answer was lost (video-service-api §3.2).
+        if (isApiError(cause) && cause.is("RAW_FILE_ALREADY_PUBLISHED")) {
+          uploaded.current = null;
+          toast.success("Video posted. It will go live once processing finishes.");
+          router.replace("/studio/content");
+          return;
+        }
+        // The stored upload is gone or not ours: Post again sends the file again.
+        if (isApiError(cause) && (cause.is("UPLOAD_NOT_FOUND") || cause.is("FOREIGN_UPLOAD"))) {
+          uploaded.current = null;
+        }
         const again = isApiError(cause) && cause.is("UPLOAD_RATE_LIMITED") ? retryAt(cause) : null;
         if (again) {
           setPostAgainAt(again);
@@ -340,7 +355,7 @@ export function UploadPage() {
             </button>
             <button
               type="button"
-              disabled={form.submitting && !uploading}
+              disabled={form.submitting && (!uploading || publishing)}
               onClick={() => {
                 // Mid-upload this stops the transfer and keeps the file and
                 // fields, so Post retries it; otherwise it drops the file.

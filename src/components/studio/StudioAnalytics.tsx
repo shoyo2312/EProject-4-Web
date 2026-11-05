@@ -15,6 +15,7 @@ import { getVideosByIds } from "@/lib/api/videos";
 import { formatCount } from "@/lib/format";
 import { niceMax } from "@/lib/studio/metrics";
 import { overviewMetrics } from "@/lib/studio/overview";
+import { pinnedFirst } from "@/lib/studio/posts";
 import { cn } from "@/lib/utils";
 
 /** `/studio/analytics` — the metric strip and its chart, for the range in the header. */
@@ -50,8 +51,9 @@ export function AnalyticsContent() {
 
   const top = useStudioQuery(`top:${days}:${sort}`, async (signal) => {
     const rows = await getCreatorTopVideos(days, sort, 10, signal);
-    const videos = await getVideosByIds(rows.map((row) => row.videoId), signal);
-    return { rows, videos: new Map(videos.map((video) => [video.id, video])) };
+    const videos = new Map((await getVideosByIds(rows.map((row) => row.videoId), signal)).map((video) => [video.id, video]));
+    // The pinned post leads, as on the profile — among the posts the window ranked, not beyond them.
+    return { rows: pinnedFirst(rows, (row) => videos.get(row.videoId)?.pinnedAt), videos };
   });
 
   return (

@@ -10,11 +10,14 @@ import { CommentText } from "@/components/feed/comments/CommentStates";
 import { ReplyThread } from "@/components/feed/comments/ReplyThread";
 import type { ReplyTarget } from "@/components/feed/comments/types";
 import { HeartIcon, ReportIcon } from "@/components/icons";
+import { ConfirmDialog } from "@/components/messages/ConfirmDialog";
 import { ReportDialog } from "@/components/report/ReportDialog";
 import { useSession } from "@/components/session/SessionProvider";
 import { StoryAvatar } from "@/components/stories/StoryAvatar";
+import { MODAL_EXIT_MS } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
 import { useDismiss } from "@/hooks/use-dismiss";
+import { usePresence } from "@/hooks/use-presence";
 import { likeComment, unlikeComment } from "@/lib/api/interactions";
 import { COMMENT_REPORT_REASONS } from "@/lib/api/reports";
 import { formatCount } from "@/lib/format";
@@ -68,6 +71,7 @@ import type { Comment } from "@/types/tiktok";
   parentId,
   currentUserId,
   canModerate = false,
+  creatorId,
   onDelete,
   onRepliesLoaded,
 }: {
@@ -82,6 +86,8 @@ import type { Comment } from "@/types/tiktok";
   currentUserId?: string;
   /** The video's uploader, viewing their own video — may delete anyone's comment on it. */
   canModerate?: boolean;
+  /** The video's uploader, whoever is viewing: their comments and replies carry the Creator pill. */
+  creatorId?: string;
   onDelete?: (id: string) => void;
   /** Hands a fetched page of this comment's replies back to the panel's state. */
   onRepliesLoaded?: (parentId: string, replies: Comment[]) => void;
@@ -98,6 +104,9 @@ import type { Comment } from "@/types/tiktok";
   const [likePending, setLikePending] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const deleteConfirm = usePresence(confirmingDelete, MODAL_EXIT_MS);
+  const isCreator = comment.isCreator || (creatorId !== undefined && comment.author.userId === creatorId);
   const menuRef = useRef<HTMLDivElement>(null);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
   // A comment still waiting on its POST has no real id to like against yet.
@@ -204,6 +213,11 @@ import type { Comment } from "@/types/tiktok";
               >
                 {comment.author.nickname}
               </Link>
+              {isCreator && (
+                <span className="rounded-[4px] bg-[var(--tt-field)] px-1 text-[11px] font-medium leading-4 text-[var(--tt-text-secondary)]">
+                  Creator
+                </span>
+              )}
               {comment.replyToName && (
                 <>
                   <ReplyArrowGlyph />
@@ -211,11 +225,6 @@ import type { Comment } from "@/types/tiktok";
                     {comment.replyToName}
                   </span>
                 </>
-              )}
-              {comment.isCreator && (
-                <span className="rounded-[4px] bg-[var(--tt-field)] px-1 text-[11px] font-medium leading-4 text-[var(--tt-text-secondary)]">
-                  Creator
-                </span>
               )}
             </div>
             <div ref={menuRef} className="relative flex-none">
@@ -225,7 +234,7 @@ import type { Comment } from "@/types/tiktok";
                 aria-label="More options"
                 aria-haspopup={menuHasItems ? "menu" : undefined}
                 aria-expanded={menuHasItems ? menuOpen : undefined}
-                className="flex h-5 w-3.5 items-center justify-center text-white/60 hover:text-[var(--tt-text)]"
+                className="flex h-5 w-3.5 items-center justify-center text-[var(--tt-text-subtle)] hover:text-[var(--tt-text)]"
               >
                 <MoreDotsGlyph />
               </button>
@@ -236,7 +245,7 @@ import type { Comment } from "@/types/tiktok";
               {menuOpen && menuHasItems && (
                 <div
                   role="menu"
-                  className="absolute right-0 top-6 z-20 w-max animate-[tt-comment-in_150ms_ease-out] overflow-hidden rounded-[8px] border border-[var(--tt-divider)] bg-black shadow-lg"
+                  className="absolute right-0 top-6 z-20 w-max animate-[tt-comment-in_150ms_ease-out] overflow-hidden rounded-[8px] border border-[var(--tt-divider)] bg-[var(--tt-page)] shadow-lg"
                 >
                   {canReport && (
                     <button
@@ -250,7 +259,7 @@ import type { Comment } from "@/types/tiktok";
                         }
                         setReportOpen(true);
                       }}
-                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:bg-white/10"
+                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:bg-[var(--tt-hover)]"
                     >
                       <ReportIcon className="h-4 w-4 flex-none" />
                       Report
@@ -262,9 +271,10 @@ import type { Comment } from "@/types/tiktok";
                       role="menuitem"
                       onClick={() => {
                         setMenuOpen(false);
-                        onDelete?.(comment.id);
+                        // Deleting is one way: asked first, like TikTok, never on the menu click alone.
+                        setConfirmingDelete(true);
                       }}
-                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:bg-white/10 hover:text-[var(--tt-red)]"
+                      className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-[14px] font-medium text-[var(--tt-text)] transition-colors duration-200 ease-out hover:bg-[var(--tt-hover)] hover:text-[var(--tt-red)]"
                     >
                       <Trash2 className="h-4 w-4 flex-none" strokeWidth={2} />
                       Delete
@@ -310,7 +320,7 @@ import type { Comment } from "@/types/tiktok";
                     })
                   }
                   className={cn(
-                    "text-white/60 hover:underline",
+                    "text-[var(--tt-text-subtle)] hover:underline",
                     isReply
                       ? "text-[13px] font-semibold leading-[16.9px]"
                       : "text-[14px] font-medium leading-[18.2px]",
@@ -331,10 +341,10 @@ import type { Comment } from "@/types/tiktok";
               <HeartIcon
                 className={cn(
                   "h-5 w-5 transition-colors",
-                  liked ? "text-[var(--tt-red)]" : "text-white/60",
+                  liked ? "text-[var(--tt-red)]" : "text-[var(--tt-text-subtle)]",
                 )}
               />
-              <span className="text-[14px] leading-[21px] text-white/60">
+              <span className="text-[14px] leading-[21px] text-[var(--tt-text-subtle)]">
                 {formatCount(likeCount)}
               </span>
             </button>
@@ -360,10 +370,33 @@ import type { Comment } from "@/types/tiktok";
               justAddedId={justAddedId}
               currentUserId={currentUserId}
               canModerate={canModerate}
+              creatorId={creatorId}
               onDelete={onDelete}
             />
           )}
         />
+      )}
+
+      {deleteConfirm.mounted && (
+        <ConfirmDialog
+          closing={deleteConfirm.closing}
+          title="Delete this comment?"
+          confirmLabel="Delete"
+          busyLabel="Deleting…"
+          danger
+          busy={false}
+          error={null}
+          onCancel={() => setConfirmingDelete(false)}
+          onConfirm={() => {
+            setConfirmingDelete(false);
+            // After the sheet has shrunk away: deleting removes this row, and the dialog with it.
+            window.setTimeout(() => onDelete?.(comment.id), MODAL_EXIT_MS);
+          }}
+        >
+          {comment.author.userId === currentUserId
+            ? "Your comment will be removed from this video."
+            : `${comment.author.nickname}'s comment will be removed from your video.`}
+        </ConfirmDialog>
       )}
     </div>
   );

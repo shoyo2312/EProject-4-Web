@@ -103,7 +103,7 @@ export function ReplyThread({
       <div className="-ml-1.5 flex flex-row items-center justify-between gap-2">
         {remaining > 0 ? (
           <div className="flex flex-row items-center gap-1.5">
-            <span className="w-6 border-t border-white/40" />
+            <span className="w-6 border-t border-[var(--tt-placeholder)]" />
 
             <button
               type="button"
@@ -112,7 +112,7 @@ export function ReplyThread({
               aria-expanded={shownCount > 0}
               aria-busy={loading}
               className={cn(
-                "flex flex-row items-center gap-1.5 py-px font-medium text-white/60 hover:opacity-80 transition-opacity duration-200 ease-in-out",
+                "flex flex-row items-center gap-1.5 py-px font-medium text-[var(--tt-text-subtle)] hover:opacity-80 transition-opacity duration-200 ease-in-out",
                 shownCount > 0 ? "text-[14px] leading-[21px]" : "text-[14px] leading-[18px]",
               )}
             >
@@ -129,7 +129,7 @@ export function ReplyThread({
           <button
             type="button"
             onClick={() => setShownCount(0)}
-            className="flex flex-row items-center gap-1.5 py-px text-[14px] font-medium leading-[21px] text-white/60 hover:opacity-80 transition-opacity duration-200 ease-in-out"
+            className="flex flex-row items-center gap-1.5 py-px text-[14px] font-medium leading-[21px] text-[var(--tt-text-subtle)] hover:opacity-80 transition-opacity duration-200 ease-in-out"
           >
             Hide
             <ChevronUpGlyph />
@@ -145,7 +145,7 @@ function ChevronDownGlyph() {
   return (
     <svg
       viewBox="0 0 48 48"
-      className="h-[13px] w-[13px] flex-none text-white/60"
+      className="h-[13px] w-[13px] flex-none text-[var(--tt-text-subtle)]"
       fill="currentColor"
       aria-hidden
     >
@@ -158,7 +158,7 @@ function ChevronUpGlyph() {
   return (
       <svg
           viewBox="0 0 48 48"
-          className="h-[13px] w-[13px] flex-none text-white/60"
+          className="h-[13px] w-[13px] flex-none text-[var(--tt-text-subtle)]"
           fill="currentColor"
           aria-hidden
       >

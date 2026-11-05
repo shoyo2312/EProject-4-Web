@@ -4,10 +4,13 @@ import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 
 import { MetricTabs } from "@/components/studio/MetricTabs";
-import { PostCell } from "@/components/studio/PostCell";
+import { PostCell, StatusNote } from "@/components/studio/PostCell";
 import { useStudioRange } from "@/components/studio/StudioRange";
+import { useOpenStudioVideo } from "@/components/studio/StudioVideoModal";
 import { EmptyState, RangeSelect, SectionTitle, StudioCard, StudioSkeleton } from "@/components/studio/ui";
+import { BookmarkIcon, CommentIcon, HeartIcon, PlayIcon, ShareIcon } from "@/components/icons";
 import { useStudioQuery } from "@/hooks/use-studio-query";
+import { getVideoCounts } from "@/lib/api/interactions";
 import { getCreatorVideo } from "@/lib/api/studio";
 import { getVideo } from "@/lib/api/videos";
 import { formatCount, formatDuration } from "@/lib/format";
@@ -22,6 +25,7 @@ const CHART_H = 200;
  * so it reads as "not found" here too.
  */
 export function StudioVideoAnalytics({ videoId }: { videoId: string }) {
+  const openVideo = useOpenStudioVideo();
   const { days, setDays } = useStudioRange();
   const video = useStudioQuery(`video:${videoId}`, (signal) => getVideo(videoId, signal));
   const stats = useStudioQuery(`video-stats:${videoId}:${days}`, (signal) => getCreatorVideo(videoId, days, signal));
@@ -41,12 +45,15 @@ export function StudioVideoAnalytics({ videoId }: { videoId: string }) {
           >
             <ChevronLeft className="h-5 w-5" />
           </Link>
-          <PostCell video={video.data ?? undefined} href={`/video/${videoId}`} />
+          <PostCell video={video.data ?? undefined} onOpen={() => openVideo(videoId)} />
         </div>
-        <RangeSelect days={days} onChange={setDays} />
+        <VideoCounts videoId={videoId} />
       </div>
 
-      {stats.error ? (
+      {video.data && <StatusNote status={video.data.status} />}
+
+      {/* A failed upload never had a viewer: the note above is the whole story. */}
+      {video.data?.status === "FAILED" ? null : stats.error ? (
         <StudioCard>
           <EmptyState>{stats.error}</EmptyState>
         </StudioCard>
@@ -87,7 +94,11 @@ export function StudioVideoAnalytics({ videoId }: { videoId: string }) {
           </section>
 
           <section className="flex flex-col gap-4">
-            <SectionTitle>Engagement in the last {days} days</SectionTitle>
+            {/* Only this section follows the range: the totals above are lifetime. */}
+            <div className="flex items-center justify-between">
+              <SectionTitle>Engagement</SectionTitle>
+              <RangeSelect days={days} onChange={setDays} />
+            </div>
             <MetricTabs
               metrics={
                 data && [
@@ -103,6 +114,39 @@ export function StudioVideoAnalytics({ videoId }: { videoId: string }) {
         </>
       )}
     </div>
+  );
+}
+
+/** Lifetime counters beside the post, as TikTok Studio shows them. Saves live only in interaction-service. */
+function VideoCounts({ videoId }: { videoId: string }) {
+  const query = useStudioQuery(`video-counts:${videoId}`, (signal) =>
+    getVideoCounts([videoId], signal).then(([row]) => row),
+  );
+  const counts = query.data;
+  if (query.error) return null;
+
+  return (
+    <dl className="flex flex-none items-center gap-6">
+      {(
+        [
+          ["Views", PlayIcon, counts?.viewCount],
+          ["Likes", HeartIcon, counts?.likeCount],
+          ["Comments", CommentIcon, counts?.commentCount],
+          ["Shares", ShareIcon, counts?.shareCount],
+          ["Saves", BookmarkIcon, counts?.saveCount],
+        ] as const
+      ).map(([label, Icon, value]) => (
+        <div key={label} className="flex w-[52px] flex-col items-center gap-1" title={label}>
+          <dt>
+            <Icon aria-hidden className="h-5 w-5 text-black/24" />
+            <span className="sr-only">{label}</span>
+          </dt>
+          <dd className="text-[14px] leading-5 text-black/65">
+            {value === undefined ? <StudioSkeleton className="h-4 w-6" /> : formatCount(value)}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

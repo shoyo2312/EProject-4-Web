@@ -73,3 +73,23 @@ describe("StudioEditPost", () => {
     expect(screen.getByRole("option", { name: /Only me/ })).toBeTruthy();
   });
 });
+
+describe("StudioEditPost for a post that is not live", () => {
+  it("explains a failed upload instead of offering a form to edit it", async () => {
+    getVideo.mockResolvedValueOnce({ ...post("1001", "Broken"), status: "FAILED" });
+
+    render(<StudioEditPost videoId="1001" />);
+
+    expect(await screen.findByText(/Transcoding failed/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+
+  it("keeps the form for a post under review, with the reason above it", async () => {
+    getVideo.mockResolvedValueOnce({ ...post("1001", "Held"), status: "PENDING_REVIEW" });
+
+    render(<StudioEditPost videoId="1001" />);
+    await screen.findByDisplayValue("Held");
+
+    expect(screen.getByText(/Waiting on a moderator/)).toBeTruthy();
+  });
+});

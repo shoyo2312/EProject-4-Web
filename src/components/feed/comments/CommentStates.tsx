@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { CommentIcon } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
 import { splitMentions } from "@/lib/comments/mention";
@@ -19,8 +21,8 @@ import { cn } from "@/lib/utils";
 export function NoCommentsYet() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-6">
-      <CommentIcon className="h-16 w-16 text-white/25" />
-      <p className="text-[14px] leading-5 text-white/75">
+      <CommentIcon className="h-16 w-16 text-[var(--tt-text-faint)]" />
+      <p className="text-[14px] leading-5 text-[var(--tt-text-secondary)]">
         Start the conversation
       </p>
     </div>
@@ -34,8 +36,8 @@ export function NoCommentsYet() {
 export function CommentsLocked({ message }: { message: string }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-4 py-6">
-      <CommentIcon className="h-16 w-16 text-white/25" />
-      <p className="text-[14px] leading-5 text-white/75">{message}</p>
+      <CommentIcon className="h-16 w-16 text-[var(--tt-text-faint)]" />
+      <p className="text-[14px] leading-5 text-[var(--tt-text-secondary)]">{message}</p>
     </div>
   );
 }
@@ -47,7 +49,7 @@ export function CommentsLocked({ message }: { message: string }) {
 export function CommentLockNotice({ message }: { message: string }) {
   return (
     <div className="flex h-16 flex-none items-end justify-center pb-2.5">
-      <p className="text-center text-[14px] leading-5 text-white/60">
+      <p className="text-center text-[14px] leading-5 text-[var(--tt-text-subtle)]">
         {message}
       </p>
     </div>
@@ -97,18 +99,17 @@ export function CommentListSkeleton({ count = 5 }: { count?: number }) {
 }
 
 /**
- * Comment body with its "@handle" runs tinted. Mentions are plain text here —
- * nothing resolves them to an account — so this is a render-time highlight, not
- * a link.
+ * Comment body with its "@handle" runs tinted and linked to `/@handle` — the
+ * profile route resolves a handle itself, so the text is all a link needs.
  */
 export function CommentText({ text }: { text: string }) {
   return (
     <>
       {splitMentions(text).map((run, i) =>
         run.mention ? (
-          <span key={i} className="text-[var(--tt-mention)]">
+          <Link key={i} href={`/${run.text}`} className="text-[var(--tt-mention)] hover:underline">
             {run.text}
-          </span>
+          </Link>
         ) : (
           run.text
         ),

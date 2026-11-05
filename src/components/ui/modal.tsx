@@ -40,6 +40,7 @@ export function modalCardMotion(closing: boolean): string {
 export function Modal({
   onClose,
   className = "w-[340px] rounded-[12px] p-6",
+  closing,
   children,
 }: {
   onClose: () => void;
@@ -48,9 +49,16 @@ export function Modal({
    * the report flow passes the live site's 700px one instead.
    */
   className?: string;
+  /**
+   * Opts into TikTok's open and close motion above. The caller keeps the modal mounted for
+   * `MODAL_EXIT_MS` while this is true (`usePresence`), and it stops answering for that window.
+   * Left undefined, the modal appears and disappears at once, as it always has.
+   */
+  closing?: boolean;
   children: React.ReactNode;
 }) {
-  useEscapeKey(onClose);
+  const animated = closing !== undefined;
+  useEscapeKey(onClose, !closing);
 
   /* Rendered into <body>: callers mount this deep inside rows that carry
      `content-visibility: auto` (paint containment), which makes the row a
@@ -58,11 +66,14 @@ export function Modal({
      instead of the viewport. */
   const mounted = useMounted();
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, mounted);
+  useFocusTrap(dialogRef, mounted && !closing);
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[3001] flex items-center justify-center">
+    <div
+      inert={closing || undefined}
+      className={cn("fixed inset-0 z-[3001] flex items-center justify-center", animated && modalOverlayMotion(Boolean(closing)))}
+    >
       <button
         type="button"
         aria-label="Close"
@@ -75,6 +86,7 @@ export function Modal({
         aria-modal="true"
         className={cn(
           "relative max-w-[calc(100vw-2rem)] bg-[#121212] shadow-[0_2px_12px_rgba(0,0,0,0.4)]",
+          animated && modalCardMotion(Boolean(closing)),
           className,
         )}
       >

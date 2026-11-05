@@ -40,6 +40,19 @@ export const PRIVACY_LABEL: Record<VideoVisibility, string> = {
   PRIVATE: "Only me",
 };
 
+/** Why a video is not live, in a sentence. Only the owner ever sees these — everyone else got a 404. */
+export const STATUS_NOTE: Record<VideoStatus, string> = {
+  PROCESSING: "Still processing — it will play once transcoding finishes.",
+  PENDING_MODERATION:
+    "Being checked — it goes live as soon as the check clears.",
+  PENDING_REVIEW: "Waiting on a moderator. It goes live once it is approved.",
+  PUBLISHED: "",
+  FAILED: "Transcoding failed. Delete this video and upload it again.",
+  REJECTED:
+    "Removed automatically for likely adult content. Contact support to have it reviewed.",
+  TAKEN_DOWN: "This video was taken down by a moderator.",
+};
+
 /** What the Posts table says about a video that is not simply live. Null for a live one. */
 export const STATUS_LABEL: Record<VideoStatus, string | null> = {
   PROCESSING: "Processing",

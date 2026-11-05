@@ -163,6 +163,9 @@
   --tt-text: rgb(255 255 255 / 0.9); /* body default */
   --tt-text-secondary: rgb(255 255 255 / 0.75); /* action-rail counts */
   --tt-text-muted: rgb(255 255 255 / 0.5); /* footer headings */
+  --tt-text-subtle: rgb(255 255 255 / 0.6); /* comment "Reply", like counts */
+  --tt-text-faint: rgb(255 255 255 / 0.25); /* empty-state glyphs */
+  --tt-hover: rgb(255 255 255 / 0.1); /* menu item hover */
   --tt-text-display: #f0f0f0; /* --ui-text-1-display */
   --tt-icon: #f6f6f6; /* inactive nav icon */
   --tt-placeholder: rgb(255 255 255 / 0.4); /* --ui-text-placeholder */
@@ -198,6 +201,30 @@
   /* Motion */
   --tt-ease: cubic-bezier(0.25, 0, 0.25, 1);
   --tt-duration: 300ms;
+}
+
+/*
+ * The same tokens on white, for the feed's comment components inside Studio's
+ * video modal — TikTok Studio shows tiktok.com's comment list there, light.
+ * Values measured off tiktokstudio's modal (names black, meta .48, field .06).
+ */
+.tt-light {
+  --tt-page: #fff;
+  --tt-text: #000;
+  --tt-text-secondary: rgb(0 0 0 / 0.65);
+  --tt-text-muted: rgb(0 0 0 / 0.48);
+  --tt-text-subtle: rgb(0 0 0 / 0.48);
+  --tt-text-faint: rgb(0 0 0 / 0.2);
+  --tt-hover: rgb(0 0 0 / 0.04);
+  --tt-text-display: #000;
+  --tt-icon: #000;
+  --tt-placeholder: rgb(0 0 0 / 0.4);
+  --tt-field: rgb(22 24 35 / 0.06);
+  --tt-shape-neutral-3: rgb(22 24 35 / 0.12);
+  --tt-comment-panel: #fff;
+  --tt-sheet-3: #fff;
+  --tt-divider: rgb(0 0 0 / 0.12);
+  color-scheme: light;
 }
 
 /*

@@ -44,3 +44,11 @@ export function videoFileName(title: string, videoId: string): string {
     .trim();
   return `${name || videoId}.mp4`;
 }
+
+/**
+ * Pinned posts first, as on the profile grid, keeping the given order inside each half —
+ * for a list ranked by something else (the analytics top posts) that still shows the pin.
+ */
+export function pinnedFirst<T>(items: T[], pinnedAtOf: (item: T) => string | null | undefined): T[] {
+  return [...items].sort((a, b) => Number(Boolean(pinnedAtOf(b))) - Number(Boolean(pinnedAtOf(a))));
+}

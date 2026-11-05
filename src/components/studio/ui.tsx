@@ -193,7 +193,9 @@ export function MenuOption({
       onClick={onClick}
       className="flex h-10 w-full items-center justify-between gap-6 px-4 text-left text-[14px] whitespace-nowrap text-black hover:bg-black/4"
     >
-      {label}
+      <span className="truncate" title={label}>
+        {label}
+      </span>
       {selected && <Check className="h-4 w-4 flex-none" />}
     </button>
   );

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { recordView, recordWatch } from "@/lib/api/interactions";
+import { markLastWatched } from "@/lib/last-watched";
 
 interface UseWatchSessionOptions {
   videoId: string;
@@ -64,6 +65,9 @@ export function useWatchSession({
    */
   const playId = useRef<string | null>(null);
   useEffect(() => {
+    // Ahead of the `enabled` gate: the "Just watched" tile on a profile is for
+    // every viewer, signed in or not, and needs no server.
+    if (isPlaying) markLastWatched(latest.current.videoId);
     if (!isPlaying || viewed.current || !latest.current.enabled) return;
     viewed.current = true;
     playId.current ??= crypto.randomUUID();

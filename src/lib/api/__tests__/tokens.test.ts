@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isAccessTokenFresh, onSessionEnded, storeTokens } from "@/lib/api/tokens";
+import {
+  isAccessTokenFresh,
+  onSessionEnded,
+  onSessionStarted,
+  storeTokens,
+} from "@/lib/api/tokens";
 
 afterEach(() => {
   window.localStorage.clear();
@@ -29,6 +34,42 @@ describe("onSessionEnded", () => {
     otherTab("tiktok.accessToken");
     storeTokens({ accessToken: "a", refreshToken: "r" });
     otherTab(null);
+    stop();
+
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe("onSessionStarted", () => {
+  const otherTab = (oldValue: string | null, newValue: string | null) => {
+    if (newValue === null) window.localStorage.removeItem("tiktok.refreshToken");
+    else window.localStorage.setItem("tiktok.refreshToken", newValue);
+    window.dispatchEvent(
+      new StorageEvent("storage", {
+        key: "tiktok.refreshToken",
+        oldValue,
+        newValue,
+        storageArea: window.localStorage,
+      }),
+    );
+  };
+
+  it("fires when another tab signs in", () => {
+    const listener = vi.fn();
+    const stop = onSessionStarted(listener);
+
+    otherTab(null, "r");
+    stop();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores another tab rotating the pair, and signing out", () => {
+    const listener = vi.fn();
+    const stop = onSessionStarted(listener);
+
+    otherTab("r1", "r2");
+    otherTab("r2", null);
     stop();
 
     expect(listener).not.toHaveBeenCalled();

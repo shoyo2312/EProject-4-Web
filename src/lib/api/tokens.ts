@@ -19,17 +19,28 @@ export interface TokenPair {
   refreshToken: string;
 }
 
-/** Listeners fired when the session dies (refresh rejected, or logout). */
-type SessionEndedListener = () => void;
-const sessionEndedListeners = new Set<SessionEndedListener>();
+type SessionListener = () => void;
+/** Fired when the session dies (refresh rejected, or logout). */
+const sessionEndedListeners = new Set<SessionListener>();
+/** Fired when another tab signs in. */
+const sessionStartedListeners = new Set<SessionListener>();
 
-export function onSessionEnded(listener: SessionEndedListener): () => void {
-  if (sessionEndedListeners.size === 0) window.addEventListener("storage", onStorage);
-  sessionEndedListeners.add(listener);
+function subscribe(listeners: Set<SessionListener>, listener: SessionListener): () => void {
+  const listening = () => sessionEndedListeners.size + sessionStartedListeners.size > 0;
+  if (!listening()) window.addEventListener("storage", onStorage);
+  listeners.add(listener);
   return () => {
-    sessionEndedListeners.delete(listener);
-    if (sessionEndedListeners.size === 0) window.removeEventListener("storage", onStorage);
+    listeners.delete(listener);
+    if (!listening()) window.removeEventListener("storage", onStorage);
   };
+}
+
+export function onSessionEnded(listener: SessionListener): () => void {
+  return subscribe(sessionEndedListeners, listener);
+}
+
+export function onSessionStarted(listener: SessionListener): () => void {
+  return subscribe(sessionStartedListeners, listener);
 }
 
 /**
@@ -37,12 +48,19 @@ export function onSessionEnded(listener: SessionEndedListener): () => void {
  * session to a refused refresh — has ended this tab's session too. Without
  * this, the tab kept a signed-in UI whose every request answered 401.
  * `key === null` is another tab clearing storage outright.
+ *
+ * Signing in is the same in reverse: the tab already holds the pair, but kept
+ * showing "Log in" until reloaded. Only a refresh token appearing from nothing
+ * is a sign-in; one replacing another is a rotation, every 15 minutes.
  */
 function onStorage(event: StorageEvent): void {
   if (event.storageArea !== window.localStorage) return;
   if (event.key !== REFRESH_KEY && event.key !== null) return;
-  if (getRefreshToken() !== null) return;
-  sessionEndedListeners.forEach((listener) => listener());
+  if (getRefreshToken() === null) {
+    sessionEndedListeners.forEach((listener) => listener());
+  } else if (event.key === REFRESH_KEY && event.oldValue === null) {
+    sessionStartedListeners.forEach((listener) => listener());
+  }
 }
 
 export function getAccessToken(): string | null {

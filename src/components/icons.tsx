@@ -617,6 +617,15 @@ export function ChevronRightIcon(props: IconProps) {
   );
 }
 
+/** Two stacked chevrons pointing up — the "jump back to" cue on a floating pill. */
+export function DoubleChevronUpIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12.59 24.41a2 2 0 0 1 0-2.82l10-10a2 2 0 0 1 2.82 0l10 10a2 2 0 0 1-2.82 2.82L24 15.83l-8.59 8.58a2 2 0 0 1-2.82 0Zm0 14a2 2 0 0 1 0-2.82l10-10a2 2 0 0 1 2.82 0l10 10a2 2 0 0 1-2.82 2.82L24 29.83l-8.59 8.58a2 2 0 0 1-2.82 0Z" />
+    </Icon>
+  );
+}
+
 /** The same chevron turned down, for a dropdown. */
 export function CaretDownIcon(props: IconProps) {
   return (

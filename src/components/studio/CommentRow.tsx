@@ -1,13 +1,15 @@
 import Link from "next/link";
 
 import { PostThumb } from "@/components/studio/PostCell";
+import { useOpenStudioVideo } from "@/components/studio/StudioVideoModal";
 import type { CommentResponse, VideoResponse } from "@/lib/api/types";
 import { formatRelativeTime } from "@/lib/format";
 import type { Author } from "@/types/tiktok";
 
 /**
- * One comment in Studio: who said it, what, when, and on which post. Actions,
- * when given, sit under the text the way TikTok puts Reply and Delete there.
+ * One comment in Studio: who said it, what, when, and on which post. The text opens
+ * that post's comment page, the cover the post itself. Actions, when given, sit under
+ * the text the way TikTok puts Reply and Delete there.
  */
 export function CommentRow({
   comment,
@@ -20,6 +22,7 @@ export function CommentRow({
   video: VideoResponse | undefined;
   actions?: React.ReactNode;
 }) {
+  const openVideo = useOpenStudioVideo();
   return (
     <div className="flex items-start gap-3 px-5 py-4">
       {/* eslint-disable-next-line @next/next/no-img-element -- avatar host is whatever user-service allowed */}
@@ -40,15 +43,25 @@ export function CommentRow({
             </span>
           )}
         </div>
-        <p className="text-[14px] leading-5 break-words whitespace-pre-wrap text-black">{comment.content}</p>
+        <Link
+          href={`/studio/comment/${comment.videoId}`}
+          className="text-[14px] leading-5 break-words whitespace-pre-wrap text-black hover:underline"
+        >
+          {comment.content}
+        </Link>
         <div className="flex items-center gap-4 text-[13px] leading-4 text-black/50">
           <span>{formatRelativeTime(comment.createdAt)}</span>
           {actions}
         </div>
       </div>
-      <Link href={`/video/${comment.videoId}`} className="flex-none hover:opacity-80" aria-label="Open the post">
+      <button
+        type="button"
+        onClick={() => openVideo(comment.videoId)}
+        className="flex-none hover:opacity-80"
+        aria-label="Open the post"
+      >
         <PostThumb url={video?.thumbnailUrl ?? null} className="h-14 w-[42px]" />
-      </Link>
+      </button>
     </div>
   );
 }

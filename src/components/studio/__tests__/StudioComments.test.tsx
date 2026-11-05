@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import StudioCommentsRoute from "@/app/studio/comment/page";
+import { StudioComments } from "@/components/studio/StudioComments";
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -14,7 +15,16 @@ vi.mock("@/components/ui/toast", () => ({ toast: { error: vi.fn(), success: vi.f
 vi.mock("@/hooks/use-comment-context", () => ({
   useCommentContext: () => ({ authors: new Map(), videos: new Map() }),
 }));
-vi.mock("@/lib/api/interactions", () => ({ addComment: vi.fn(), approveComment: vi.fn(), deleteComment: vi.fn() }));
+const addComment = vi.fn();
+vi.mock("@/lib/api/interactions", () => ({
+  addComment: (...args: unknown[]) => addComment(...args),
+  approveComment: vi.fn(),
+  deleteComment: vi.fn(),
+  likeComment: vi.fn(),
+  unlikeComment: vi.fn(),
+  listReplies: vi.fn(),
+  getVideoCounts: vi.fn(),
+}));
 
 const listInboxComments = vi.fn();
 vi.mock("@/lib/api/studio", () => ({
@@ -50,5 +60,85 @@ describe("/studio/comment route", () => {
   it("passes a real video id through", async () => {
     const element = await StudioCommentsRoute({ searchParams: Promise.resolve({ videoId: "7312458901234567" }) });
     expect(element.props.initialVideoId).toBe("7312458901234567");
+  });
+});
+
+describe("Studio comment inbox", () => {
+  it("answers a reply with that reply's id, so the post shows whom the owner answered", async () => {
+    const reply = {
+      commentId: "r1",
+      videoId: "1001",
+      userId: "3",
+      content: "a reply in the inbox",
+      createdAt: "2026-11-05T00:00:00Z",
+      parentId: "c1",
+      replyToUserId: null,
+      likeCount: 0,
+      likedByMe: false,
+      replyCount: 0,
+      status: "VISIBLE",
+    };
+    listInboxComments.mockResolvedValue({ items: [reply], nextCursor: null, hasMore: false });
+    addComment.mockResolvedValueOnce({ ...reply, commentId: "r2", userId: "1", replyToUserId: "3", content: "thanks" });
+    render(<StudioComments />);
+
+    await screen.findByText("a reply in the inbox");
+    fireEvent.click(screen.getByRole("button", { name: /Reply/ }));
+    const box = screen.getByPlaceholderText(/Reply to/);
+    fireEvent.change(box, { target: { value: "thanks" } });
+    fireEvent.submit(box.closest("form")!);
+
+    // Not "c1", the thread's root: the backend derives "owner ▸ user" from the id it is given.
+    await waitFor(() => expect(addComment).toHaveBeenCalledWith("1001", "thanks", "r1"));
+    // And the owner's reply shows at once, under the row it answers.
+    expect(await screen.findByText("thanks")).toBeTruthy();
+  });
+
+  const row = (commentId: string, content: string) => ({
+    commentId,
+    videoId: "1001",
+    userId: "3",
+    content,
+    createdAt: "2026-11-05T00:00:00Z",
+    parentId: null,
+    replyToUserId: null,
+    likeCount: 0,
+    likedByMe: false,
+    replyCount: 0,
+    status: "VISIBLE",
+  });
+
+  it("drops a Load more page that answers the filter the owner already left", async () => {
+    let finishStale: (page: unknown) => void = () => {};
+    listInboxComments
+      .mockResolvedValueOnce({ items: [row("c1", "first page")], nextCursor: "cur-1", hasMore: true })
+      .mockReturnValueOnce(new Promise((resolve) => (finishStale = resolve)))
+      .mockResolvedValueOnce({ items: [row("h1", "held comment")], nextCursor: null, hasMore: false });
+    render(<StudioComments />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
+    fireEvent.click(screen.getByRole("button", { name: /All comments/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Held for review" }));
+    await screen.findByText("held comment");
+
+    finishStale({ items: [row("c2", "stale page")], nextCursor: null, hasMore: false });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByText("stale page")).toBeNull();
+    const staleSignal = listInboxComments.mock.calls[1][3] as AbortSignal;
+    expect(staleSignal.aborted).toBe(true);
+  });
+
+  it("asks for the next page once, however fast Load more is clicked", async () => {
+    listInboxComments
+      .mockResolvedValueOnce({ items: [row("c1", "first page")], nextCursor: "cur-1", hasMore: true })
+      .mockReturnValueOnce(new Promise(() => {}));
+    render(<StudioComments />);
+
+    const button = await screen.findByRole("button", { name: "Load more" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(listInboxComments).toHaveBeenCalledTimes(2);
   });
 });

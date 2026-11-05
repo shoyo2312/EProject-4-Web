@@ -15,13 +15,17 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { PostCell } from "@/components/studio/PostCell";
-import { MenuOption, Popover } from "@/components/studio/ui";
+import { MenuOption, Popover, StudioSkeleton } from "@/components/studio/ui";
 import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { messageFor } from "@/lib/api/errors";
 import type { VideoResponse } from "@/lib/api/types";
-import { deleteVideo, updateVideoPinned, updateVideoVisibility } from "@/lib/api/videos";
+import {
+  deleteVideo,
+  updateVideoPinned,
+  updateVideoVisibility,
+} from "@/lib/api/videos";
 import { downloadFile } from "@/lib/download";
 import { isHlsManifest } from "@/hooks/use-hls-source";
 import { formatCount } from "@/lib/format";
@@ -29,7 +33,33 @@ import { PRIVACY_LABEL, VISIBILITIES } from "@/lib/studio/overview";
 import { videoFileName } from "@/lib/studio/posts";
 import { cn } from "@/lib/utils";
 
-export const POSTS_GRID = "grid grid-cols-[minmax(0,1fr)_120px_96px_96px_104px_160px] items-center gap-4";
+export const POSTS_GRID =
+  "grid grid-cols-[minmax(0,1fr)_120px_96px_96px_104px_160px] items-center gap-4";
+
+/** One Posts row's shape while the page loads: measured off a rendered row, 105px tall, 54x72 cover. */
+export function PostRowSkeleton() {
+  return (
+    <li className={cn(POSTS_GRID, "px-5 py-4")} aria-hidden>
+      <span className="flex items-center gap-3">
+        <StudioSkeleton className="h-[72px] w-[54px] flex-none" />
+        <span className="flex flex-col gap-1">
+          <StudioSkeleton className="h-[18px] w-[160px]" />
+          <StudioSkeleton className="h-5 w-[100px]" />
+        </span>
+      </span>
+      <StudioSkeleton className="h-[29px] w-[92px]" />
+      <StudioSkeleton className="h-[21px] w-10" />
+      <StudioSkeleton className="h-[21px] w-10" />
+      <StudioSkeleton className="h-[21px] w-10" />
+      <span className="flex items-center justify-center gap-1.5">
+        <StudioSkeleton className="h-[34px] w-[34px]" />
+        <StudioSkeleton className="h-[34px] w-[34px]" />
+        <StudioSkeleton className="h-[34px] w-[34px]" />
+        <StudioSkeleton className="h-[34px] w-[34px]" />
+      </span>
+    </li>
+  );
+}
 
 /** TikTok Studio's row action: a 34px hairline circle. */
 const ACTION =
@@ -43,102 +73,164 @@ export function PostRow({
   video,
   onChange,
   onDelete,
+  onOpen,
 }: {
   video: VideoResponse;
   onChange: (video: VideoResponse) => void;
   onDelete: (id: string) => void;
+  /** Plays the post in Studio's video modal. */
+  onOpen?: () => void;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const pinned = Boolean(video.pinnedAt);
+  // Transcoding failed: no file, no viewers, nothing to edit or pin — only Delete is left.
+  const failed = video.status === "FAILED";
+  // The server pins only a published post that is not private (VIDEO_NOT_PINNABLE otherwise);
+  // a pin left from before can always come off.
+  const pinnable = pinned || (video.status === "PUBLISHED" && video.visibility !== "PRIVATE");
   const fail = (cause: unknown) => toast.error(messageFor(cause));
 
   const pin = () =>
     updateVideoPinned(video.id, !pinned)
       .then((updated) => {
         onChange(updated);
-        toast.success(pinned ? "Unpinned" : "Pinned to the top of your profile");
+        toast.success(
+          pinned ? "Unpinned" : "Pinned to the top of your profile",
+        );
       })
       .catch(fail);
 
   const download = (url: string) => {
     toast.success("Downloading…");
-    downloadFile(url, videoFileName(video.title, video.id)).catch(() => toast.error("Could not download this video"));
+    downloadFile(url, videoFileName(video.title, video.id)).catch(() =>
+      toast.error("Could not download this video"),
+    );
   };
   // A manifest is a playlist, not a file to save; the hook plays it, nothing downloads it.
-  const file = video.hlsUrl && !isHlsManifest(video.hlsUrl) ? video.hlsUrl : null;
+  const file =
+    video.hlsUrl && !isHlsManifest(video.hlsUrl) ? video.hlsUrl : null;
 
   return (
-    <li className={cn(POSTS_GRID, "px-5 py-4 text-[14px] transition-colors hover:bg-black/4")}>
-      <PostCell video={video} href={`/studio/analytics/${video.id}`} />
+    <li
+      className={cn(
+        POSTS_GRID,
+        "px-5 py-4 text-[14px] transition-colors hover:bg-black/4",
+      )}
+    >
+      <PostCell video={video} href={`/studio/analytics/${video.id}`} onOpen={onOpen} />
 
-      <Popover
-        className="w-[160px]"
-        trigger={({ open, toggle }) => (
-          <button
-            type="button"
-            onClick={toggle}
-            aria-expanded={open}
-            className="w-fit rounded-[4px] px-2 py-1 text-left font-medium hover:bg-black/4"
-          >
-            {PRIVACY_LABEL[video.visibility]} ▾
-          </button>
-        )}
-      >
-        {(close) =>
-          VISIBILITIES.map((value) => (
-            <MenuOption
-              key={value}
-              label={PRIVACY_LABEL[value]}
-              selected={value === video.visibility}
-              onClick={() => {
-                close();
-                if (value !== video.visibility) void updateVideoVisibility(video.id, value).then(onChange).catch(fail);
-              }}
-            />
-          ))
-        }
-      </Popover>
+      {failed ? (
+        <span className="px-2 py-1 font-medium text-black/35">
+          {PRIVACY_LABEL[video.visibility]}
+        </span>
+      ) : (
+        <Popover
+          className="w-[160px]"
+          trigger={({ open, toggle }) => (
+            <button
+              type="button"
+              onClick={toggle}
+              aria-expanded={open}
+              className="w-fit rounded-[4px] px-2 py-1 text-left font-medium hover:bg-black/4"
+            >
+              {PRIVACY_LABEL[video.visibility]} ▾
+            </button>
+          )}
+        >
+          {(close) =>
+            VISIBILITIES.map((value) => (
+              <MenuOption
+                key={value}
+                label={PRIVACY_LABEL[value]}
+                selected={value === video.visibility}
+                onClick={() => {
+                  close();
+                  if (value !== video.visibility)
+                    void updateVideoVisibility(video.id, value)
+                      .then((updated) => {
+                        onChange(updated);
+                        toast.success(`Privacy set to ${PRIVACY_LABEL[value]}`);
+                      })
+                      .catch(fail);
+                }}
+              />
+            ))
+          }
+        </Popover>
+      )}
 
-      <span>{formatCount(video.viewCount)}</span>
-      <span>{formatCount(video.likeCount)}</span>
-      <span>{video.commentCount === null ? "–" : formatCount(video.commentCount)}</span>
+      <span>{failed ? "–" : formatCount(video.viewCount)}</span>
+      <span>{failed ? "–" : formatCount(video.likeCount)}</span>
+      <span>
+        {failed || video.commentCount === null
+          ? "–"
+          : formatCount(video.commentCount)}
+      </span>
 
       <div className="flex items-center justify-center gap-1.5">
-        <ActionLink label="Edit" href={`/studio/content/${video.id}/edit`} icon={PenLine} />
-        <ActionLink label="View analytics" href={`/studio/analytics/${video.id}`} icon={SquareActivity} />
-        <ActionLink label="View comments" href={`/studio/comment?videoId=${video.id}`} icon={MessageCircleMore} />
+        <ActionLink
+          label="Edit"
+          href={`/studio/content/${video.id}/edit`}
+          icon={PenLine}
+          disabled={failed}
+        />
+        <ActionLink
+          label="View analytics"
+          href={`/studio/analytics/${video.id}`}
+          icon={SquareActivity}
+          disabled={failed}
+        />
+        <ActionLink
+          label="View comments"
+          href={`/studio/comment/${video.id}`}
+          icon={MessageCircleMore}
+          disabled={failed}
+        />
         <RowMenu
           pinned={pinned}
-          onPin={pin}
+          onPin={pinnable ? pin : undefined}
           onDownload={file ? () => download(file) : undefined}
           onDelete={() => setConfirming(true)}
         />
       </div>
 
       {confirming && (
-        <Modal onClose={() => setConfirming(false)} className="w-[400px] rounded-[8px] bg-white p-6 text-center text-black">
+        <Modal
+          onClose={() => setConfirming(false)}
+          className="w-[400px] rounded-[8px] bg-white p-6 text-center text-black"
+        >
           <p className="text-[20px] font-bold">Delete this post?</p>
-          <p className="mt-2 text-[14px] text-black/65">It is removed from your profile and from everyone&apos;s feed.</p>
+          <p className="mt-2 text-[14px] text-black/65">
+            It is removed from your profile and from everyone&apos;s feed.
+          </p>
           <div className="mt-6 flex gap-3">
             <button
               type="button"
+              disabled={deleting}
               onClick={() => setConfirming(false)}
-              className="h-10 flex-1 rounded-[4px] border border-black/12 font-semibold hover:bg-black/3"
+              className="h-10 flex-1 rounded-[4px] border border-black/12 font-semibold hover:bg-black/3 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={() =>
+              disabled={deleting}
+              onClick={() => {
+                if (deleting) return;
+                setDeleting(true);
                 deleteVideo(video.id)
                   .then(() => {
                     onDelete(video.id);
                     toast.success("Post deleted");
                   })
                   .catch(fail)
-                  .finally(() => setConfirming(false))
-              }
-              className="h-10 flex-1 rounded-[4px] bg-[#fe2c55] font-semibold text-white hover:bg-[#ea284e]"
+                  .finally(() => {
+                    setDeleting(false);
+                    setConfirming(false);
+                  });
+              }}
+              className="h-10 flex-1 rounded-[4px] bg-[#fe2c55] font-semibold text-white hover:bg-[#ea284e] disabled:opacity-50"
             >
               Delete
             </button>
@@ -149,7 +241,29 @@ export function PostRow({
   );
 }
 
-function ActionLink({ label, href, icon: Icon }: { label: string; href: string; icon: LucideIcon }) {
+function ActionLink({
+  label,
+  href,
+  icon: Icon,
+  disabled,
+}: {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  disabled?: boolean;
+}) {
+  if (disabled) {
+    return (
+      <button
+        type="button"
+        disabled
+        aria-label={label}
+        className={cn(ACTION, "cursor-not-allowed opacity-30")}
+      >
+        <Icon className="h-4 w-4" strokeWidth={2} />
+      </button>
+    );
+  }
   return (
     <Tooltip label={label} placement="top" variant="studio">
       <Link href={href} aria-label={label} className={ACTION}>
@@ -167,7 +281,8 @@ function RowMenu({
   onDelete,
 }: {
   pinned: boolean;
-  onPin: () => void;
+  /** Absent for a post that cannot go on the profile. */
+  onPin?: () => void;
   /** Absent while the video has no playable file yet. */
   onDownload?: () => void;
   onDelete: () => void;
@@ -191,14 +306,16 @@ function RowMenu({
     >
       {(close) => (
         <div role="menu" className="flex flex-col gap-0.5">
-          <MenuItem
-            icon={pinned ? PinOff : Pin}
-            label={pinned ? "Unpin" : "Pin to top"}
-            onClick={() => {
-              close();
-              onPin();
-            }}
-          />
+          {onPin && (
+            <MenuItem
+              icon={pinned ? PinOff : Pin}
+              label={pinned ? "Unpin" : "Pin to top"}
+              onClick={() => {
+                close();
+                onPin();
+              }}
+            />
+          )}
           {onDownload && (
             <MenuItem
               icon={Download}

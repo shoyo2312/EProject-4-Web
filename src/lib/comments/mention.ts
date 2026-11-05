@@ -26,10 +26,10 @@ export function mentionTokenAt(
 }
 
 /**
- * What gets typed into the comment. Most backend accounts have no handle
- * (user-service stores none for older rows), so the display name stands in with
- * its spaces squeezed out — a mention is plain text here, not an entity the API
- * resolves, so it only has to read as one.
+ * What gets typed into the comment. The handle is what makes it work: the
+ * comment links "@handle" to `/@handle`, and notification-service resolves it
+ * by username to tell the account it was tagged. The squeezed display name is
+ * only a last resort for a profile with no username, which reaches nobody.
  */
 export function mentionHandle(profile: UserProfileResponse): string {
   if (profile.username) return profile.username;

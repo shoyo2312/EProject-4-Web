@@ -1,11 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ActionRail } from "@/components/feed/ActionRail";
 import { CommentPanel } from "@/components/feed/CommentPanel";
 import { VideoCard } from "@/components/feed/VideoCard";
+import { ChartLine } from "lucide-react";
+
 import { CloseIcon, ArrowPostIcon } from "@/components/icons";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
@@ -360,6 +363,16 @@ export function VideoDetail({
               video={video}
               className="pointer-events-auto w-[480px] max-w-[55%]"
             />
+            {/* The owner's way into Studio for this one post, as on the live site. */}
+            {sessionUser?.userId === video.author.userId && (
+              <Link
+                href={`/studio/analytics/${video.id}`}
+                className="pointer-events-auto mb-4 flex h-11 flex-none items-center gap-2 rounded-full bg-[var(--tt-field)] px-5 text-[16px] font-semibold text-[var(--tt-text)] transition-[background-color,transform] duration-200 ease-out hover:scale-[1.04] hover:bg-white/35 active:scale-[0.98]"
+              >
+                <ChartLine className="h-5 w-5" strokeWidth={2} />
+                View analytics
+              </Link>
+            )}
             <div className="pointer-events-auto mr-2">
               <ActionRail
                 compact

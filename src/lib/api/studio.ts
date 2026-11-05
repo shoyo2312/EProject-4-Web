@@ -114,6 +114,8 @@ export function listStudioPosts(
 /** Spring binds `a,b` to a list param. */
 const csv = (values?: string[]) => (values?.length ? values.join(",") : undefined);
 
+export type InboxSort = "NEWEST" | "MOST_LIKED" | "MOST_REPLIED";
+
 export interface InboxQuery {
   videoId?: string;
   status?: "VISIBLE" | "HELD";
@@ -122,6 +124,12 @@ export interface InboxQuery {
   from?: string;
   /** ISO instant, exclusive. */
   to?: string;
+  /** The three below need `videoId`: the server reads that video whole and ranks it. */
+  sort?: InboxSort;
+  /** true: only threads the owner answered; false: only the ones they have not. */
+  replied?: boolean;
+  /** Only authors whose follower count is in one of these ranges. */
+  followers?: CountRange[];
 }
 
 /**
@@ -140,7 +148,7 @@ export function listInboxComments(
 ): Promise<CommentPageResponse> {
   return apiFetch<CommentPageResponse>("/interactions/users/me/comments", {
     auth: "required",
-    query: { ...query, q: query.q?.trim() || undefined, cursor, size },
+    query: { ...query, q: query.q?.trim() || undefined, followers: csv(query.followers), cursor, size },
     signal,
   });
 }

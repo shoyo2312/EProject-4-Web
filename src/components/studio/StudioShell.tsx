@@ -16,15 +16,29 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { useSession } from "@/components/session/SessionProvider";
-import { StudioRangeProvider, useStudioRange } from "@/components/studio/StudioRange";
-import { Popover, RangeSelect } from "@/components/studio/ui";
+import {
+  StudioRangeProvider,
+  useStudioRange,
+} from "@/components/studio/StudioRange";
+import { Popover, RangeSelect, StudioSkeleton } from "@/components/studio/ui";
+import { StudioVideoProvider } from "@/components/studio/StudioVideoModal";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/studio", label: "Home", icon: House, exact: true },
   { href: "/studio/content", label: "Posts", icon: FolderMinus, exact: false },
-  { href: "/studio/analytics", label: "Analytics", icon: SquareActivity, exact: false },
-  { href: "/studio/comment", label: "Comments", icon: MessageCircleMore, exact: false },
+  {
+    href: "/studio/analytics",
+    label: "Analytics",
+    icon: SquareActivity,
+    exact: false,
+  },
+  {
+    href: "/studio/comment",
+    label: "Comments",
+    icon: MessageCircleMore,
+    exact: false,
+  },
 ] as const;
 
 /** The tabs analytics carries in the header, as TikTok does. Followers has no backend yet. */
@@ -47,45 +61,62 @@ export function StudioShell({ children }: { children: React.ReactNode }) {
 
   return (
     <StudioRangeProvider>
-      <div className="flex h-screen w-full overflow-hidden bg-[#f8f8f8] font-sans text-black">
-        <aside className="flex w-[248px] flex-none flex-col border-r border-black/8">
-          <Link href="/studio" className="flex h-[68px] flex-none items-center gap-1.5 px-5">
-            <Image
-              src="/images/brand/nowa-icon.png"
-              alt=""
-              width={171}
-              height={183}
-              className="h-7 w-auto rounded-[5px]"
-            />
-            <span className="text-[21px] leading-none font-bold tracking-tight">Nowa</span>
-            <span className="text-[19px] leading-none font-normal">Studio</span>
-          </Link>
-          <StudioNav />
-        </aside>
+      <StudioVideoProvider>
+        {/* globals.css paints every scrollbar for the dark feed; Studio is light, so grey thumb, no track. */}
+        <div className="flex h-screen w-full overflow-hidden bg-[#f8f8f8] font-sans text-black [&_*]:[scrollbar-color:rgb(0_0_0/0.2)_transparent]">
+          <aside className="flex w-[248px] flex-none flex-col border-r border-black/8">
+            <Link
+              href="/studio"
+              className="flex h-[68px] flex-none items-center gap-1.5 px-5"
+            >
+              <Image
+                src="/images/brand/nowa-icon.png"
+                alt=""
+                width={171}
+                height={183}
+                className="h-7 w-auto rounded-[5px]"
+              />
+              <span className="text-[21px] leading-none font-bold tracking-tight">
+                Nowa
+              </span>
+              <span className="text-[19px] leading-none font-normal">Studio</span>
+            </Link>
+            <StudioNav />
+          </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <StudioHeader />
-          <main className="min-h-0 flex-1 overflow-y-auto px-8 pt-8 pb-12">
-            {isLoading ? null : user ? (
-              children
-            ) : (
-              <div className="flex flex-col items-center gap-4 pt-24 text-center">
-                <p className="text-[20px] font-bold">Log in to Nowa Studio</p>
-                <p className="text-[14px] text-black/65">
-                  See how your posts are doing and manage comments in one place.
-                </p>
-                <button
-                  type="button"
-                  onClick={openLogin}
-                  className="h-11 w-[300px] rounded-[8px] bg-[#fe2c55] text-[16px] font-semibold text-white hover:bg-[#ea284e]"
+          <div className="flex min-w-0 flex-1 flex-col">
+            <StudioHeader />
+            <main className="min-h-0 flex-1 overflow-y-auto px-8 pt-8 pb-12">
+              {isLoading ? (
+                <div
+                  className="flex flex-col gap-6"
+                  role="status"
+                  aria-label="Loading"
                 >
-                  Log in
-                </button>
-              </div>
-            )}
-          </main>
+                  <StudioSkeleton className="h-[89px] rounded-[8px]" />
+                  <StudioSkeleton className="h-[398px] rounded-[8px]" />
+                </div>
+              ) : user ? (
+                children
+              ) : (
+                <div className="flex flex-col items-center gap-4 pt-24 text-center">
+                  <p className="text-[20px] font-bold">Log in to Nowa Studio</p>
+                  <p className="text-[14px] text-black/65">
+                    See how your posts are doing and manage comments in one place.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={openLogin}
+                    className="h-11 w-[300px] rounded-[8px] bg-[#fe2c55] text-[16px] font-semibold text-white hover:bg-[#ea284e]"
+                  >
+                    Log in
+                  </button>
+                </div>
+              )}
+            </main>
+          </div>
         </div>
-      </div>
+      </StudioVideoProvider>
     </StudioRangeProvider>
   );
 }
@@ -158,7 +189,9 @@ function StudioHeader() {
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex items-center border-b-2 pt-0.5 text-[14px] font-medium transition-colors",
-                  active ? "border-black text-black" : "border-transparent text-black/34 hover:text-black/65",
+                  active
+                    ? "border-black text-black"
+                    : "border-transparent text-black/34 hover:text-black/65",
                 )}
               >
                 {tab.label}
@@ -220,7 +253,13 @@ function StudioAccountMenu() {
     >
       {(close) => (
         <div role="menu">
-          <Link href={`/@${user.username}`} target="_blank" role="menuitem" onClick={close} className={MENU_ITEM}>
+          <Link
+            href={`/@${user.username}`}
+            target="_blank"
+            role="menuitem"
+            onClick={close}
+            className={MENU_ITEM}
+          >
             <User className="h-5 w-5" strokeWidth={1.75} />
             Profile
             <SquareArrowOutUpRight className="h-4 w-4" strokeWidth={2} />
