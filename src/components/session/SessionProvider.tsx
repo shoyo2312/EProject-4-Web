@@ -95,6 +95,8 @@ interface SessionValue {
     signupToken: string;
     username: string;
     password: string;
+    /** `YYYY-MM-DD`. */
+    birthDate: string;
   }) => Promise<void>;
   /**
    * Trades a token the provider's SDK already issued for a session of ours.
@@ -323,7 +325,7 @@ export function SessionProvider({
   );
 
   const signUp = useCallback(
-    async (input: { signupToken: string; username: string; password: string }) => {
+    async (input: { signupToken: string; username: string; password: string; birthDate: string }) => {
       await authApi.completeSignup(input);
       // The profile is built off a Kafka event; leaving now would let a quick
       // tap on "Profile" hit an account that is not there yet.

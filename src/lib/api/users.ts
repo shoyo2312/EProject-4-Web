@@ -77,6 +77,8 @@ export function updateMyProfile(patch: {
   displayName?: string;
   bio?: string;
   avatarUrl?: string;
+  /** `YYYY-MM-DD`, settable once: 409 `BIRTH_DATE_ALREADY_SET` after that, 400 `BIRTH_DATE_INVALID` under 13. */
+  birthDate?: string;
 }): Promise<UserProfileResponse> {
   return apiFetch<UserProfileResponse>("/users/me", {
     method: "PATCH",

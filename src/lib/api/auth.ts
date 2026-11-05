@@ -67,6 +67,8 @@ export async function completeSignup(input: {
   signupToken: string;
   username: string;
   password: string;
+  /** `YYYY-MM-DD`; 400 `BIRTH_DATE_INVALID` under 13. */
+  birthDate: string;
 }): Promise<TokenResponse> {
   const tokens = await apiFetch<TokenResponse>("/auth/register/complete", {
     method: "POST",

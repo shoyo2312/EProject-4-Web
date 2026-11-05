@@ -24,6 +24,7 @@ import {
   verifySignup,
 } from "@/lib/api/auth";
 import { closedAccountKind, isApiError, messageFor } from "@/lib/api/errors";
+import { toIsoBirthDate } from "@/lib/forms/birthday";
 import type { OtpSentResponse } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 import type { LoginOption } from "@/types/tiktok";
@@ -256,7 +257,12 @@ export function AuthModal({
   const createAccount = async (username: string, setFieldError: SetFieldError) => {
     try {
       // Closes the modal on success.
-      await signUp({ signupToken: draft.signupToken, username, password: draft.password });
+      await signUp({
+        signupToken: draft.signupToken,
+        username,
+        password: draft.password,
+        birthDate: toIsoBirthDate(draft.birthMonth, draft.birthDay, draft.birthYear),
+      });
     } catch (cause) {
       if (isApiError(cause) && cause.is("USERNAME_ALREADY_EXISTS")) {
         setFieldError("username", messageFor(cause));

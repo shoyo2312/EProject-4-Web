@@ -115,7 +115,7 @@ export function useWatchSession({
     // the way out, and there is no one left to tell. `recordWatch` sends it with
     // `keepalive`, which, unlike `sendBeacon`, carries the bearer header and
     // survives the tab closing.
-    void recordWatch(id, watchedMs.current, seconds * 1000).catch(() => undefined);
+    void recordWatch(id, watchedMs.current, seconds * 1000, "DIRECT").catch(() => undefined);
   }, []);
 
   // Scrolled away from: the card is no longer the one on screen. Resets rather
