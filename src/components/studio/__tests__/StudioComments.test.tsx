@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import StudioCommentsRoute from "@/app/studio/comment/page";
+import { StudioComments } from "@/components/studio/StudioComments";
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -14,7 +15,13 @@ vi.mock("@/components/ui/toast", () => ({ toast: { error: vi.fn(), success: vi.f
 vi.mock("@/hooks/use-comment-context", () => ({
   useCommentContext: () => ({ authors: new Map(), videos: new Map() }),
 }));
-vi.mock("@/lib/api/interactions", () => ({ addComment: vi.fn(), approveComment: vi.fn(), deleteComment: vi.fn() }));
+const deleteComment = vi.fn();
+vi.mock("@/lib/api/interactions", () => ({
+  addComment: vi.fn(),
+  approveComment: vi.fn(),
+  deleteComment: (...args: unknown[]) => deleteComment(...args),
+}));
+vi.mock("@/components/session/SessionProvider", () => ({ useSession: () => ({ user: { userId: "me" } }) }));
 
 const listInboxComments = vi.fn();
 vi.mock("@/lib/api/studio", () => ({
@@ -50,5 +57,48 @@ describe("/studio/comment route", () => {
   it("passes a real video id through", async () => {
     const element = await StudioCommentsRoute({ searchParams: Promise.resolve({ videoId: "7312458901234567" }) });
     expect(element.props.initialVideoId).toBe("7312458901234567");
+  });
+});
+
+describe("StudioComments — delete", () => {
+  const comment = (commentId: string, userId: string) => ({
+    commentId,
+    videoId: "v1",
+    userId,
+    content: `Comment ${commentId}`,
+    createdAt: "2026-11-01T00:00:00Z",
+    parentId: null,
+    replyToUserId: null,
+    likeCount: 0,
+    likedByMe: false,
+    replyCount: 0,
+  });
+
+  it("asks before deleting someone else's comment, and Cancel deletes nothing", async () => {
+    listInboxComments.mockResolvedValue({ items: [comment("c1", "someone")], nextCursor: null, hasMore: false });
+    deleteComment.mockResolvedValue(undefined);
+    render(<StudioComments />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    expect(screen.getByText("Delete this comment?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(deleteComment).not.toHaveBeenCalled();
+    expect(screen.queryByText("Delete this comment?")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    const confirm = screen.getAllByRole("button", { name: "Delete" }).at(-1)!;
+    fireEvent.click(confirm);
+    await waitFor(() => expect(screen.queryByText("Comment c1")).toBeNull());
+    expect(deleteComment).toHaveBeenCalledWith("v1", "c1");
+  });
+
+  it("deletes the creator's own comment without asking", async () => {
+    listInboxComments.mockResolvedValue({ items: [comment("c2", "me")], nextCursor: null, hasMore: false });
+    deleteComment.mockResolvedValue(undefined);
+    render(<StudioComments />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    expect(screen.queryByText("Delete this comment?")).toBeNull();
+    await waitFor(() => expect(deleteComment).toHaveBeenCalledWith("v1", "c2"));
   });
 });

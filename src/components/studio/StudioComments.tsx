@@ -3,9 +3,11 @@
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { useSession } from "@/components/session/SessionProvider";
 import { CommentRow } from "@/components/studio/CommentRow";
 import { DateRangeChip, type DayRange } from "@/components/studio/DateRangeChip";
 import { EmptyState, FilterChip, MenuOption, Popover, StudioCard, StudioSkeleton } from "@/components/studio/ui";
+import { Modal } from "@/components/ui/modal";
 import { toast } from "@/components/ui/toast";
 import { useCommentContext } from "@/hooks/use-comment-context";
 import { useDebounced } from "@/hooks/use-debounced";
@@ -189,10 +191,26 @@ function CommentActions({
   onApproved: (comment: CommentResponse) => void;
   onDeleted: (commentId: string) => void;
 }) {
+  const { user } = useSession();
   const [replying, setReplying] = useState(false);
   const [reply, setReply] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const fail = (cause: unknown) => toast.error(messageFor(cause));
   const action = "font-semibold text-black/65 hover:text-black";
+
+  const remove = () => {
+    setDeleting(true);
+    deleteComment(comment.videoId, comment.commentId)
+      .then(() => onDeleted(comment.commentId))
+      .catch(fail)
+      .finally(() => {
+        setDeleting(false);
+        setConfirming(false);
+      });
+  };
+  // Someone else's words can't be put back, so those ask first; the creator's own go at once.
+  const own = comment.userId === user?.userId;
 
   return (
     <>
@@ -209,17 +227,36 @@ function CommentActions({
           Reply
         </button>
       )}
-      <button
-        type="button"
-        className={action}
-        onClick={() =>
-          deleteComment(comment.videoId, comment.commentId)
-            .then(() => onDeleted(comment.commentId))
-            .catch(fail)
-        }
-      >
+      <button type="button" className={action} disabled={deleting} onClick={() => (own ? remove() : setConfirming(true))}>
         Delete
       </button>
+      {confirming && (
+        <Modal
+          onClose={() => !deleting && setConfirming(false)}
+          className="w-[400px] rounded-[8px] bg-white p-6 text-center text-black"
+        >
+          <p className="text-[20px] font-bold">Delete this comment?</p>
+          <p className="mt-2 text-[14px] text-black/65">It is removed from your post for everyone.</p>
+          <div className="mt-6 flex gap-3">
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => setConfirming(false)}
+              className="h-10 flex-1 rounded-[4px] border border-black/12 font-semibold hover:bg-black/3 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={remove}
+              className="h-10 flex-1 rounded-[4px] bg-[#fe2c55] font-semibold text-white hover:bg-[#ea284e] disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </Modal>
+      )}
       {replying && (
         <form
           className="flex flex-1 gap-2"
