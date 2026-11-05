@@ -7,7 +7,9 @@ import { ImagePlus } from "lucide-react";
 import { ArrowPostIcon, CloseIcon, EmojiIcon } from "@/components/icons";
 import { ChatPicker } from "@/components/messages/thread/ChatPicker";
 import { ReplyBar, type ReplyDraft } from "@/components/messages/thread/ReplyBar";
+import { StickerSuggestionBar } from "@/components/messages/thread/StickerSuggestionBar";
 import { useDismiss } from "@/hooks/use-dismiss";
+import { useStickerSuggestions } from "@/hooks/use-sticker-suggestions";
 import type { ImageView, StickerView } from "@/lib/api/conversations";
 import { isApiError } from "@/lib/api/errors";
 import { MAX_MESSAGE_LENGTH, chatErrorMessage, isSendable } from "@/lib/chat";
@@ -63,6 +65,9 @@ interface ImageDraft {
  * `clientRequestId` goes with every attempt, so a retry cannot post it twice. The draft belongs to the
  * conversation it was made in (the thread keys this component by conversation).
  *
+ * With `suggestionScope` (the conversation) a short message that names a feeling offers stickers over the box
+ * (`useStickerSuggestions`); a photo, a reply, the picker or a send in flight turn that off.
+ *
  * While `reply` is set a strip names the message being answered. Dropping it with its cross keeps the
  * draft; the reply itself is released by whoever owns it (`ThreadBody`) once a send has succeeded, so
  * a refused or cancelled send leaves both the text and the reply where they were.
@@ -80,6 +85,7 @@ export function Composer({
   incomingFile = null,
   reply = null,
   onCancelReply,
+  suggestionScope,
 }: {
   disabled: boolean;
   disabledReason?: string;
@@ -100,6 +106,8 @@ export function Composer({
   onSendImage?: (image: ImageSend) => Promise<ImageSendResult>;
   /** A file dropped on the thread; a new object each time, so the same file can be dropped twice. */
   incomingFile?: { file: File } | null;
+  /** Names the conversation that sticker suggestions are silenced for; without it there are none. */
+  suggestionScope?: string;
 }) {
   const [text, setText] = useState(draft);
   const [sending, setSending] = useState(false);
@@ -185,6 +193,11 @@ export function Composer({
   const busy = sending || stickerSending || imageBusy;
   const captionOk = text.trim().length <= MAX_CAPTION_LENGTH;
   const canSend = !disabled && !busy && (image ? captionOk : isSendable(text));
+  const suggestions = useStickerSuggestions({
+    scope: suggestionScope,
+    text,
+    enabled: !disabled && !busy && !pickerOpen && image === null && reply === null,
+  });
 
   /** Upload (once), then send. Any failure leaves the draft, the caption and the key as they were. */
   const submitImage = async (draft: ImageDraft) => {
@@ -233,6 +246,7 @@ export function Composer({
       return;
     }
     const content = text.trim();
+    suggestions.ignore();
     onTyping?.(false);
     setText("");
     setSending(true);
@@ -257,21 +271,36 @@ export function Composer({
     });
   };
 
-  const sendSticker = async (sticker: StickerView) => {
-    if (disabled || busy || stickerInFlight.current) return;
+  const sendSticker = async (sticker: StickerView): Promise<boolean> => {
+    if (disabled || busy || stickerInFlight.current) return false;
     stickerInFlight.current = true;
     setStickerSending(true);
+    let ok = false;
     try {
-      const ok = await onSendSticker(sticker);
+      ok = await onSendSticker(sticker);
       if (ok) setPickerOpen(false);
     } finally {
       stickerInFlight.current = false;
       setStickerSending(false);
     }
+    return ok;
+  };
+
+  const sendSuggestedSticker = async (sticker: StickerView) => {
+    if (await sendSticker(sticker)) suggestions.used();
   };
 
   return (
     <div ref={root} className="relative flex-none px-3 pt-1 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      {suggestions.stickers.length > 0 && (
+        <StickerSuggestionBar
+          stickers={suggestions.stickers}
+          disabled={busy}
+          onPick={(sticker) => void sendSuggestedSticker(sticker)}
+          onDismiss={suggestions.dismiss}
+        />
+      )}
+
       {pickerOpen && !disabled && (
         <div className="absolute right-5 bottom-full left-5 z-20 mb-2 ml-auto max-w-[372px] tt-768:right-3 tt-768:left-3 tt-768:max-w-none">
           <ChatPicker onEmoji={insertAtCaret} onSticker={(sticker) => void sendSticker(sticker)} stickerBusy={busy} />

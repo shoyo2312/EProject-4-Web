@@ -617,6 +617,31 @@ export function searchGiphyStickers(query: string, signal?: AbortSignal): Promis
   return apiFetch<StickerView[]>(`/conversations/stickers/giphy?${params.toString()}`, { auth: "required", signal });
 }
 
+/**
+ * A word list that earns a sticker suggestion while typing. The browser matches what is typed against
+ * `keywords` and `patterns` itself and names a topic by `id`, so the text never reaches the server.
+ */
+export interface SuggestionTopic {
+  id: string;
+  /** Words or phrases as written, with diacritics; both sides are normalised before they are compared. */
+  keywords: string[];
+  /** Regular expressions over one normalised word ("hahaha"). */
+  patterns: string[];
+}
+
+/** The topics that can earn a suggestion; changes rarely, so callers keep the answer. */
+export function fetchSuggestionTopics(signal?: AbortSignal): Promise<SuggestionTopic[]> {
+  return apiFetch<SuggestionTopic[]>("/conversations/stickers/suggestions/topics", { auth: "required", signal });
+}
+
+/** A few stickers for one topic, from a pool the server refreshes a few times a day. */
+export function fetchStickerSuggestions(topicId: string, signal?: AbortSignal): Promise<StickerView[]> {
+  return apiFetch<StickerView[]>(`/conversations/stickers/suggestions/${encodeURIComponent(topicId)}`, {
+    auth: "required",
+    signal,
+  });
+}
+
 /** The other participant's markers, for a sender to show "Delivered" and "Seen". */
 export async function getReceipts(conversationId: string, signal?: AbortSignal): Promise<Receipt> {
   const raw = await apiFetch<RawReceipt>(`/conversations/${conversationId}/messages/receipts`, {
