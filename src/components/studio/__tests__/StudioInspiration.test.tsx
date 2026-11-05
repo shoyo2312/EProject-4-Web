@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { creatorsOf, inCategory, StudioInspiration, TRENDING_REFRESH_MS } from "@/components/studio/StudioInspiration";
+import { APPROVAL_SETTLE_MS, creatorsOf, inCategory, StudioInspiration, TRENDING_REFRESH_MS } from "@/components/studio/StudioInspiration";
 import type { VideoResponse } from "@/lib/api/types";
 import { getOverlayCollection, getOverlayOrigin } from "@/lib/overlay-origin";
 
@@ -15,6 +15,12 @@ vi.mock("next/link", () => ({
 vi.mock("@/components/ui/toast", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 vi.mock("@/hooks/use-saved-videos", () => ({
   useSavedVideos: () => ({ isSaved: (id: string) => id === "2", wasSaved: () => false, toggleSave: vi.fn() }),
+}));
+
+/** The handler StudioInspiration hands `/topic/feed`, so a test can deliver a frame. */
+const stomp = vi.hoisted(() => ({ handlers: new Map<string, (frame: unknown) => void>() }));
+vi.mock("@/hooks/use-stomp-topic", () => ({
+  useStompTopic: (destination: string, onFrame: (frame: unknown) => void) => stomp.handlers.set(destination, onFrame),
 }));
 
 const getTrending = vi.fn();
@@ -164,6 +170,30 @@ describe("StudioInspiration — refresh", () => {
       await vi.advanceTimersByTimeAsync(TRENDING_REFRESH_MS);
       await waitFor(() => expect(screen.getAllByRole("link").map((l) => l.getAttribute("href"))).toEqual(["/video/1"]));
       expect(getTrending).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("StudioInspiration — approvals", () => {
+  it("fetches the chart again shortly after a video is approved, once for a burst", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      getTrending.mockResolvedValue([{ videoId: "1" }]);
+      echoBatch();
+      render(<StudioInspiration tab="trending" />);
+      await screen.findAllByRole("link");
+      expect(getTrending).toHaveBeenCalledTimes(1);
+
+      const onFrame = stomp.handlers.get("/topic/feed")!;
+      onFrame({ videoId: "7" });
+      onFrame({ videoId: "8" });
+      await vi.advanceTimersByTimeAsync(APPROVAL_SETTLE_MS - 100);
+      expect(getTrending).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(200);
+      await waitFor(() => expect(getTrending).toHaveBeenCalledTimes(2));
     } finally {
       vi.useRealTimers();
     }

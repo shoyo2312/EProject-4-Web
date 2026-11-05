@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { EmptyState, StudioSkeleton } from "@/components/studio/ui";
 import { toast } from "@/components/ui/toast";
 import { useSavedVideos } from "@/hooks/use-saved-videos";
+import { useStompTopic } from "@/hooks/use-stomp-topic";
 import { useStudioQuery } from "@/hooks/use-studio-query";
 import { messageFor } from "@/lib/api/errors";
 import { listSavedVideos } from "@/lib/api/interactions";
@@ -125,15 +126,29 @@ function Trending() {
 export const TRENDING_REFRESH_MS = 60_000;
 
 /**
- * Fetches the chart again every rebuild and when the tab comes back into view, so a post just
- * published or re-tagged shows up without a reload. No socket carries tags or chart changes, so
- * this polls; it skips hidden tabs. ponytail: polling, push from chat-service if a minute is too slow.
+ * How long after an approval frame the chart is fetched. chat-service and recommendation-service
+ * read the same verdict in separate consumer groups, so the frame can beat the ranking it announces.
+ * ponytail: a fixed wait; have recommendation-service announce its own rebuild if it ever lags more.
+ */
+export const APPROVAL_SETTLE_MS = 2_500;
+
+/**
+ * Fetches the chart again shortly after any video is approved (chat-service's `/topic/feed`
+ * frame; recommendation-service ranks it on the same verdict), and, as a fallback for a dropped
+ * socket or a re-tag, every rebuild and when the tab comes back into view. Hidden tabs skip the poll.
  */
 function useRefreshWhileOpen(reload: () => void) {
   const latest = useRef(reload);
+  const settle = useRef<number | undefined>(undefined);
   useEffect(() => {
     latest.current = reload;
   });
+  useStompTopic("/topic/feed", () => {
+    // A burst of approvals is one fetch, after the last of them.
+    window.clearTimeout(settle.current);
+    settle.current = window.setTimeout(() => latest.current(), APPROVAL_SETTLE_MS);
+  });
+  useEffect(() => () => window.clearTimeout(settle.current), []);
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState === "visible") latest.current();
