@@ -145,14 +145,19 @@ export function ProfileBody({
       setLastWatchedAway(null);
       return;
     }
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        setLastWatchedAway(null);
-        return;
-      }
-      const top = entry.rootBounds?.top ?? 0;
-      setLastWatchedAway(entry.boundingClientRect.top < top ? "above" : "below");
-    });
+    // Half the tile counts as on screen; a sliver at the edge does not, since
+    // the viewer cannot tell it is the one.
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.intersectionRatio >= 0.5) {
+          setLastWatchedAway(null);
+          return;
+        }
+        const top = entry.rootBounds?.top ?? 0;
+        setLastWatchedAway(entry.boundingClientRect.top < top ? "above" : "below");
+      },
+      { threshold: 0.5 },
+    );
     observer.observe(lastWatchedTile);
     return () => observer.disconnect();
   }, [lastWatchedTile]);
@@ -290,7 +295,7 @@ export function ProfileBody({
         <button
           type="button"
           onClick={() => lastWatchedTile.scrollIntoView({ behavior: "smooth", block: "center" })}
-          className="fixed right-10 bottom-10 z-20 flex h-12 items-center gap-2 rounded-full bg-[#fe2c55] px-6 text-[16px] font-semibold text-white shadow-[0_4px_12px_rgba(0,0,0,0.3)] hover:bg-[var(--tt-red-active)]"
+          className="fixed right-10 bottom-[88px] z-20 flex h-12 items-center gap-2 rounded-full bg-[#fe2c55] px-6 text-[16px] font-semibold text-white shadow-[0_4px_12px_rgba(0,0,0,0.3)] hover:bg-[var(--tt-red-active)]"
         >
           Just watched
           <DoubleChevronUpIcon
