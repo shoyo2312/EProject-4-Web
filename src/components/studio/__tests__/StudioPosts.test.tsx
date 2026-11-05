@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { StudioPosts } from "@/components/studio/StudioPosts";
+import { SETTLE_POLL_MS, StudioPosts } from "@/components/studio/StudioPosts";
 import type { PageResponse, VideoResponse } from "@/lib/api/types";
 
 vi.mock("next/link", () => ({
@@ -16,6 +16,11 @@ vi.mock("@/components/ui/toast", () => ({ toast: { error: vi.fn(), success: vi.f
 const listStudioPosts = vi.fn();
 vi.mock("@/lib/api/studio", () => ({
   listStudioPosts: (...args: unknown[]) => listStudioPosts(...args),
+}));
+const getVideo = vi.fn();
+vi.mock("@/lib/api/videos", async (original) => ({
+  ...(await original<typeof import("@/lib/api/videos")>()),
+  getVideo: (...args: unknown[]) => getVideo(...args),
 }));
 
 const post = (id: string, title: string): VideoResponse => ({
@@ -90,5 +95,32 @@ describe("StudioPosts", () => {
     expect(screen.queryByText("second of old")).toBeNull();
     expect(screen.getByText("only of new")).toBeTruthy();
     expect(loader()).toBeNull();
+  });
+});
+
+describe("StudioPosts — moderation status", () => {
+  it("refetches only the rows still being checked until their verdict lands", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const checking = { ...post("2", "Fresh upload"), status: "PENDING_MODERATION" as const };
+      listStudioPosts.mockResolvedValue(page([post("1", "Old post"), checking], 0, 1));
+      getVideo.mockResolvedValue({ ...checking, status: "PUBLISHED" });
+
+      render(<StudioPosts />);
+      await screen.findByText("Fresh upload");
+      expect(screen.getByText("Under review")).toBeTruthy();
+
+      await act(() => vi.advanceTimersByTimeAsync(SETTLE_POLL_MS));
+      expect(getVideo).toHaveBeenCalledTimes(1);
+      expect(getVideo.mock.calls[0][0]).toBe("2");
+      expect(screen.queryByText("Under review")).toBeNull();
+
+      // Settled: nothing left to poll.
+      await act(() => vi.advanceTimersByTimeAsync(SETTLE_POLL_MS * 3));
+      expect(getVideo).toHaveBeenCalledTimes(1);
+      expect(listStudioPosts).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

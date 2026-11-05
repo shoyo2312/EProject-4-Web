@@ -10,6 +10,7 @@ import { toast } from "@/components/ui/toast";
 import { useDebounced } from "@/hooks/use-debounced";
 import { messageFor } from "@/lib/api/errors";
 import { listStudioPosts, type StudioPostQuery } from "@/lib/api/studio";
+import { getVideo } from "@/lib/api/videos";
 import {
   isLastPage,
   type SortOrder,
@@ -31,6 +32,13 @@ const STATUSES: { value: VideoStatus; label: string }[] = [
   { value: "TAKEN_DOWN", label: "Taken down" },
   { value: "FAILED", label: "Upload failed" },
 ];
+
+/**
+ * Statuses the transcode and the automatic check move on by themselves, in seconds to minutes.
+ * PENDING_REVIEW waits on an admin, which can take hours, so it is not polled.
+ */
+const SETTLING = new Set<VideoStatus>(["PROCESSING", "PENDING_MODERATION"]);
+export const SETTLE_POLL_MS = 5_000;
 
 const PRIVACY_OPTIONS = VISIBILITIES.map((value) => ({ value, label: PRIVACY_LABEL[value] }));
 const NONE: never[] = [];
@@ -95,6 +103,24 @@ export function StudioPosts() {
 
   const replace = (video: VideoResponse) =>
     setPosts((current) => current?.map((item) => (item.id === video.id ? video : item)) ?? null);
+
+  // Rows the pipeline is still working on are fetched again until they settle, so a verdict
+  // shows up without a reload. Only those rows, by id: reloading the list would drop the pages
+  // "Load more" added. No socket carries every verdict to the owner, so this polls.
+  const settlingIds = posts?.filter((video) => SETTLING.has(video.status)).map((video) => video.id).join(",") ?? "";
+  useEffect(() => {
+    if (!settlingIds) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      for (const id of settlingIds.split(",")) {
+        getVideo(id)
+          .then((video) => setPosts((current) => current?.map((item) => (item.id === video.id ? video : item)) ?? null))
+          // A miss is tried again next tick; a deleted video leaves with the next list load.
+          .catch(() => {});
+      }
+    }, SETTLE_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [settlingIds]);
   const remove = (id: string) => setPosts((current) => current?.filter((item) => item.id !== id) ?? null);
   const filterBy =
     <K extends keyof PostFilters>(key: K) =>
