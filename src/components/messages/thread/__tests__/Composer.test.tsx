@@ -8,6 +8,7 @@ const { listStickerPacks } = vi.hoisted(() => ({ listStickerPacks: vi.fn<() => P
 vi.mock("@/lib/api/conversations", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/conversations")>()),
   listStickerPacks: () => listStickerPacks(),
+  searchGiphyStickers: () => Promise.resolve([]),
 }));
 
 import { Composer } from "@/components/messages/thread/Composer";
