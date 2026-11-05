@@ -2,15 +2,10 @@
 
 import { useState } from "react";
 
+import { StudioLineChart } from "@/components/studio/charts/StudioLineChart";
 import { StudioCard, StudioSkeleton } from "@/components/studio/ui";
 import { formatCount } from "@/lib/format";
-import {
-  changeLine,
-  dayLabel,
-  labelIndexes,
-  linePath,
-  niceMax,
-} from "@/lib/studio/metrics";
+import { changeLine, dayLabel } from "@/lib/studio/metrics";
 import { cn } from "@/lib/utils";
 
 export interface Metric {
@@ -21,10 +16,6 @@ export interface Metric {
   /** One value per day, oldest first; a metric without one shows no chart. */
   series?: number[];
 }
-
-const CHART_W = 1000;
-const CHART_H = 220;
-const BLUE = "#0075db";
 
 /**
  * TikTok's metric strip: one cell per metric, the picked one blue with a bar
@@ -90,7 +81,13 @@ export function MetricTabs({
       </div>
 
       {metric?.series ? (
-        <LineChart values={metric.series} days={days} />
+        <div className="px-6 pt-6 pb-4">
+          <StudioLineChart
+            points={metric.series.map((value, i) => ({ label: days[i], value }))}
+            formatLabel={dayLabel}
+            formatValue={formatCount}
+          />
+        </div>
       ) : (
         <div className="px-6 pt-6 pb-4">
           <StudioSkeleton className="h-[220px]" />
@@ -111,61 +108,3 @@ const PLACEHOLDER: Metric[] = [
   label,
   value: 0,
 }));
-
-/** The picked metric over the window: gridlines, the line, and day labels under it. */
-export function LineChart({
-  values,
-  days,
-}: {
-  values: number[];
-  days: string[];
-}) {
-  // At least 2, so the middle gridline is a whole number.
-  const max = Math.max(2, niceMax(Math.max(0, ...values)));
-  const labels = labelIndexes(days.length);
-
-  return (
-    <div className="px-6 pt-6 pb-4">
-      <div className="flex gap-3">
-        <svg
-          viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-          preserveAspectRatio="none"
-          className="h-[220px] min-w-0 flex-1 overflow-visible"
-        >
-          {[0, 0.5, 1].map((share) => (
-            <line
-              key={share}
-              x1={0}
-              x2={CHART_W}
-              y1={CHART_H * share}
-              y2={CHART_H * share}
-              stroke="rgba(0,0,0,0.12)"
-              strokeDasharray={share === 1 ? undefined : "4 4"}
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-          <path
-            d={linePath(values, CHART_W, CHART_H, max)}
-            fill="none"
-            stroke={BLUE}
-            strokeWidth={2}
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-        <div className="flex h-[220px] w-10 flex-none flex-col justify-between text-[12px] leading-none text-black/34">
-          <span>{formatCount(max)}</span>
-          <span>{formatCount(max / 2)}</span>
-          <span>0</span>
-        </div>
-      </div>
-      <div className="mt-2 mr-[52px] flex justify-between text-[12px] leading-4 text-black/50">
-        {labels.map((index) => (
-          <span key={index} className="whitespace-nowrap">
-            {dayLabel(days[index])}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
