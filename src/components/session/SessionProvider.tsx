@@ -458,7 +458,8 @@ export function SessionProvider({
     <SessionContext.Provider value={value}>
       {children}
 
-      <BirthdayPrompt />
+      {/* Keyed by viewer: a dismissal belongs to the account that dismissed it, not to the tab. */}
+      <BirthdayPrompt key={user?.userId ?? ""} />
 
       {loginModal.mounted && (
         <AuthModal

@@ -19,11 +19,14 @@ const BLUE = "#0075db";
  * under the x axis, and on hover a dashed cursor, a ringed dot, and a card with
  * the label over the value.
  *
+ * `formatTick` is the y axis's own format when the tooltip's `formatValue` is
+ * too long for a 48px column; it defaults to `formatValue`.
  * `width` is only for tests: in the page the chart fills its container.
  */
 export function StudioLineChart({
   points,
   formatValue = (value) => String(value),
+  formatTick = formatValue,
   formatLabel = (label) => label,
   height = 220,
   yDomain,
@@ -31,6 +34,7 @@ export function StudioLineChart({
 }: {
   points: ChartPoint[];
   formatValue?: (value: number) => string;
+  formatTick?: (value: number) => string;
   formatLabel?: (label: string, index: number) => string;
   height?: number;
   yDomain?: [number, number];
@@ -77,7 +81,7 @@ export function StudioLineChart({
           axisLine={false}
           tickMargin={8}
           tick={{ fill: "rgba(0,0,0,0.34)", fontSize: 12 }}
-          tickFormatter={(value: number) => formatValue(value)}
+          tickFormatter={(value: number) => formatTick(value)}
         />
         <Tooltip
           cursor={{ stroke: "rgba(0,0,0,0.3)", strokeDasharray: "4 4" }}

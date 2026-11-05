@@ -52,3 +52,21 @@ describe("StudioLineChart", () => {
     expect(container.querySelector(".recharts-wrapper")).toBeTruthy();
   });
 });
+
+describe("StudioLineChart axis", () => {
+  it("formatsTheAxisWithFormatTickWhenGiven", () => {
+    render(
+      <StudioLineChart
+        points={points}
+        yDomain={[0, 1]}
+        formatValue={(v) => `${v * 100}% still watching`}
+        formatTick={(v) => `${v * 100}%`}
+        width={320}
+        height={200}
+      />,
+    );
+
+    expect(screen.getAllByText("100%").length).toBeGreaterThan(0);
+    expect(screen.queryByText("100% still watching")).toBeNull();
+  });
+});

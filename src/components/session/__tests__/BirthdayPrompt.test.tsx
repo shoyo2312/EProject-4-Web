@@ -63,3 +63,14 @@ describe("BirthdayPrompt", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
+
+describe("BirthdayPrompt across sign-ins", () => {
+  it("asksAgainForTheNextViewer", () => {
+    const { rerender } = render(<BirthdayPrompt key="1" />);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    rerender(<BirthdayPrompt key="2" />);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+});

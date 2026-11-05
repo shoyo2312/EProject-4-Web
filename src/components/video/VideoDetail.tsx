@@ -507,7 +507,7 @@ export function VideoDetail({
               <CreatorVideosPanel
                 userId={creatorId}
                 currentVideoId={video.id}
-                onSelect={(id) => router.replace(`/video/${id}`)}
+                onSelect={(id) => router.replace(`/video/${id}${window.location.search}`)}
               />
             )}
           </div>

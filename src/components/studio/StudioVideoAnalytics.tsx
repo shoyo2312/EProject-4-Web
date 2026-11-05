@@ -185,6 +185,7 @@ function RetentionChart({ points, durationSeconds }: { points: number[]; duratio
         yDomain={[0, 1]}
         formatLabel={(_, i) => mark(i)}
         formatValue={(value) => `${Math.round(value * 100)}% still watching`}
+        formatTick={(value) => `${Math.round(value * 100)}%`}
       />
       {insight !== null && (
         <p className="text-[14px] leading-5 text-black/65">

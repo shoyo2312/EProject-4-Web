@@ -116,7 +116,8 @@ export const MONTHS = [
   "December",
 ] as const;
 
-export const MINIMUM_AGE = 18;
+/** The same floor the server enforces (`BirthDateRule`); the 13–17 age group exists for these accounts. */
+export const MINIMUM_AGE = 13;
 
 /**
  * The three birthday selects validate as one field: an error belongs under the

@@ -13,7 +13,12 @@ export function TrafficSources({ rows }: { rows: TrafficSourceRow[] }) {
       <SectionTitle>Traffic source</SectionTitle>
       <StudioCard className="p-6">
         <BarList
-          rows={sorted.map((row) => ({ key: row.source, label: TRAFFIC_SOURCE_LABELS[row.source], value: row.views }))}
+          rows={sorted.map((row) => ({
+            key: row.source,
+            // A source newer than this build still gets a label.
+            label: TRAFFIC_SOURCE_LABELS[row.source] ?? row.source,
+            value: row.views,
+          }))}
           total={total}
         />
       </StudioCard>
