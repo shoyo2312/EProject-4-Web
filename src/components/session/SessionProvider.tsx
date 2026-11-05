@@ -107,6 +107,11 @@ interface SessionValue {
     providerToken: string,
     options?: { reactivate?: boolean },
   ) => Promise<{ requiresEmail: boolean }>;
+  /**
+   * Finishes a QR sign-in: the phone approved and `pollQrLogin` has already
+   * stored this browser's tokens, so only the profile and the modal are left.
+   */
+  completeQrSignIn: () => Promise<void>;
   /** Second half of that 409: the same provider token, plus the mailed code. */
   confirmSocialLink: (
     provider: SocialProvider,
@@ -341,6 +346,11 @@ export function SessionProvider({
     [settleSignIn],
   );
 
+  const completeQrSignIn = useCallback(async () => {
+    await settleSignIn();
+    toast.success("You’re logged in.");
+  }, [settleSignIn]);
+
   const confirmSocialLink = useCallback(
     async (provider: SocialProvider, input: { token: string; otp: string }) => {
       const result = await authApi.confirmSocialLink(provider, input);
@@ -410,6 +420,7 @@ export function SessionProvider({
       signIn,
       signUp,
       signInWithProvider,
+      completeQrSignIn,
       confirmSocialLink,
       signOut,
       confirmSignOut: () => setLogoutConfirmOpen(true),
@@ -432,6 +443,7 @@ export function SessionProvider({
       signIn,
       signUp,
       signInWithProvider,
+      completeQrSignIn,
       confirmSocialLink,
       signOut,
       loadMe,

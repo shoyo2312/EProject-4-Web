@@ -37,6 +37,7 @@ import {
   ResetEmailStep,
 } from "./auth-modal/LoginSteps";
 import { Agreement, OptionsStep } from "./auth-modal/OptionsStep";
+import { QrStep } from "./auth-modal/QrStep";
 import { ReactivateStep } from "./auth-modal/ReactivateStep";
 import {
   EMPTY_DRAFT,
@@ -58,6 +59,8 @@ type CodeSent = { email: string; resendTicket: string | null };
 /** One screen of the modal. Each keeps what the screens after it need. */
 type AuthStep =
   | { name: "options" }
+  /** A code for the signed-in app to scan; the phone confirms the login. */
+  | { name: "qr" }
   | { name: "login-form"; identifier?: string }
   | { name: "reset-email" }
   | ({ name: "reset-code" } & CodeSent)
@@ -127,7 +130,7 @@ export function AuthModal({
   signupOptions: LoginOption[];
   onClose: () => void;
 }) {
-  const { signIn, signUp, reload } = useSession();
+  const { signIn, signUp, reload, completeQrSignIn } = useSession();
   const [flow, setFlow] = useState<Flow>("login");
   const [stack, setStack] = useState<AuthStep[]>([HOME]);
   const [draft, setDraft] = useState<SignupDraft>(EMPTY_DRAFT);
@@ -149,7 +152,14 @@ export function AuthModal({
    */
   const social = useSocialSignIn({
     onFallback: useCallback(
-      () => go(flow === "login" ? { name: "login-form" } : { name: "signup-details" }),
+      (option: LoginOption) =>
+        go(
+          option.icon === "qr"
+            ? { name: "qr" }
+            : flow === "login"
+              ? { name: "login-form" }
+              : { name: "signup-details" },
+        ),
       [go, flow],
     ),
     onEmailMissing: useCallback(() => setStack([{ name: "add-email" }]), []),
@@ -313,6 +323,9 @@ export function AuthModal({
             pending={social.pending}
           />
         );
+
+      case "qr":
+        return <QrStep onApproved={completeQrSignIn} />;
 
       case "login-form":
         return (
