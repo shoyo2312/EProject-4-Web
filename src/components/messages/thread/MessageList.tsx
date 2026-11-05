@@ -310,7 +310,6 @@ export function MessageList({
                     <div className={cn("flex flex-col gap-1", item.mine ? "items-end" : "items-start")}>
                       <VideoMessage
                         video={item.message.video}
-                        mine={item.mine}
                         onOpen={() => markOverlayOrigin(window.location.pathname + window.location.search, sharedVideoIds(messages))}
                       />
                       {item.message.content && (

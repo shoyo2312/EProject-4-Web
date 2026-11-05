@@ -3,6 +3,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { VideoCard } from "@/lib/api/conversations";
 
+vi.mock("@/lib/api/authors", () => ({
+  resolveAuthor: vi.fn(async (userId: string) => ({
+    userId,
+    username: userId,
+    nickname: "Học Cùng Tâm",
+    avatarUrl: "https://cdn.example/a.png",
+  })),
+}));
+
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
@@ -27,17 +36,24 @@ afterEach(cleanup);
 
 describe("VideoMessage", () => {
   it("is a link to the video's own page and does not play anything", () => {
-    const { container } = render(<VideoMessage video={card()} mine={false} />);
+    const { container } = render(<VideoMessage video={card()} />);
     const link = screen.getByRole("link", { name: /Cake/ });
     expect(link.getAttribute("href")).toBe("/video/77");
     expect(container.querySelector("video")).toBeNull();
     expect(container.querySelector("img")?.getAttribute("src")).toBe("https://cdn.example/t.jpg");
   });
 
+  it("shows the owner's avatar and name in place of the title, on one truncated line", async () => {
+    render(<VideoMessage video={card()} />);
+    const name = await screen.findByText("Học Cùng Tâm");
+    expect(name.className).toContain("truncate");
+    expect(screen.queryByText("Cake")).toBeNull();
+  });
+
   it("keeps the portrait card for an available video and a compact fixed notice when it cannot be shown", () => {
     const classes = [card(), card({ state: "UNAVAILABLE", thumbnailUrl: null, title: null }), card({ state: "UNKNOWN" })].map(
       (video) => {
-        const { container, unmount } = render(<VideoMessage video={video} mine />);
+        const { container, unmount } = render(<VideoMessage video={video} />);
         const className = (container.firstElementChild as HTMLElement).className;
         unmount();
         return className;
@@ -50,7 +66,7 @@ describe("VideoMessage", () => {
 
   it("shows a placeholder, and no thumbnail or title, for a video that is gone", () => {
     const { container } = render(
-      <VideoMessage video={card({ state: "UNAVAILABLE", thumbnailUrl: null, title: null })} mine={false} />,
+      <VideoMessage video={card({ state: "UNAVAILABLE", thumbnailUrl: null, title: null })} />,
     );
     expect(screen.getByRole("img", { name: "Video unavailable" })).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
@@ -58,20 +74,20 @@ describe("VideoMessage", () => {
   });
 
   it("says it could not load, not that it was deleted, when the video service did not answer", () => {
-    render(<VideoMessage video={card({ state: "UNKNOWN", thumbnailUrl: null, title: null })} mine={false} />);
+    render(<VideoMessage video={card({ state: "UNKNOWN", thumbnailUrl: null, title: null })} />);
     expect(screen.getByRole("img", { name: /couldn't be loaded/i })).toBeTruthy();
     expect(screen.queryByText(/isn't available/i)).toBeNull();
   });
 
   it("keeps the card when its thumbnail fails to load", () => {
-    const { container } = render(<VideoMessage video={card()} mine={false} />);
+    const { container } = render(<VideoMessage video={card()} />);
     fireEvent.error(container.querySelector("img") as HTMLImageElement);
-    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector('img[src="https://cdn.example/t.jpg"]')).toBeNull();
     expect(screen.getByRole("link", { name: /Cake/ })).toBeTruthy();
   });
 
   it("treats a missing card as unavailable", () => {
-    render(<VideoMessage video={null} mine={false} />);
+    render(<VideoMessage video={null} />);
     expect(screen.getByRole("img", { name: "Video unavailable" })).toBeTruthy();
   });
 });
