@@ -42,7 +42,7 @@ export function ConversationList({ openId, inPanel = false }: { openId: string |
         <ConversationSearch value={query} onChange={setQuery} />
       </header>
 
-      <nav aria-label="Conversations" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-4">
+      <nav aria-label="Conversations" className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-2.5 pb-4">
         {requestSummary.pending > 0 && !needle && (
           <MessageRequestsEntry pending={requestSummary.pending} unread={requestSummary.unread} />
         )}

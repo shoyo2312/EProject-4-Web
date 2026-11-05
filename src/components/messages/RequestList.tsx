@@ -35,7 +35,7 @@ export function RequestList({ openId, inPanel = false }: { openId: string | null
         <h1 className="text-[22px] leading-7 font-bold text-[var(--tt-text)]">Message requests</h1>
       </header>
 
-      <nav aria-label="Message requests" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-4">
+      <nav aria-label="Message requests" className="no-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-4">
         {status === "loading" ? (
           <ListSkeleton />
         ) : status === "error" && requests.length === 0 ? (
