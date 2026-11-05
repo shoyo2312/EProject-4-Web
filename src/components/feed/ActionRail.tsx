@@ -79,7 +79,7 @@ export function ActionRail({
     isSelf,
     following,
     toggle: toggleFollow,
-  } = useFollow(video.author.userId, video.isFollowing);
+  } = useFollow(video.author.userId, video.isFollowing, { sourceVideoId: video.id });
   const [shareOpen, setShareOpen] = useState(false);
   const [extraShares, setExtraShares] = useState(0);
 

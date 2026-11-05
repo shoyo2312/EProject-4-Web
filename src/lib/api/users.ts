@@ -206,11 +206,17 @@ export function peekFollowState(userId: string): boolean | undefined {
   return followState.get(userId);
 }
 
-export async function follow(userId: string): Promise<FollowResponse> {
+/**
+ * `POST /api/v1/users/{userId}/follow`. `sourceVideoId` is the video the viewer
+ * followed from, when there was one: Studio credits the follow to it, through a
+ * private account's request too.
+ */
+export async function follow(userId: string, sourceVideoId?: string): Promise<FollowResponse> {
   try {
     const result = await apiFetch<FollowResponse>(`/users/${userId}/follow`, {
       method: "POST",
       auth: "required",
+      ...(sourceVideoId ? { body: { sourceVideoId } } : {}),
     });
     // A private account only records a request: "Following" would be a lie.
     setFollowState(userId, result.status === "FOLLOWING");

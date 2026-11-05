@@ -35,11 +35,14 @@ interface FollowControl {
  * detail page's button both ask the same question about the same account.
  *
  * @param initial what the card was rendered with, used until the server answers.
+ * @param options.sourceVideoId the video the control sits on, so Studio can credit the follow to it.
  */
 export function useFollow(
   authorId: string,
   initial = false,
+  options: { sourceVideoId?: string } = {},
 ): FollowControl {
+  const { sourceVideoId } = options;
   const { user, requireSignIn } = useSession();
   const viewerId = user?.userId;
   const isSelf = authorId === viewerId;
@@ -106,7 +109,7 @@ export function useFollow(
     // A private account answers REQUESTED, and `follow` has already moved the
     // cache — so every card by this author — off "Following" onto "Requested".
     const request = next
-      ? follow(authorId).then(({ status }) => {
+      ? follow(authorId, sourceVideoId).then(({ status }) => {
           if (status === "REQUESTED") toast.success("Follow request sent.");
         })
       : unfollow(authorId);
@@ -119,7 +122,7 @@ export function useFollow(
       setFollowing(following);
       setRequested(stillRequested);
     });
-  }, [authorId, following, requested, requireSignIn]);
+  }, [authorId, following, requested, requireSignIn, sourceVideoId]);
 
   // Nothing to look up when signed out or on your own account.
   const ready = isSelf || !viewerId || answered;
