@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 
 import { useVideoRealtime } from "@/hooks/use-video-realtime";
 import { isApiError } from "@/lib/api/errors";
@@ -26,8 +26,10 @@ export function useVideoChanges(
   videoIds: string[],
   handlers: { onUpdated: (video: VideoResponse) => void; onDeleted: (videoId: string) => void },
 ): void {
+  // Swapped in the commit itself: a change announced between a commit and its passive effects
+  // (a task later) must reach the handlers of the rows on screen, not the previous render's.
   const handler = useRef(handlers);
-  useEffect(() => {
+  useLayoutEffect(() => {
     handler.current = handlers;
   });
 

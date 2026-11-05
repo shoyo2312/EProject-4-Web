@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { cleanup, render, renderHook, waitFor } from "@testing-library/react";
+import { useEffect, useState } from "react";
 
 import { useVideoChanges } from "@/hooks/use-video-changes";
 import { ApiError } from "@/lib/api/errors";
@@ -84,6 +85,39 @@ describe("useVideoChanges", () => {
     expect(getVideo).not.toHaveBeenCalled();
     expect(onUpdated).not.toHaveBeenCalled();
     expect(onDeleted).not.toHaveBeenCalled();
+  });
+
+  it("reaches the handler of the render just committed, before that render's effects have run", async () => {
+    // A list re-rendered by an API answer commits its rows, then runs its effects in a later task. A
+    // change announced in between must still see those rows, not the previous render's.
+    const seen: string[] = [];
+    function List() {
+      const [rows, setRows] = useState("none");
+      useEffect(() => {
+        void Promise.resolve().then(() => setRows("loaded"));
+      }, []);
+      useVideoChanges(["1"], { onUpdated: () => seen.push(rows), onDeleted: () => {} });
+      return <p>{rows}</p>;
+    }
+    // Outside act: the answer's render goes through React's own scheduler, as in the app.
+    const flags = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const actEnvironment = flags.IS_REACT_ACT_ENVIRONMENT;
+    flags.IS_REACT_ACT_ENVIRONMENT = false;
+    try {
+      const { container } = render(<List />);
+      await new Promise<void>((done) => {
+        new MutationObserver((_, observer) => {
+          if (container.textContent !== "loaded") return;
+          observer.disconnect();
+          announceVideoChange({ kind: "updated", video: video("1") });
+          done();
+        }).observe(container, { childList: true, subtree: true, characterData: true });
+      });
+    } finally {
+      flags.IS_REACT_ACT_ENVIRONMENT = actEnvironment;
+    }
+
+    expect(seen).toEqual(["loaded"]);
   });
 
   it("rechecks every video when the tab comes back, dropping the ones no longer there", async () => {
