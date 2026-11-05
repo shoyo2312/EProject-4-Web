@@ -34,12 +34,14 @@ const listComments = vi.fn();
 const addComment = vi.fn();
 const listHeldComments = vi.fn();
 const getCommentPermission = vi.fn();
+const deleteComment = vi.fn();
 vi.mock("@/lib/api/interactions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api/interactions")>()),
   listComments: (...args: unknown[]) => listComments(...args),
   addComment: (...args: unknown[]) => addComment(...args),
   listHeldComments: (...args: unknown[]) => listHeldComments(...args),
   getCommentPermission: (...args: unknown[]) => getCommentPermission(...args),
+  deleteComment: (...args: unknown[]) => deleteComment(...args),
 }));
 
 beforeEach(() => {
@@ -195,5 +197,27 @@ describe("CommentPanel", () => {
     await screen.findByDisplayValue("hi");
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Post comment" }).disabled).toBe(false);
     expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks before deleting a comment, and Cancel keeps it", async () => {
+    listComments.mockResolvedValue({ items: [comment({ userId: "1" })], nextCursor: null, hasMore: false });
+    deleteComment.mockResolvedValue(undefined);
+    const { onCommentDeleted } = renderPanel();
+
+    await screen.findByText("first");
+    fireEvent.click(screen.getByRole("button", { name: "More options" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    expect(screen.getByText("Delete comment?")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(deleteComment).not.toHaveBeenCalled();
+    expect(screen.getByText("first")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "More options" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(screen.queryByText("first")).toBeNull());
+    expect(deleteComment).toHaveBeenCalledWith(VIDEO, "5");
+    expect(onCommentDeleted).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,7 +3,6 @@
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { useSession } from "@/components/session/SessionProvider";
 import { CommentRow } from "@/components/studio/CommentRow";
 import { DateRangeChip, type DayRange } from "@/components/studio/DateRangeChip";
 import { EmptyState, FilterChip, MenuOption, Popover, StudioCard, StudioSkeleton } from "@/components/studio/ui";
@@ -192,7 +191,6 @@ function CommentActions({
   onApproved: (comment: CommentResponse) => void;
   onDeleted: (commentId: string) => void;
 }) {
-  const { user } = useSession();
   const [replying, setReplying] = useState(false);
   const [reply, setReply] = useState("");
   const [confirming, setConfirming] = useState(false);
@@ -210,8 +208,6 @@ function CommentActions({
         setConfirming(false);
       });
   };
-  // Someone else's words can't be put back, so those ask first; the creator's own go at once.
-  const own = comment.userId === user?.userId;
 
   return (
     <>
@@ -228,7 +224,8 @@ function CommentActions({
           Reply
         </button>
       )}
-      <button type="button" className={action} disabled={deleting} onClick={() => (own ? remove() : setConfirming(true))}>
+      {/* Always asks: a deletion cannot be undone, and Delete sits right beside Reply/Approve. */}
+      <button type="button" className={action} disabled={deleting} onClick={() => setConfirming(true)}>
         Delete
       </button>
       {confirming && (

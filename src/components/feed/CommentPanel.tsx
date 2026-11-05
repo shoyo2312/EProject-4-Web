@@ -14,6 +14,7 @@ import {
 import type { PostFailure, ReplyTarget } from "@/components/feed/comments/types";
 import { useCommentThread } from "@/components/feed/comments/use-comment-thread";
 import { CloseIcon } from "@/components/icons";
+import { ConfirmDialog } from "@/components/messages/ConfirmDialog";
 import { useSession } from "@/components/session/SessionProvider";
 import { toast } from "@/components/ui/toast";
 import { useCommentRestriction } from "@/hooks/use-comment-restriction";
@@ -215,6 +216,8 @@ export function CommentPanel({
     return postBackendComment(text, replyTo);
   };
 
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
+
   const deleteOwnComment = async (id: string) => {
     invalidateCommentPage(videoId);
     const previous = comments;
@@ -299,10 +302,31 @@ export function CommentPanel({
             justAddedId={justAddedId}
             currentUserId={user?.userId}
             canModerate={isOwner}
-            onDelete={deleteOwnComment}
+            onDelete={setConfirmingDelete}
             onRepliesLoaded={appendReplies}
           />
         ))}
+
+        {/* Every delete asks first — a reply's included, they share this handler. The delete
+            itself is optimistic, so the dialog closes at once and a failure puts the row back. */}
+        {confirmingDelete && (
+          <ConfirmDialog
+            title="Delete comment?"
+            confirmLabel="Delete"
+            busyLabel="Deleting…"
+            danger
+            busy={false}
+            error={null}
+            onCancel={() => setConfirmingDelete(null)}
+            onConfirm={() => {
+              const id = confirmingDelete;
+              setConfirmingDelete(null);
+              void deleteOwnComment(id);
+            }}
+          >
+            It will be removed for everyone. This can’t be undone.
+          </ConfirmDialog>
+        )}
 
         {hasMore && (
           <button

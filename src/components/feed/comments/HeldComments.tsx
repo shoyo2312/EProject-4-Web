@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
 import { CommentText } from "@/components/feed/comments/CommentStates";
+import { ConfirmDialog } from "@/components/messages/ConfirmDialog";
 import { toast } from "@/components/ui/toast";
 import { isApiError, messageFor } from "@/lib/api/errors";
 import { approveComment, deleteComment, listHeldComments } from "@/lib/api/interactions";
@@ -38,6 +39,7 @@ export function HeldComments({
   const [loadingMore, setLoadingMore] = useState(false);
   /** Comments with an approve or delete in flight — a second tap would count twice. */
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -158,7 +160,7 @@ export function HeldComments({
                     </button>
                     <button
                       type="button"
-                      onClick={() => void review(ui.id, false)}
+                      onClick={() => setConfirmingDelete(ui.id)}
                       disabled={busy.has(ui.id)}
                       aria-label={`Delete comment by ${ui.author.nickname}`}
                       className="h-7 rounded-full bg-[var(--tt-field)] px-3 text-[13px] font-semibold text-[var(--tt-text)] transition-colors hover:bg-[var(--tt-shape-neutral-3)] disabled:opacity-40"
@@ -181,6 +183,26 @@ export function HeldComments({
             </button>
           )}
         </div>
+      )}
+
+      {/* Approve stays one tap; Delete sits right beside it and cannot be undone. */}
+      {confirmingDelete && (
+        <ConfirmDialog
+          title="Delete comment?"
+          confirmLabel="Delete"
+          busyLabel="Deleting…"
+          danger
+          busy={false}
+          error={null}
+          onCancel={() => setConfirmingDelete(null)}
+          onConfirm={() => {
+            const id = confirmingDelete;
+            setConfirmingDelete(null);
+            void review(id, false);
+          }}
+        >
+          It will be removed for good. This can’t be undone.
+        </ConfirmDialog>
       )}
     </div>
   );

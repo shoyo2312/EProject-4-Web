@@ -84,15 +84,29 @@ describe("HeldComments", () => {
     expect(screen.getByText("bit.ly/x")).toBeTruthy();
   });
 
-  it("deleting a comment rejects it without counting it", async () => {
+  it("deleting a comment asks first, then rejects it without counting it", async () => {
     deleteComment.mockResolvedValue(undefined);
     const onApproved = await openQueue();
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Delete/ })[1]);
+    expect(screen.getByText("Delete comment?")).toBeTruthy();
+    expect(deleteComment).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     await waitFor(() => expect(screen.queryByText("bit.ly/x")).toBeNull());
     expect(deleteComment).toHaveBeenCalledWith(VIDEO, "12");
     expect(onApproved).not.toHaveBeenCalled();
+  });
+
+  it("deletes nothing when the confirmation is cancelled", async () => {
+    await openQueue();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /^Delete/ })[1]);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByText("Delete comment?")).toBeNull();
+    expect(screen.getByText("bit.ly/x")).toBeTruthy();
+    expect(deleteComment).not.toHaveBeenCalled();
   });
 
   it("drops a comment that is gone by the time it is approved", async () => {

@@ -21,7 +21,6 @@ vi.mock("@/lib/api/interactions", () => ({
   approveComment: vi.fn(),
   deleteComment: (...args: unknown[]) => deleteComment(...args),
 }));
-vi.mock("@/components/session/SessionProvider", () => ({ useSession: () => ({ user: { userId: "me" } }) }));
 
 const listInboxComments = vi.fn();
 vi.mock("@/lib/api/studio", () => ({
@@ -92,13 +91,16 @@ describe("StudioComments — delete", () => {
     expect(deleteComment).toHaveBeenCalledWith("v1", "c1");
   });
 
-  it("deletes the creator's own comment without asking", async () => {
+  it("asks before deleting the creator's own comment too", async () => {
     listInboxComments.mockResolvedValue({ items: [comment("c2", "me")], nextCursor: null, hasMore: false });
     deleteComment.mockResolvedValue(undefined);
     render(<StudioComments />);
 
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
-    expect(screen.queryByText("Delete this comment?")).toBeNull();
+    expect(screen.getByText("Delete this comment?")).toBeTruthy();
+    expect(deleteComment).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" }).at(-1)!);
     await waitFor(() => expect(deleteComment).toHaveBeenCalledWith("v1", "c2"));
   });
 });
