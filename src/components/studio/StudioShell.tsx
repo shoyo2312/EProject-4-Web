@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   FolderMinus,
   House,
+  Lightbulb,
   LogOut,
   MessageCircleMore,
   SquareActivity,
@@ -27,11 +28,19 @@ const NAV = [
   { href: "/studio/comment", label: "Comments", icon: MessageCircleMore, exact: false },
 ] as const;
 
+const TOOLS = [{ href: "/studio/inspiration", label: "Inspiration", icon: Lightbulb, exact: false }] as const;
+
 /** The tabs analytics carries in the header, as TikTok does. Followers has no backend yet. */
 const ANALYTICS_TABS = [
   { href: "/studio/analytics", label: "Overview" },
   { href: "/studio/analytics/content", label: "Content" },
   { href: "/studio/analytics/viewers", label: "Viewers" },
+] as const;
+
+/** Inspiration's tabs. TikTok's third, Recommended, has no backend yet. */
+const INSPIRATION_TABS = [
+  { href: "/studio/inspiration", label: "Trending" },
+  { href: "/studio/inspiration/mine", label: "My inspiration" },
 ] as const;
 
 /**
@@ -103,11 +112,30 @@ function StudioNav() {
         Upload
       </Link>
 
+      <NavSection title="Manage" items={NAV} pathname={pathname} />
+      <NavSection title="Tools" items={TOOLS} pathname={pathname} />
+
+      <Link
+        href="/"
+        className="mt-auto flex items-center gap-1 text-[14px] leading-[18px] font-medium text-black/65 hover:text-black"
+      >
+        <ChevronLeft className="h-4 w-4" />
+        Back to Nowa
+      </Link>
+    </nav>
+  );
+}
+
+type NavItem = { href: string; label: string; icon: typeof House; exact: boolean };
+
+function NavSection({ title, items, pathname }: { title: string; items: readonly NavItem[]; pathname: string }) {
+  return (
+    <>
       <p className="mt-6 mb-2 pl-0.5 text-[10px] leading-[13px] font-bold text-black/34 uppercase">
-        Manage
+        {title}
       </p>
       <ul className="flex flex-col gap-1">
-        {NAV.map(({ href, label, icon: Icon, exact }) => {
+        {items.map(({ href, label, icon: Icon, exact }) => {
           const active = exact ? pathname === href : pathname.startsWith(href);
           return (
             <li key={href}>
@@ -128,15 +156,7 @@ function StudioNav() {
           );
         })}
       </ul>
-
-      <Link
-        href="/"
-        className="mt-auto flex items-center gap-1 text-[14px] leading-[18px] font-medium text-black/65 hover:text-black"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Back to Nowa
-      </Link>
-    </nav>
+    </>
   );
 }
 
@@ -144,27 +164,31 @@ function StudioHeader() {
   const pathname = usePathname();
   const { days, setDays } = useStudioRange();
   const onAnalyticsTab = ANALYTICS_TABS.some((tab) => tab.href === pathname);
+  const tabs = onAnalyticsTab
+    ? ANALYTICS_TABS
+    : INSPIRATION_TABS.some((tab) => tab.href === pathname)
+      ? INSPIRATION_TABS
+      : [];
 
   return (
     <header className="flex h-[68px] flex-none items-center justify-between gap-6 border-b border-black/8 px-8">
       <nav className="flex h-full items-stretch gap-6">
-        {onAnalyticsTab &&
-          ANALYTICS_TABS.map((tab) => {
-            const active = tab.href === pathname;
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex items-center border-b-2 pt-0.5 text-[14px] font-medium transition-colors",
-                  active ? "border-black text-black" : "border-transparent text-black/34 hover:text-black/65",
-                )}
-              >
-                {tab.label}
-              </Link>
-            );
-          })}
+        {tabs.map((tab) => {
+          const active = tab.href === pathname;
+          return (
+            <Link
+              key={tab.href}
+              href={tab.href}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "flex items-center border-b-2 pt-0.5 text-[14px] font-medium transition-colors",
+                active ? "border-black text-black" : "border-transparent text-black/34 hover:text-black/65",
+              )}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="flex items-center gap-3">

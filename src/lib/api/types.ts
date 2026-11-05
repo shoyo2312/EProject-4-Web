@@ -343,6 +343,8 @@ export interface VideoResponse {
    */
   width: number | null;
   height: number | null;
+  /** Normalised by video-service: lowercase, no leading `#`. Optional: older cached rows lack it. */
+  tags?: string[];
   createdAt: string;
   /** When the owner pinned it to the top of their profile; null or absent when not pinned. */
   pinnedAt?: string | null;
