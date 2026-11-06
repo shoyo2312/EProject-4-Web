@@ -11,7 +11,9 @@ import { useChatUnreadContext } from "@/components/messages/ChatUnreadProvider";
 import { useSession } from "@/components/session/SessionProvider";
 import { MessagesIcon } from "@/components/icons";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useChatDrafts } from "@/hooks/use-chat-drafts";
 import { useHoverCapable } from "@/hooks/use-hover-capable";
+import { draftPreview } from "@/lib/chat-drafts";
 import type { ConversationResponse } from "@/lib/api/conversations";
 import { formatListTime, isMuted, messagePreview, otherParticipantId } from "@/lib/chat";
 import { cn } from "@/lib/utils";
@@ -148,6 +150,8 @@ export function ConversationRow({
   withMenu?: boolean;
 }) {
   const preview = messagePreview(item, me);
+  const drafts = useChatDrafts(me);
+  const draftText = drafts[item.id] ? draftPreview(drafts[item.id]) : "";
   const { nowMs } = useChatUnreadContext();
   const hover = useHoverCapable();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -205,7 +209,14 @@ export function ConversationRow({
                 : "text-[var(--chat-meta)]",
             )}
           >
-            {preview}
+            {draftText ? (
+              <>
+                <span className="font-semibold text-[var(--tt-red)]">Draft: </span>
+                {draftText}
+              </>
+            ) : (
+              preview
+            )}
           </span>
           {pinned && <Pin aria-label="Pinned" className="ml-auto h-3 w-3 flex-none -rotate-45 text-[var(--chat-meta)]" />}
           {muted && <BellOff aria-label="Notifications muted" className={cn("h-3 w-3 flex-none text-[var(--chat-meta)]", !pinned && "ml-auto")} />}
