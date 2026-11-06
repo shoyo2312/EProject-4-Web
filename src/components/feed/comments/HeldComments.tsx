@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ChevronDown } from "lucide-react";
 
@@ -16,8 +16,9 @@ import { cn } from "@/lib/utils";
 /**
  * The video owner's review queue, above the thread: comments the text rules
  * held — a link, a phone number, milder profanity — until the owner approves or
- * deletes them. Only the owner sees them, and nothing announces a new one, so
- * the queue is read once each time the panel opens.
+ * deletes them. Only the owner sees them, and nothing announces a new one (a
+ * held comment publishes no event), so the first page is read again every
+ * `HELD_POLL_MS` while the panel is open and the tab visible.
  *
  * Approving counts the comment here (`onApproved`); the thread itself gets the
  * row from the realtime frame the approval publishes, like any new comment.
@@ -25,6 +26,9 @@ import { cn } from "@/lib/utils";
  * ponytail: a queue emptied by hand while more pages wait behind it hides until
  * the next open. Fetch the next page on empty if owners clear queues that long.
  */
+/** How soon a newly held comment shows in an open panel. */
+export const HELD_POLL_MS = 5_000;
+
 export function HeldComments({
   videoId,
   onApproved,
@@ -40,6 +44,12 @@ export function HeldComments({
   /** Comments with an approve or delete in flight — a second tap would count twice. */
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
+  /**
+   * Every id this queue has shown. A poll adds only ids never seen, so one the
+   * owner approved or deleted meanwhile is not brought back by a poll that left
+   * before that landed.
+   */
+  const seen = useRef(new Set<string>());
 
   useEffect(() => {
     let cancelled = false;
@@ -47,14 +57,34 @@ export function HeldComments({
       .then(async (page) => {
         const entries = await toUiComments(page.items);
         if (cancelled) return;
+        seen.current = new Set(entries.map((entry) => entry.ui.id));
         setHeld(entries);
         setCursor(page.hasMore ? page.nextCursor : null);
       })
       .catch(() => {
         // No queue to show: a blip, or ownership the server could not confirm.
       });
+
+    // New ones go on top; the cursor still points past the pages already read.
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      listHeldComments(videoId)
+        .then(async (page) => {
+          const fresh = page.items.filter((comment) => !seen.current.has(comment.commentId));
+          if (fresh.length === 0) return;
+          const entries = await toUiComments(fresh);
+          if (cancelled) return;
+          const added = entries.filter((entry) => !seen.current.has(entry.ui.id));
+          added.forEach((entry) => seen.current.add(entry.ui.id));
+          if (added.length > 0) setHeld((current) => [...added, ...current]);
+        })
+        // Tried again next tick.
+        .catch(() => {});
+    }, HELD_POLL_MS);
+
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
   }, [videoId]);
 
@@ -63,7 +93,9 @@ export function HeldComments({
     setLoadingMore(true);
     try {
       const page = await listHeldComments(videoId, cursor);
-      const entries = await toUiComments(page.items);
+      // A poll may already have put one of these on top.
+      const entries = (await toUiComments(page.items)).filter((entry) => !seen.current.has(entry.ui.id));
+      entries.forEach((entry) => seen.current.add(entry.ui.id));
       setHeld((current) => [...current, ...entries]);
       setCursor(page.hasMore ? page.nextCursor : null);
     } catch {

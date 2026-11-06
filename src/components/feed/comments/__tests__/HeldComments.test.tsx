@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { HeldComments } from "@/components/feed/comments/HeldComments";
+import { HELD_POLL_MS, HeldComments } from "@/components/feed/comments/HeldComments";
 import { toast } from "@/components/ui/toast";
 import { ApiError } from "@/lib/api/errors";
 import type { CommentResponse } from "@/lib/api/types";
@@ -143,5 +143,25 @@ describe("HeldComments", () => {
     expect(await screen.findByText("fb88 vào đây")).toBeTruthy();
     expect(listHeldComments).toHaveBeenLastCalledWith(VIDEO, "c1");
     expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
+  });
+});
+
+describe("HeldComments — while open", () => {
+  it("adds a comment held while the panel is open, once", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await openQueue();
+      listHeldComments.mockResolvedValue(
+        page([held("13", "new link"), held("11", "call me 0912"), held("12", "bit.ly/x")]),
+      );
+
+      await act(() => vi.advanceTimersByTimeAsync(HELD_POLL_MS));
+
+      expect(await screen.findByText("new link")).toBeTruthy();
+      expect(screen.getAllByText("call me 0912")).toHaveLength(1);
+      expect(screen.getByRole("button", { name: /3 comments held for review/ })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

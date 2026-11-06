@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import StudioCommentsRoute from "@/app/studio/comment/page";
 import { StudioComments } from "@/components/studio/StudioComments";
+import { INBOX_POLL_MS } from "@/hooks/use-inbox-comments";
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -140,5 +141,42 @@ describe("Studio comment inbox", () => {
     fireEvent.click(button);
 
     expect(listInboxComments).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("Studio comment inbox — while open", () => {
+  it("puts a comment that arrives meanwhile on top, held ones included, without a reload", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const comment = (commentId: string, content: string, status: string) => ({
+        commentId,
+        videoId: "1001",
+        userId: "3",
+        content,
+        createdAt: "2026-11-05T00:00:00Z",
+        parentId: null,
+        replyToUserId: null,
+        likeCount: 0,
+        likedByMe: false,
+        replyCount: 0,
+        status,
+      });
+      listInboxComments
+        .mockResolvedValueOnce({ items: [comment("c1", "older", "VISIBLE")], nextCursor: null, hasMore: false })
+        .mockResolvedValue({
+          items: [comment("c2", "just held", "HELD"), comment("c1", "older", "VISIBLE")],
+          nextCursor: null,
+          hasMore: false,
+        });
+      render(<StudioComments />);
+      await screen.findByText("older");
+
+      await act(() => vi.advanceTimersByTimeAsync(INBOX_POLL_MS));
+
+      expect(await screen.findByText("just held")).toBeTruthy();
+      expect(screen.getAllByText("older")).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
