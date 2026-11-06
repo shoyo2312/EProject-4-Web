@@ -4,6 +4,7 @@ import { ImageOff, Play, RotateCw } from "lucide-react";
 import { useState } from "react";
 
 import { useChatUnreadContext } from "@/components/messages/ChatUnreadProvider";
+import { useSession } from "@/components/session/SessionProvider";
 import { useStories } from "@/components/stories/StoriesProvider";
 import { toast } from "@/components/ui/toast";
 import { unknownAuthor } from "@/lib/api/adapters";
@@ -41,6 +42,7 @@ export function StoryReplyMessage({
 function StoryPreview({ story }: { story: StoryCard | null | undefined }) {
   const { openStories } = useStories();
   const { authors } = useChatUnreadContext();
+  const { user } = useSession();
   const [failed, setFailed] = useState<string | null>(null);
 
   if (!story || story.state !== "AVAILABLE" || !story.mediaUrl) {
@@ -64,7 +66,9 @@ function StoryPreview({ story }: { story: StoryCard | null | undefined }) {
   const broken = failed === story.mediaUrl;
   const open = async () => {
     const owner = story.ownerId ?? "";
-    if (!(await openStories(authors.get(owner) ?? unknownAuthor(owner)))) {
+    // `authors` only holds the other side of each chat; a reply to your own story names you.
+    const author = authors.get(owner) ?? (user?.userId === owner ? user : unknownAuthor(owner));
+    if (!(await openStories(author))) {
       toast.error("This story isn't available anymore");
     }
   };

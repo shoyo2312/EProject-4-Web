@@ -4,7 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { StoryReplyMessage } from "@/components/messages/thread/StoryReplyMessage";
 import type { StoryCard } from "@/lib/api/conversations";
 
-const { openStories, toastError } = vi.hoisted(() => ({ openStories: vi.fn(), toastError: vi.fn() }));
+const { openStories, toastError, session } = vi.hoisted(() => ({
+  openStories: vi.fn(),
+  toastError: vi.fn(),
+  session: { user: null as null | { userId: string; username: string; nickname: string; avatarUrl: string } },
+}));
+vi.mock("@/components/session/SessionProvider", () => ({ useSession: () => session }));
 vi.mock("@/components/stories/StoriesProvider", () => ({ useStories: () => ({ openStories }) }));
 vi.mock("@/components/messages/ChatUnreadProvider", () => ({ useChatUnreadContext: () => ({ authors: new Map() }) }));
 vi.mock("@/components/ui/toast", () => ({ toast: { error: toastError } }));
@@ -12,6 +17,7 @@ vi.mock("@/components/ui/toast", () => ({ toast: { error: toastError } }));
 afterEach(() => {
   cleanup();
   openStories.mockReset();
+  session.user = null;
 });
 
 const available: StoryCard = { storyId: "s1", state: "AVAILABLE", ownerId: "7", mediaType: "IMAGE", mediaUrl: "https://signed/s1" };
@@ -69,5 +75,13 @@ describe("StoryReplyMessage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open story" }));
     expect(openStories).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("This story isn't available anymore"));
+  });
+
+  it("a reply to your own story opens it under your name, not a placeholder", () => {
+    session.user = { userId: "7", username: "me", nickname: "Me", avatarUrl: "/me.png" };
+    openStories.mockResolvedValue(true);
+    render(<StoryReplyMessage story={available} mine={false} text="x" bubbleClassName="b" />);
+    fireEvent.click(screen.getByRole("button", { name: "Open story" }));
+    expect(openStories).toHaveBeenCalledWith(expect.objectContaining({ userId: "7", username: "me" }));
   });
 });
