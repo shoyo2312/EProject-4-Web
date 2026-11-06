@@ -38,6 +38,7 @@ import {
   quoteText,
   retryAvailableAfter,
 } from "@/lib/chat";
+import { clearDraft, flushDrafts, getDraft, saveDraft } from "@/lib/chat-drafts";
 import { firstImage } from "@/lib/chat-image";
 import { isWindowActive, setViewing } from "@/lib/chat-viewing";
 import { isApiError } from "@/lib/api/errors";
@@ -75,7 +76,10 @@ export function ThreadBody({
   // The server's word for this conversation, the viewer's block list only while it could not tell.
   const blockedByMe = conversation.blockedByViewer ?? blockedUsers.has(otherId);
   const messagingBlocked = blockedByMe || conversation.messagingBlocked === true;
-  const [draft, setDraft] = useState({ conversationId, text: "" });
+  const [draft, setDraft] = useState(() => ({ conversationId, text: getDraft(me, conversationId) }));
+  /** True while a text send is out: the composer empties its box at once, but the saved draft goes only once the send succeeds. */
+  const textSendInFlight = useRef(false);
+  useEffect(() => () => flushDrafts(), []);
   const [unblocking, setUnblocking] = useState(false);
   const [unblockError, setUnblockError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<unknown>(null);
@@ -319,16 +323,28 @@ export function ThreadBody({
         locked={locked}
         blockedByMe={blockedByMe}
         messagingBlocked={messagingBlocked}
-        draft={draft.conversationId === conversationId ? draft.text : ""}
+        draft={draft.conversationId === conversationId ? draft.text : getDraft(me, conversationId)}
         onTyping={typing.input}
-        onDraftChange={(text) => setDraft({ conversationId, text })}
+        onDraftChange={(text) => {
+          setDraft({ conversationId, text });
+          if (!(textSendInFlight.current && text === "")) saveDraft(me, conversationId, text);
+        }}
         unblocking={unblocking}
         unblockError={unblockError}
         onUnblock={() => void unblockNow()}
         ready={thread.status === "ready"}
         reply={reply}
         onCancelReply={() => setReplyId(null)}
-        onSend={(content) => send({ type: "TEXT", content })}
+        onSend={async (content) => {
+          textSendInFlight.current = true;
+          try {
+            const ok = await send({ type: "TEXT", content });
+            if (ok) clearDraft(me, conversationId);
+            return ok;
+          } finally {
+            textSendInFlight.current = false;
+          }
+        }}
         onSendSticker={(sticker) => send({ type: "STICKER", stickerId: sticker.stickerId })}
         photos={{ onUploadImage: uploadImage, onSendImage: sendImage, incomingFile: dropped }}
       />
