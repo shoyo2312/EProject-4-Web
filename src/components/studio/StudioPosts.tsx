@@ -51,6 +51,8 @@ const STATUSES: { value: VideoStatus; label: string }[] = [
  */
 const SETTLING = new Set<VideoStatus>(["PROCESSING", "PENDING_MODERATION"]);
 export const SETTLE_POLL_MS = 5_000;
+/** How soon a new post, a count or a reviewer's verdict shows without a reload. */
+export const POSTS_POLL_MS = 5_000;
 
 const PRIVACY_OPTIONS = VISIBILITIES.map((value) => ({ value, label: PRIVACY_LABEL[value] }));
 const NONE: never[] = [];
@@ -138,13 +140,19 @@ export function StudioPosts() {
       });
   };
 
-  const replace = (video: VideoResponse) =>
+  // Bumped by every change made here; a poll that left before one would undo it, so it is dropped.
+  const edits = useRef(0);
+  const replace = (video: VideoResponse) => {
+    edits.current += 1;
     setPosts(
       (current) =>
         current?.map((item) => (item.id === video.id ? video : item)) ?? null,
     );
-  const remove = (id: string) =>
+  };
+  const remove = (id: string) => {
+    edits.current += 1;
     setPosts((current) => current?.filter((item) => item.id !== id) ?? null);
+  };
   /**
    * The default order leads with pinned posts (video-service sorts them first), so a pin or unpin
    * moves the row: the first page is asked again for the server's order. Under a column the owner
@@ -183,6 +191,25 @@ export function StudioPosts() {
     }, SETTLE_POLL_MS);
     return () => window.clearInterval(timer);
   }, [settlingIds]);
+  // The first page is read again for new posts and fresh counts; nothing pushes either to the owner.
+  // Its rows go on top and replace their old copies, so pages "Load more" added stay below.
+  useEffect(() => {
+    if (loading) return;
+    const timer = window.setInterval(() => {
+      const signal = controller.current?.signal;
+      if (!signal || signal.aborted || document.visibilityState !== "visible") return;
+      const before = edits.current;
+      listStudioPosts({ ...query, page: 0, size: PAGE_SIZE }, signal)
+        .then((result) => {
+          if (signal.aborted || edits.current !== before) return;
+          const top = new Set(result.content.map((item) => item.id));
+          setPosts((current) => [...result.content, ...(current ?? []).filter((item) => !top.has(item.id))]);
+        })
+        // Tried again next tick.
+        .catch(() => {});
+    }, POSTS_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [loading, query]);
   const filterBy =
     <K extends keyof PostFilters>(key: K) =>
     (value: PostFilters[K]) =>
