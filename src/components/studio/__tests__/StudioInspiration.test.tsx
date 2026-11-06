@@ -12,7 +12,10 @@ vi.mock("next/link", () => ({
     </a>
   ),
 }));
-vi.mock("@/components/ui/toast", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+const toastCustom = vi.fn();
+vi.mock("@/components/ui/toast", () => ({
+  toast: { error: vi.fn(), success: vi.fn(), custom: (...a: unknown[]) => toastCustom(...a) },
+}));
 vi.mock("@/hooks/use-saved-videos", () => ({
   useSavedVideos: () => ({ isSaved: (id: string) => id === "2", wasSaved: () => false, toggleSave: vi.fn() }),
 }));
@@ -58,6 +61,21 @@ describe("StudioInspiration — trending posts", () => {
     fireEvent.click(links[0]);
     expect(getOverlayOrigin()).toBe(window.location.pathname);
     expect(getOverlayCollection()).toEqual(["1", "2"]);
+  });
+
+  it("confirms a save with a toast, as TikTok does, and a removal with none", async () => {
+    getTrending.mockResolvedValue([{ videoId: "1" }, { videoId: "2" }]);
+    echoBatch();
+    render(<StudioInspiration tab="trending" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Remove from My inspiration" }));
+    expect(toastCustom).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add to My inspiration" }));
+    expect(toastCustom).toHaveBeenCalledTimes(1);
+    const toastBody = (toastCustom.mock.calls[0][0] as () => React.ReactElement)();
+    render(toastBody);
+    expect(screen.getByText("Added to “My inspiration”")).toBeTruthy();
   });
 
   it("hydrates the chart 50 ids at a time, the batch endpoint's cap", async () => {

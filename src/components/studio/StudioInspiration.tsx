@@ -376,12 +376,25 @@ function PostsGrid({ videos, ranked }: { videos: VideoResponse[]; ranked: boolea
             video={video}
             rank={ranked ? index + 1 : undefined}
             saved={isSaved(video.id)}
-            onToggleSave={() => toggleSave(video.id)}
+            onToggleSave={() => {
+              // TikTok confirms an add only; on a removal the emptied bookmark says enough.
+              if (!isSaved(video.id)) toast.custom(() => <AddedToast />);
+              toggleSave(video.id);
+            }}
             onOpen={open}
           />
         </li>
       ))}
     </ul>
+  );
+}
+
+/** TikTok Studio's save toast: a dark pill, no icon, no close button (custom toasts get none). */
+function AddedToast() {
+  return (
+    <div className="mx-auto w-fit rounded-[12px] bg-[#3a3a3a] px-4 py-3 text-[16px] leading-[21px] text-[#f6f6f6] shadow-[0_2px_12px_rgba(0,0,0,0.12)]">
+      Added to “My inspiration”
+    </div>
   );
 }
 
