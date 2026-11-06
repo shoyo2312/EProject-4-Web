@@ -8,6 +8,8 @@ import type {
   MeResponse,
   OtpSentResponse,
   PasswordResetTicketResponse,
+  QrLoginCreatedResponse,
+  QrLoginStatusResponse,
   SignupTicketResponse,
   SocialLoginResponse,
   TokenResponse,
@@ -365,4 +367,32 @@ export function changeUsername(username: string): Promise<AccountResponse> {
     body: { username },
     auth: "required",
   });
+}
+
+/**
+ * `POST /api/v1/auth/qr` — a code for the signed-in app to scan. The
+ * `pollToken` stays in this page: it is what collects the session, so it must
+ * never be put in the image.
+ */
+export function createQrLogin(): Promise<QrLoginCreatedResponse> {
+  return apiFetch<QrLoginCreatedResponse>("/auth/qr", { method: "POST", auth: "none" });
+}
+
+/**
+ * `POST /api/v1/auth/qr/{id}/status` — where the code stands. The APPROVED
+ * answer carries this browser's session exactly once, and it is stored here
+ * like any other login's.
+ */
+export async function pollQrLogin(qrId: string, pollToken: string): Promise<QrLoginStatusResponse> {
+  const result = await apiFetch<QrLoginStatusResponse>(
+    `/auth/qr/${encodeURIComponent(qrId)}/status`,
+    { method: "POST", body: { pollToken }, auth: "none" },
+  );
+  if (result.status === "APPROVED" && result.tokens) {
+    storeTokens({
+      accessToken: result.tokens.accessToken,
+      refreshToken: result.tokens.refreshToken,
+    });
+  }
+  return result;
 }

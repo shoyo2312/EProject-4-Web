@@ -65,6 +65,23 @@ export interface TokenResponse {
   expiresInMillis: number;
 }
 
+/** `POST /auth/qr` — a code for this browser to show. Only `qrContent` goes in the image. */
+export interface QrLoginCreatedResponse {
+  qrId: string;
+  pollToken: string;
+  qrContent: string;
+  expiresAt: string;
+}
+
+export type QrLoginStatus = "PENDING" | "SCANNED" | "APPROVED" | "REJECTED" | "EXPIRED";
+
+/** `POST /auth/qr/{id}/status` — `tokens` only on the single APPROVED answer. */
+export interface QrLoginStatusResponse {
+  status: QrLoginStatus;
+  username: string | null;
+  tokens: TokenResponse | null;
+}
+
 /** `POST /auth/register/verify` — proof the mailbox was verified. */
 export interface SignupTicketResponse {
   signupToken: string;
