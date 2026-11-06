@@ -13,7 +13,7 @@ import { MessagesLink } from "@/components/messages/MessagesLink";
 import { PanelNavContext, useMessagesPanel } from "@/components/messages/panel/MessagesPanelProvider";
 import { RequestList } from "@/components/messages/RequestList";
 import { useSession } from "@/components/session/SessionProvider";
-import { otherParticipantId } from "@/lib/chat";
+import { isMuted, otherParticipantId } from "@/lib/chat";
 import { holdPlayback } from "@/lib/playback-hold";
 import { panelReservedWidth, PANEL_THREAD_WIDTH } from "@/lib/messages-panel";
 import { cn } from "@/lib/utils";
@@ -168,7 +168,7 @@ function PanelButton({
 /** Compact thread view: the people you talk to as avatars, the open one ringed. */
 function AvatarRail({ openId }: { openId: string }) {
   const { user } = useSession();
-  const { conversations, authors } = useChatUnreadContext();
+  const { conversations, authors, nowMs } = useChatUnreadContext();
   const me = user?.userId ?? "";
   return (
     <nav aria-label="Conversations" className="no-scrollbar flex min-h-0 flex-1 flex-col items-center gap-2 overflow-y-auto overscroll-contain py-4">
@@ -186,8 +186,8 @@ function AvatarRail({ openId }: { openId: string }) {
               active ? "bg-[var(--chat-active)] ring-2 ring-[var(--tt-red)]" : "hover:bg-[var(--chat-hover)]",
             )}
           >
-            <ChatAvatar userId={otherParticipantId(item, me)} src={author?.avatarUrl} className="h-9 w-9" />
-            {item.hasUnread && (
+            <ChatAvatar userId={otherParticipantId(item, me)} name={author?.nickname} src={author?.avatarUrl} className="h-9 w-9" />
+            {item.hasUnread && !isMuted(item, nowMs) && (
               <span aria-hidden className="absolute top-0.5 right-0.5 h-2.5 w-2.5 rounded-full bg-[var(--tt-red)]" />
             )}
           </MessagesLink>

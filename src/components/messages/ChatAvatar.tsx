@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useState, type MouseEvent, type ReactNode } from "react";
 
-import { useStoryRing } from "@/components/stories/StoriesProvider";
+import { useStories, useStoryRing } from "@/components/stories/StoriesProvider";
 import { StoryRing } from "@/components/stories/StoryRing";
 import { DEFAULT_AVATAR } from "@/lib/api/adapters";
 import { cn } from "@/lib/utils";
@@ -15,10 +16,13 @@ import { cn } from "@/lib/utils";
 export function ChatAvatar({
   src,
   userId,
+  name,
   className,
 }: {
   src: string | undefined;
   userId?: string;
+  /** The account's display name, for the story button's label. */
+  name?: string;
   className?: string;
 }) {
   const ring = useStoryRing(userId ?? "");
@@ -41,10 +45,55 @@ export function ChatAvatar({
   if (ring === "none") return image;
 
   return (
-    <span className={cn("inline-flex flex-none rounded-full", className)}>
+    <WatchableRing userId={userId ?? ""} name={name} avatarUrl={shown} className={className}>
       <StoryRing state={ring} fill>
         {image}
       </StoryRing>
-    </span>
+    </WatchableRing>
+  );
+}
+
+/**
+ * The ringed avatar as a button that plays the owner's stories right where it is; if they turn out
+ * to be gone it goes to the profile instead. Apart from `ChatAvatar` because `useRouter` throws
+ * outside an app router, and an avatar with no ring must not need one.
+ */
+function WatchableRing({
+  userId,
+  name,
+  avatarUrl,
+  className,
+  children,
+}: {
+  userId: string;
+  name?: string;
+  avatarUrl: string | undefined;
+  className?: string;
+  children: ReactNode;
+}) {
+  const router = useRouter();
+  const { openStories } = useStories();
+  const nickname = name ?? "this account";
+
+  async function watch(event: MouseEvent) {
+    // The avatar sits inside a conversation link or a profile link: the click is for the stories.
+    event.preventDefault();
+    event.stopPropagation();
+    const opened = await openStories({ userId, username: userId, nickname, avatarUrl: avatarUrl ?? DEFAULT_AVATAR });
+    if (!opened) router.push(`/@${userId}`);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={watch}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+      }}
+      aria-label={`Watch ${nickname}'s stories`}
+      className={cn("inline-flex flex-none rounded-full", className)}
+    >
+      {children}
+    </button>
   );
 }

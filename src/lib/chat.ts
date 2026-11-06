@@ -383,6 +383,30 @@ export function isMuted(
   );
 }
 
+/**
+ * What the muted state reads as: "Muted until you turn it back on", or when a timed mute ends and how
+ * long is left ("Notifications back on at 8:30 PM · 2h 15m left"). Null when not muted. The end time is
+ * the server's instant shown in the viewer's own timezone; the remaining time comes from `nowMs`.
+ */
+export function muteStatus(
+  conversation: Pick<ConversationResponse, "muteMode" | "mutedUntil">,
+  nowMs: number,
+): string | null {
+  if (!isMuted(conversation, nowMs)) return null;
+  if (conversation.muteMode === "INDEFINITE" || conversation.mutedUntil === null) {
+    return "Notifications off until you turn them back on";
+  }
+  const end = Date.parse(conversation.mutedUntil);
+  const minutes = Math.max(1, Math.ceil((end - nowMs) / 60_000));
+  const hours = Math.floor(minutes / 60);
+  const left = hours > 0 ? `${hours}h ${minutes % 60}m left` : `${minutes}m left`;
+  const at = new Date(end);
+  const sameDay = startOfDay(at) === startOfDay(new Date(nowMs));
+  const clock = at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const when = sameDay ? clock : `${at.toLocaleDateString(undefined, { day: "numeric", month: "short" })}, ${clock}`;
+  return `Notifications back on at ${when} · ${left}`;
+}
+
 /** The soonest end of a timed mute still in force, to wake the UI up for; null when there is none. */
 export function nextMuteExpiry(conversations: readonly ConversationResponse[], nowMs: number): number | null {
   let soonest: number | null = null;
@@ -686,6 +710,10 @@ export function placeConversation(
 }
 
 /** Messages in a request thread are the other side's alone, so the box's counters read the list itself. */
-export function requestCounts(requests: readonly ConversationResponse[]): { pending: number; unread: number } {
-  return { pending: requests.length, unread: requests.filter((c) => c.hasUnread).length };
+export function requestCounts(
+  requests: readonly ConversationResponse[],
+  nowMs: number = Date.now(),
+): { pending: number; unread: number } {
+  // A muted request is still pending, but it does not add to the badge.
+  return { pending: requests.length, unread: requests.filter((c) => c.hasUnread && !isMuted(c, nowMs)).length };
 }

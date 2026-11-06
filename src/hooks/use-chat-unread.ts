@@ -44,7 +44,6 @@ import {
   needsTail,
   reconcile,
   saveUnread,
-  unreadTotal,
   type UnreadState,
 } from "@/lib/chat-unread";
 import { isLastPage } from "@/lib/api/types";
@@ -498,12 +497,23 @@ export function useChatUnread(me: string | null): ChatUnread {
     return () => document.removeEventListener("visibilitychange", refresh);
   }, []);
 
-  const total = useMemo(() => unreadTotal(state), [state]);
-  const byConversation = useMemo(
-    () => Object.fromEntries(Object.entries(state.unread).map(([id, entry]) => [id, entry.ids.length])),
-    [state],
+  // The badges (sidebar, bubbles) leave out muted conversations; `state` keeps the real unread run, so
+  // opening Messages, or unmuting, shows the true counts and nothing is marked read by muting.
+  const mutedIds = useMemo(
+    () => new Set(lists.inbox.filter((c) => isMuted(c, nowMs)).map((c) => c.id)),
+    [lists.inbox, nowMs],
   );
-  const requestSummary = useMemo(() => requestCounts(lists.requests), [lists.requests]);
+  const byConversation = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(state.unread)
+          .filter(([id]) => !mutedIds.has(id))
+          .map(([id, entry]) => [id, entry.ids.length]),
+      ),
+    [state, mutedIds],
+  );
+  const total = useMemo(() => Object.values(byConversation).reduce((sum, n) => sum + n, 0), [byConversation]);
+  const requestSummary = useMemo(() => requestCounts(lists.requests, nowMs), [lists.requests, nowMs]);
   const reload = useCallback(() => void sync(), [sync]);
 
   return useMemo(

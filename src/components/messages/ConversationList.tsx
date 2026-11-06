@@ -175,7 +175,7 @@ export function ConversationRow({
         withMenu && !hover && "pr-12",
       )}
     >
-      <ChatAvatar userId={otherParticipantId(item, me)} src={author?.avatarUrl} className="h-12 w-12" />
+      <ChatAvatar userId={otherParticipantId(item, me)} name={author?.nickname} src={author?.avatarUrl} className="h-12 w-12" />
 
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">
@@ -220,7 +220,8 @@ export function ConversationRow({
           </span>
           {pinned && <Pin aria-label="Pinned" className="ml-auto h-3 w-3 flex-none -rotate-45 text-[var(--chat-meta)]" />}
           {muted && <BellOff aria-label="Notifications muted" className={cn("h-3 w-3 flex-none text-[var(--chat-meta)]", !pinned && "ml-auto")} />}
-          {item.hasUnread &&
+          {/* A muted thread keeps its bold "unread" text but raises no red dot or count. */}
+          {item.hasUnread && !muted &&
             (unreadAsCount ? (
               <span className="ml-auto flex-none">
                 <CountBadge count={1} label="Unread" />
