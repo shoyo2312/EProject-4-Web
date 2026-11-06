@@ -4,6 +4,8 @@ import { Bookmark, Heart, Play, User } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { CreatorPreview } from "@/components/studio/CreatorPreview";
+import { onPlainClick, useOpenStudioVideo } from "@/components/studio/StudioVideoModal";
 import { EmptyState, StudioSkeleton } from "@/components/studio/ui";
 import { toast } from "@/components/ui/toast";
 import { useSavedVideos } from "@/hooks/use-saved-videos";
@@ -16,7 +18,6 @@ import type { UserProfileResponse, VideoResponse } from "@/lib/api/types";
 import { getProfiles } from "@/lib/api/users";
 import { getVideosByIds } from "@/lib/api/videos";
 import { formatCount } from "@/lib/format";
-import { markOverlayOrigin } from "@/lib/overlay-origin";
 import { EXPLORE_CATEGORIES, EXPLORE_CATEGORY_HASHTAGS } from "@/lib/site-config";
 import { cn } from "@/lib/utils";
 
@@ -242,32 +243,31 @@ function CreatorCard({
       <User className="h-4 w-4" strokeWidth={2} />
     </span>
   );
-  const open = () => markOverlayOrigin(window.location.pathname, videos.map((video) => video.id));
+  const openVideo = useOpenStudioVideo();
+  const ids = videos.map((video) => video.id);
+  const [previewing, setPreviewing] = useState(false);
 
   return (
     <div className="relative flex flex-col gap-3 rounded-[12px] border border-black/8 bg-white p-4">
       {rank !== undefined && <RankBadge rank={rank} className="top-0 left-0 -translate-x-1/3 -translate-y-1/3" />}
       <div className="flex items-center gap-2.5">
-        {/* The profile opens in a new tab, as Studio's own Profile link does. */}
-        {profile.username ? (
-          <Link href={`/@${profile.username}`} target="_blank" className="flex-none hover:opacity-80">
-            {avatar}
-          </Link>
-        ) : (
-          avatar
-        )}
-        <span className="flex min-w-0 flex-1 flex-col">
-          {profile.username ? (
-            <Link
-              href={`/@${profile.username}`}
-              target="_blank"
-              className="truncate text-[15px] leading-5 font-semibold text-black hover:underline"
-            >
-              {name}
-            </Link>
-          ) : (
-            <span className="truncate text-[15px] leading-5 font-semibold text-black">{name}</span>
-          )}
+        {/* The account opens in a popup over Studio, as on TikTok, not on its profile page. */}
+        <button
+          type="button"
+          onClick={() => setPreviewing(true)}
+          aria-label={`Preview ${name}`}
+          className="flex-none hover:opacity-80"
+        >
+          {avatar}
+        </button>
+        <span className="flex min-w-0 flex-1 flex-col items-start">
+          <button
+            type="button"
+            onClick={() => setPreviewing(true)}
+            className="max-w-full truncate text-left text-[15px] leading-5 font-semibold text-black hover:underline"
+          >
+            {name}
+          </button>
           {profile.bio && <span className="truncate text-[12px] leading-4 text-black/50">{profile.bio}</span>}
         </span>
         <span className="flex flex-none flex-col items-end">
@@ -281,7 +281,7 @@ function CreatorCard({
           <Link
             key={video.id}
             href={`/video/${video.id}`}
-            onClick={open}
+            onClick={onPlainClick(() => openVideo(video.id, ids))}
             className="relative block aspect-[3/4] overflow-hidden rounded-[6px] bg-black/8 hover:opacity-90"
           >
             {video.thumbnailUrl && (
@@ -295,6 +295,7 @@ function CreatorCard({
           </Link>
         ))}
       </div>
+      {previewing && <CreatorPreview profile={profile} onClose={() => setPreviewing(false)} />}
     </div>
   );
 }
@@ -365,8 +366,9 @@ const POSTS_GRID = "grid grid-cols-[repeat(auto-fill,minmax(176px,1fr))] gap-x-4
 
 function PostsGrid({ videos, ranked }: { videos: VideoResponse[]; ranked: boolean }) {
   const { isSaved, toggleSave } = useSavedVideos();
-  // Close on the video page goes back here, and its up/down step through this grid.
-  const open = () => markOverlayOrigin(window.location.pathname, videos.map((video) => video.id));
+  // Opens in Studio's player, as a cover on Posts does; its up/down step through this grid.
+  const openVideo = useOpenStudioVideo();
+  const ids = videos.map((video) => video.id);
 
   return (
     <ul className={POSTS_GRID}>
@@ -381,7 +383,7 @@ function PostsGrid({ videos, ranked }: { videos: VideoResponse[]; ranked: boolea
               if (!isSaved(video.id)) toast.custom(() => <AddedToast />);
               toggleSave(video.id);
             }}
-            onOpen={open}
+            onOpen={onPlainClick(() => openVideo(video.id, ids))}
           />
         </li>
       ))}
@@ -426,7 +428,7 @@ function PostCard({
   rank: number | undefined;
   saved: boolean;
   onToggleSave: () => void;
-  onOpen: () => void;
+  onOpen: (event: React.MouseEvent) => void;
 }) {
   return (
     <div className="group relative flex flex-col gap-2">

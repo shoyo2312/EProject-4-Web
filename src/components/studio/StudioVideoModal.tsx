@@ -41,6 +41,18 @@ export function useOpenStudioVideo(): Open {
 }
 
 /**
+ * For a cover that stays a link to `/video/{id}`: a plain click opens the post in Studio's
+ * player, while a ctrl/cmd/shift or middle click still opens the public page in a new tab.
+ */
+export function onPlainClick(open: () => void) {
+  return (event: React.MouseEvent) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    open();
+  };
+}
+
+/**
  * TikTok Studio never sends a creator to the public video page: a cover click
  * opens this modal over the page, and the URL stays put. `ids` is the list the
  * cover sat in, for the up/down arrows; without it there are none.

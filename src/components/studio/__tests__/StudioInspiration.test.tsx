@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 import { APPROVAL_SETTLE_MS, creatorsOf, inCategory, StudioInspiration, TRENDING_REFRESH_MS } from "@/components/studio/StudioInspiration";
 import type { VideoResponse } from "@/lib/api/types";
-import { getOverlayCollection, getOverlayOrigin } from "@/lib/overlay-origin";
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -11,6 +10,11 @@ vi.mock("next/link", () => ({
       {children}
     </a>
   ),
+}));
+const openVideo = vi.fn();
+vi.mock("@/components/studio/StudioVideoModal", async (original) => ({
+  ...(await original<typeof import("@/components/studio/StudioVideoModal")>()),
+  useOpenStudioVideo: () => openVideo,
 }));
 const toastCustom = vi.fn();
 vi.mock("@/components/ui/toast", () => ({
@@ -32,7 +36,16 @@ const getVideosByIds = vi.fn();
 const getProfiles = vi.fn();
 vi.mock("@/lib/api/recommendations", () => ({ getTrending: (...a: unknown[]) => getTrending(...a) }));
 vi.mock("@/lib/api/interactions", () => ({ listSavedVideos: (...a: unknown[]) => listSavedVideos(...a) }));
-vi.mock("@/lib/api/videos", () => ({ getVideosByIds: (...a: unknown[]) => getVideosByIds(...a) }));
+const getUserVideos = vi.fn();
+const getUserVideoStats = vi.fn();
+vi.mock("@/lib/api/videos", () => ({
+  getVideosByIds: (...a: unknown[]) => getVideosByIds(...a),
+  getUserVideos: (...a: unknown[]) => getUserVideos(...a),
+  getUserVideoStats: (...a: unknown[]) => getUserVideoStats(...a),
+}));
+vi.mock("@/hooks/use-follow", () => ({
+  useFollow: () => ({ isSelf: false, following: false, requested: false, ready: true, toggle: vi.fn() }),
+}));
 vi.mock("@/lib/api/users", () => ({ getProfiles: (...a: unknown[]) => getProfiles(...a) }));
 
 const video = (id: string, userId = "u1") =>
@@ -47,7 +60,7 @@ afterEach(() => {
 });
 
 describe("StudioInspiration — trending posts", () => {
-  it("ranks posts in chart order, marks the saved one, and opens into this grid", async () => {
+  it("ranks posts in chart order, marks the saved one, and opens in Studio's player", async () => {
     getTrending.mockResolvedValue([{ videoId: "1" }, { videoId: "2" }]);
     echoBatch();
 
@@ -59,8 +72,10 @@ describe("StudioInspiration — trending posts", () => {
     expect(screen.getByRole("button", { name: "Remove from My inspiration" })).toBeTruthy();
 
     fireEvent.click(links[0]);
-    expect(getOverlayOrigin()).toBe(window.location.pathname);
-    expect(getOverlayCollection()).toEqual(["1", "2"]);
+    expect(openVideo).toHaveBeenCalledWith("1", ["1", "2"]);
+    // A ctrl-click is the browser's: the public page in a new tab.
+    fireEvent.click(links[1], { ctrlKey: true });
+    expect(openVideo).toHaveBeenCalledTimes(1);
   });
 
   it("confirms a save with a toast, as TikTok does, and a removal with none", async () => {
@@ -111,11 +126,36 @@ describe("StudioInspiration — trending creators", () => {
     expect(await screen.findByText("Bee")).toBeTruthy();
     expect(screen.getByText("2.4M")).toBeTruthy();
     expect(getProfiles).toHaveBeenCalledWith(["a", "b"]);
-    expect(screen.queryAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
-      "/@bee",
-      "/@bee",
-      "/video/2",
+    expect(screen.queryAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(["/video/2"]);
+  });
+
+  it("opens the creator in a popup over Studio instead of leaving for the profile", async () => {
+    getTrending.mockResolvedValue([{ videoId: "2" }]);
+    getVideosByIds.mockResolvedValue([video("2", "b")]);
+    getProfiles.mockResolvedValue([
+      { userId: "b", username: "bee", displayName: "Bee", bio: "Buzz", avatarUrl: null, followerCount: 2_400_000, followingCount: 7 },
     ]);
+    getUserVideoStats.mockResolvedValue({ userId: "b", videoCount: 2, totalLikes: 980, totalViews: 5 });
+    getUserVideos.mockResolvedValue({ content: [video("8", "b"), video("9", "b")], page: { size: 12, number: 0, totalElements: 2, totalPages: 1 } });
+
+    render(<StudioInspiration tab="trending" />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Creators" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Bee" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Follow" })).toBeTruthy();
+    expect(await within(dialog).findByText("980")).toBeTruthy();
+    expect(getUserVideos.mock.calls[0][0]).toBe("b");
+    await waitFor(() =>
+      expect(within(dialog).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
+        "/@bee",
+        "/video/8",
+        "/video/9",
+      ]),
+    );
+
+    fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" })[0]);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
 
