@@ -15,6 +15,7 @@ import type {
   VideoIdPageResponse,
   ViewResponse,
   WatchResponse,
+  WatchSource,
 } from "@/lib/api/types";
 
 /**
@@ -34,15 +35,25 @@ import type {
  *   session — a looping clip reports more than its own length, which is the
  *   point: it says the viewer stayed.
  * @param durationMs the clip's length as the player measured it.
+ * @param source where the viewer was when the clip started — Studio's traffic sources.
+ * @param searchQuery what they searched, sent only with `SEARCH` so Studio can list it.
  */
 export function recordWatch(
   videoId: string,
   watchedMs: number,
   durationMs: number,
+  source: WatchSource,
+  searchQuery?: string,
 ): Promise<WatchResponse> {
+  const query = source === "SEARCH" ? searchQuery?.trim() : undefined;
   return apiFetch<WatchResponse>(`/interactions/videos/${videoId}/watch`, {
     method: "POST",
-    body: { watchedMs: Math.round(watchedMs), durationMs: Math.round(durationMs) },
+    body: {
+      watchedMs: Math.round(watchedMs),
+      durationMs: Math.round(durationMs),
+      source,
+      ...(query ? { searchQuery: query } : {}),
+    },
     auth: "required",
     keepalive: true,
   });

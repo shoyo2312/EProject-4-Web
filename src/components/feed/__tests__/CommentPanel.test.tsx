@@ -207,7 +207,7 @@ describe("CommentPanel", () => {
     await screen.findByText("first");
     fireEvent.click(screen.getByRole("button", { name: "More options" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
-    expect(screen.getByText("Delete comment?")).toBeTruthy();
+    expect(screen.getByText("Delete this comment?")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(deleteComment).not.toHaveBeenCalled();
     expect(screen.getByText("first")).toBeTruthy();

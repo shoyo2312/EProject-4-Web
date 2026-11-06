@@ -15,6 +15,7 @@ import { useSavedVideos } from "@/hooks/use-saved-videos";
 import { getVideo } from "@/lib/api/videos";
 import { loadFirstCommentPage } from "@/lib/comment-cache";
 import { cn } from "@/lib/utils";
+import type { WatchSource } from "@/lib/api/types";
 import type { FeedVideo } from "@/types/tiktok";
 
 /** Matches the wrapper's `transition-duration: 300ms` on the live site. */
@@ -41,8 +42,11 @@ const SIDEBAR_TRANSITION_MS = 300;
 export function Feed({
   videos,
   onReachEnd,
+  source,
 }: {
   videos: FeedVideo[];
+  /** Which feed this is, reported with every watch. */
+  source: WatchSource;
   /**
    * Fired when the viewer is within a couple of cards of the end, so a paged
    * feed can fetch the next page. Absent for a fixed list.
@@ -298,6 +302,7 @@ export function Feed({
             <FeedVideoCard
               key={video.id}
               video={video}
+              source={source}
               index={index}
               activeIndex={activeIndex}
               isActive={video.id === activeId}

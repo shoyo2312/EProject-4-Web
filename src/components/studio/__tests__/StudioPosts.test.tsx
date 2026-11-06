@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { SETTLE_POLL_MS, StudioPosts } from "@/components/studio/StudioPosts";
 import type { PageResponse, VideoResponse } from "@/lib/api/types";
+import { announceVideoChange } from "@/lib/video-events";
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -12,6 +13,8 @@ vi.mock("next/link", () => ({
   ),
 }));
 vi.mock("@/components/ui/toast", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+// Rows subscribe to their video's topic; a test must not open a socket to whatever is on :8080.
+vi.mock("@/lib/realtime/stompClient", () => ({ subscribeTopic: () => () => {} }));
 
 const listStudioPosts = vi.fn();
 vi.mock("@/lib/api/studio", () => ({
@@ -95,6 +98,58 @@ describe("StudioPosts", () => {
     expect(screen.queryByText("second of old")).toBeNull();
     expect(screen.getByText("only of new")).toBeTruthy();
     expect(loader()).toBeNull();
+  });
+
+  it("asks for the next page once however fast Load more is clicked, and never repeats a row", async () => {
+    const next = deferred<PageResponse<VideoResponse>>();
+    listStudioPosts.mockResolvedValueOnce(page([post("1", "first")], 0, 2)).mockReturnValueOnce(next.promise);
+
+    render(<StudioPosts />);
+    const button = await screen.findByRole("button", { name: "Load more" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(listStudioPosts).toHaveBeenCalledTimes(2);
+
+    // A new post shifted the offset pages: the next page starts with the row already shown.
+    await act(async () => {
+      next.resolve(page([post("1", "first"), post("2", "second")], 1, 2));
+      await next.promise;
+    });
+
+    expect(screen.getAllByText("first")).toHaveLength(1);
+    expect(screen.getByText("second")).toBeTruthy();
+  });
+
+  it("asks for the first page again when a row is pinned, since pinned posts lead the default order", async () => {
+    const older = post("1", "Older");
+    const newer = post("2", "Newer");
+    listStudioPosts.mockResolvedValueOnce(page([newer, older], 0, 1));
+    render(<StudioPosts />);
+    await screen.findByText("Older");
+
+    const pinned = { ...older, pinnedAt: "2026-11-05T00:00:00Z" };
+    listStudioPosts.mockResolvedValueOnce(page([pinned, newer], 0, 1));
+    act(() => announceVideoChange({ kind: "updated", video: pinned }));
+
+    await waitFor(() =>
+      expect(screen.getAllByText(/^(Older|Newer)$/).map((title) => title.textContent)).toEqual(["Older", "Newer"]),
+    );
+    expect(listStudioPosts).toHaveBeenCalledTimes(2);
+  });
+
+  it("only patches the row while the owner sorts by a column, which pins do not move", async () => {
+    const older = post("1", "Older");
+    listStudioPosts.mockResolvedValue(page([older], 0, 1));
+    render(<StudioPosts />);
+    await screen.findByText("Older");
+    fireEvent.click(screen.getByRole("button", { name: "Sort by Views" }));
+    await waitFor(() => expect(listStudioPosts).toHaveBeenCalledTimes(2));
+    listStudioPosts.mockClear();
+
+    act(() => announceVideoChange({ kind: "updated", video: { ...older, pinnedAt: "2026-11-05T00:00:00Z" } }));
+
+    expect(await screen.findByText("Pinned")).toBeTruthy();
+    expect(listStudioPosts).not.toHaveBeenCalled();
   });
 });
 

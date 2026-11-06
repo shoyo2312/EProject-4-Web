@@ -26,6 +26,8 @@ vi.mock("@/lib/api/stories", () => ({
   updateStoryVisibility: async () => ({}),
   deleteStory: async () => undefined,
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("@/lib/api/conversations", () => ({ sendStoryReply: vi.fn() }));
 vi.mock("@/lib/api/users", () => ({ getProfiles: async () => [] }));
 
 function story(id: string, overrides: Partial<StoryResponse> = {}): StoryResponse {

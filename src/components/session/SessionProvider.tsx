@@ -23,7 +23,13 @@ import { clearCommentCache } from "@/lib/comment-cache";
 import { resetRealtime } from "@/lib/realtime/stompClient";
 import * as authApi from "@/lib/api/auth";
 import { isApiError } from "@/lib/api/errors";
-import { getAccessToken, getRefreshToken, onSessionEnded } from "@/lib/api/tokens";
+import {
+  getAccessToken,
+  getRefreshToken,
+  onSessionEnded,
+  onSessionStarted,
+} from "@/lib/api/tokens";
+import { BirthdayPrompt } from "@/components/session/BirthdayPrompt";
 import { linkedProviders } from "@/lib/account/closure";
 import { awaitProfile } from "@/lib/auth/await-profile";
 import type { SocialProvider } from "@/lib/auth/social";
@@ -55,6 +61,8 @@ export interface SessionUser extends Author {
   /** With `hasPassword` and `providers`, how the owner reconfirms before closing the account. */
   emailVerified: boolean;
   providers: SocialProvider[];
+  /** `YYYY-MM-DD`; null until given, which `BirthdayPrompt` asks for once. */
+  birthDate: string | null;
 }
 
 interface SessionValue {
@@ -90,6 +98,8 @@ interface SessionValue {
     signupToken: string;
     username: string;
     password: string;
+    /** `YYYY-MM-DD`. */
+    birthDate: string;
   }) => Promise<void>;
   /**
    * Trades a token the provider's SDK already issued for a session of ours.
@@ -107,6 +117,11 @@ interface SessionValue {
     providerToken: string,
     options?: { reactivate?: boolean },
   ) => Promise<{ requiresEmail: boolean }>;
+  /**
+   * Finishes a QR sign-in: the phone approved and `pollQrLogin` has already
+   * stored this browser's tokens, so only the profile and the modal are left.
+   */
+  completeQrSignIn: () => Promise<void>;
   /** Second half of that 409: the same provider token, plus the mailed code. */
   confirmSocialLink: (
     provider: SocialProvider,
@@ -153,6 +168,7 @@ function toSessionUser(me: MeResponse): SessionUser {
     hasPassword: me.hasPassword ?? true,
     emailVerified: me.emailVerified ?? me.email !== null,
     providers: linkedProviders(me.providers),
+    birthDate: me.birthDate ?? null,
   };
 }
 
@@ -301,6 +317,9 @@ export function SessionProvider({
     if (close) setLoginOpen(false);
   }, [loadMe]);
 
+  /** Another tab signed in: this one holds the same pair now, so it settles the same way. */
+  useEffect(() => onSessionStarted(() => void settleSignIn()), [settleSignIn]);
+
   const signIn = useCallback(
     async (
       usernameOrEmail: string,
@@ -315,7 +334,7 @@ export function SessionProvider({
   );
 
   const signUp = useCallback(
-    async (input: { signupToken: string; username: string; password: string }) => {
+    async (input: { signupToken: string; username: string; password: string; birthDate: string }) => {
       await authApi.completeSignup(input);
       // The profile is built off a Kafka event; leaving now would let a quick
       // tap on "Profile" hit an account that is not there yet.
@@ -340,6 +359,11 @@ export function SessionProvider({
     },
     [settleSignIn],
   );
+
+  const completeQrSignIn = useCallback(async () => {
+    await settleSignIn();
+    toast.success("You’re logged in.");
+  }, [settleSignIn]);
 
   const confirmSocialLink = useCallback(
     async (provider: SocialProvider, input: { token: string; otp: string }) => {
@@ -410,6 +434,7 @@ export function SessionProvider({
       signIn,
       signUp,
       signInWithProvider,
+      completeQrSignIn,
       confirmSocialLink,
       signOut,
       confirmSignOut: () => setLogoutConfirmOpen(true),
@@ -432,6 +457,7 @@ export function SessionProvider({
       signIn,
       signUp,
       signInWithProvider,
+      completeQrSignIn,
       confirmSocialLink,
       signOut,
       loadMe,
@@ -443,6 +469,9 @@ export function SessionProvider({
   return (
     <SessionContext.Provider value={value}>
       {children}
+
+      {/* Keyed by viewer: a dismissal belongs to the account that dismissed it, not to the tab. */}
+      <BirthdayPrompt key={user?.userId ?? ""} />
 
       {loginModal.mounted && (
         <AuthModal

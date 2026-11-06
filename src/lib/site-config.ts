@@ -19,7 +19,7 @@ import type {
  * for why their logos are not vendored.
  */
 export const LOGIN_OPTIONS: LoginOption[] = [
-  // { label: "Use QR code", icon: "qr" },
+  { label: "Use QR code", icon: "qr" },
   { label: "Use email or username", icon: "person" },
   { label: "Continue with Facebook", icon: "brand", tint: "#1877F2", provider: "facebook" },
   { label: "Continue with Google", icon: "brand", tint: "#FFFFFF", provider: "google" },

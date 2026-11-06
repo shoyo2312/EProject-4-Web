@@ -216,6 +216,41 @@ describe("ActivityDrawer, a repost", () => {
   });
 });
 
+describe("ActivityDrawer, a mention", () => {
+  const row = (title: string): NotificationResponse => ({
+    id: `n-${title}`,
+    actorId: "2",
+    type: "COMMENT",
+    title,
+    body: "@me look at this",
+    referenceId: "7",
+    read: false,
+    createdAt: new Date().toISOString(),
+  });
+  const inboxOf = (items: NotificationResponse[]): NotificationInbox => ({
+    items,
+    unreadCount: items.length,
+    loaded: true,
+    actors: new Map([["2", bob]]),
+    videos: new Map(),
+    markRead,
+    markAllRead: vi.fn(),
+  });
+
+  it("says the viewer was mentioned, not that their video got a comment", () => {
+    render(<ActivityDrawer open inbox={inboxOf([row("New mention")])} onClose={onClose} />);
+
+    expect(screen.getByText(/mentioned you in a comment: @me look at this/)).toBeTruthy();
+    expect(screen.queryByText(/commented:/)).toBeNull();
+  });
+
+  it("keeps a plain comment a comment", () => {
+    render(<ActivityDrawer open inbox={inboxOf([row("New comment")])} onClose={onClose} />);
+
+    expect(screen.getByText(/commented: @me look at this/)).toBeTruthy();
+  });
+});
+
 describe("ActivityDrawer, a weekly screen time update", () => {
   it("opens the Screen time summary on the week a weekly update covers", () => {
     show({

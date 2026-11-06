@@ -6,9 +6,11 @@ import { Check, CheckCheck } from "lucide-react";
 
 import { JumpToLatest } from "@/components/messages/thread/JumpToLatest";
 import { MessageActions } from "@/components/messages/thread/MessageActions";
+import { ImageMessage } from "@/components/messages/thread/ImageMessage";
 import { ReactionBadges } from "@/components/messages/thread/ReactionBadges";
 import { ReplyQuoteBlock } from "@/components/messages/thread/ReplyQuoteBlock";
 import { StickerMessage } from "@/components/messages/thread/StickerMessage";
+import { StoryReplyMessage } from "@/components/messages/thread/StoryReplyMessage";
 import { VideoMessage } from "@/components/messages/thread/VideoMessage";
 import { useHoverCapable } from "@/hooks/use-hover-capable";
 import { useSharedNow } from "@/hooks/use-shared-now";
@@ -28,10 +30,13 @@ import {
   STICK_PX,
   addUnseen,
   appendedAfter,
+  arrivedLive,
   isAtBottom,
   jumpButtonKind,
 } from "@/lib/chat-scroll";
 import { cn } from "@/lib/utils";
+
+const NO_IDS: ReadonlySet<string> = new Set();
 
 /** Scrolling this close to the top asks for the next older page. */
 const LOAD_OLDER_PX = 160;
@@ -59,6 +64,7 @@ function scrollBehavior(): ScrollBehavior {
 export function MessageList({
   messages,
   receipt = null,
+  liveIds,
   onVisibleNewestChange,
   me,
   hasMore,
@@ -74,6 +80,8 @@ export function MessageList({
   messages: MessageResponse[];
   /** How far the other side has got; "Delivered" and "Seen" under the viewer's newest message come from it. */
   receipt?: Receipt | null;
+  /** Which messages arrived live; only those animate in. Without it nothing does. */
+  liveIds?: ReadonlySet<string>;
   /**
    * The newest message of the other side that is on screen changed (null: none is). The caller decides
    * whether that makes it "seen" — this knows what is drawn and in view, not whether anyone is looking.
@@ -164,7 +172,8 @@ export function MessageList({
       }
       const appended = appendedAfter(messages, before.last);
       if (appended.length > 0) {
-        setArrived((current) => new Set([...current, ...appended.map((message) => message.id)]));
+        const live = arrivedLive(appended, liveIds ?? NO_IDS);
+        if (live.length > 0) setArrived((current) => new Set([...current, ...live.map((message) => message.id)]));
         const mine = appended.some((message) => message.senderId === me);
         if (following.current || mine) {
           el.scrollTop = el.scrollHeight;
@@ -177,7 +186,7 @@ export function MessageList({
     }
     previous.current = { first, last: newest.id, firstTop: anchorTop(el, first) };
     measure();
-  }, [messages, me, measure]);
+  }, [messages, me, measure, liveIds]);
 
   useEffect(() => {
     const el = scroller.current;
@@ -238,7 +247,7 @@ export function MessageList({
         role="log"
         aria-live="polite"
         aria-label="Messages"
-        className="h-full overflow-y-auto overscroll-contain px-3 pt-3 pb-1 [scrollbar-color:transparent_transparent] data-[above=true]:[mask-image:linear-gradient(to_bottom,#000_calc(100%-24px),transparent)] data-[scrolling=true]:[scrollbar-color:rgb(255_255_255/0.3)_transparent] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/30 "
+        className="no-scrollbar h-full overflow-y-auto overscroll-contain px-3 pt-3 pb-1 data-[above=true]:[mask-image:linear-gradient(to_bottom,#000_calc(100%-24px),transparent)] focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-white/30 "
       >
         <div ref={content}>
           {loadingOlder && (
@@ -258,7 +267,8 @@ export function MessageList({
                 data-id={item.message.id}
                 className={cn(
                   "flex flex-col",
-                  arrived.has(item.message.id) && "motion-safe:animate-chat-in",
+                  arrived.has(item.message.id) &&
+                    (item.mine ? "origin-bottom-right" : "origin-bottom-left") + " motion-safe:animate-chat-in",
                   item.mine ? "items-end" : "items-start",
                   item.startsRun ? "mt-3" : "mt-0.5",
                 )}
@@ -269,6 +279,7 @@ export function MessageList({
                     mine={item.mine}
                     peerName={peerName}
                     onJump={jumpToMessage}
+                    animate={arrived.has(item.message.id)}
                   />
                 )}
                 <div
@@ -281,11 +292,24 @@ export function MessageList({
                     </div>
                   ) : item.message.type === "STICKER" ? (
                     <StickerMessage sticker={item.message.sticker} />
+                  ) : item.message.type === "STORY_REPLY" ? (
+                    <StoryReplyMessage
+                      story={item.message.story}
+                      mine={item.mine}
+                      text={item.message.content}
+                      bubbleClassName={bubble(item.mine, true, true)}
+                    />
+                  ) : item.message.type === "IMAGE" ? (
+                    <div className={cn("flex flex-col gap-1", item.mine ? "items-end" : "items-start")}>
+                      <ImageMessage image={item.message.image} />
+                      {item.message.content && (
+                        <div className={bubble(item.mine, true, true)}>{item.message.content}</div>
+                      )}
+                    </div>
                   ) : item.message.type === "VIDEO" ? (
                     <div className={cn("flex flex-col gap-1", item.mine ? "items-end" : "items-start")}>
                       <VideoMessage
                         video={item.message.video}
-                        mine={item.mine}
                         onOpen={() => markOverlayOrigin(window.location.pathname + window.location.search, sharedVideoIds(messages))}
                       />
                       {item.message.content && (

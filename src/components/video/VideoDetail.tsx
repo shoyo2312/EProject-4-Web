@@ -1,11 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ActionRail } from "@/components/feed/ActionRail";
 import { CommentPanel } from "@/components/feed/CommentPanel";
 import { VideoCard } from "@/components/feed/VideoCard";
+import { ChartLine } from "lucide-react";
+
 import { CloseIcon, ArrowPostIcon } from "@/components/icons";
 import { usePlayerSettings } from "@/components/player/PlayerSettingsProvider";
 import { useSession } from "@/components/session/SessionProvider";
@@ -21,6 +24,7 @@ import { useHotkeys } from "@/hooks/use-hotkeys";
 import { useLikeStatuses } from "@/hooks/use-like-statuses";
 import { useVideoLike } from "@/hooks/use-video-like";
 import type { VideoPlayback } from "@/hooks/use-video-playback";
+import type { WatchSource } from "@/lib/api/types";
 import { useVideoRealtime, type VideoFrame } from "@/hooks/use-video-realtime";
 import { useVideoSave } from "@/hooks/use-video-save";
 import { COMMENT_PANEL_COOKIE } from "@/lib/comment-panel";
@@ -69,8 +73,13 @@ export function VideoDetail({
   previousId,
   nextId,
   initialPanelOpen = true,
+  source = "DIRECT",
+  searchQuery,
 }: {
   video: FeedVideo;
+  /** Where the page was opened from, reported with the watch; see `watch-source`. */
+  source?: WatchSource;
+  searchQuery?: string;
   /** Neighbours in the same collection; `null` at either end of it. */
   previousId?: string | null;
   nextId?: string | null;
@@ -174,7 +183,9 @@ export function VideoDetail({
       // `replace`, not `push`: stepping between videos is a swap inside the same
       // overlay, so it must not stack history entries — otherwise Close walks
       // back through every video visited instead of returning to the grid.
-      router.replace(`/video/${id}`);
+      // The query string carries where the viewer came from, so the next video
+      // is credited to the same surface.
+      router.replace(`/video/${id}${window.location.search}`);
     },
     [router, nextId, previousId],
   );
@@ -342,6 +353,8 @@ export function VideoDetail({
           >
             <VideoCard
               video={video}
+              source={source}
+              searchQuery={searchQuery}
               onLike={like.likeOnly}
               showCaption={false}
               showVolumeControl={false}
@@ -360,6 +373,16 @@ export function VideoDetail({
               video={video}
               className="pointer-events-auto w-[480px] max-w-[55%]"
             />
+            {/* The owner's way into Studio for this one post, as on the live site. */}
+            {sessionUser?.userId === video.author.userId && (
+              <Link
+                href={`/studio/analytics/${video.id}`}
+                className="pointer-events-auto mb-4 flex h-11 flex-none items-center gap-2 rounded-full bg-[var(--tt-field)] px-5 text-[16px] font-semibold text-[var(--tt-text)] transition-[background-color,transform] duration-200 ease-out hover:scale-[1.04] hover:bg-white/35 active:scale-[0.98]"
+              >
+                <ChartLine className="h-5 w-5" strokeWidth={2} />
+                View analytics
+              </Link>
+            )}
             <div className="pointer-events-auto mr-2">
               <ActionRail
                 compact
@@ -484,7 +507,7 @@ export function VideoDetail({
               <CreatorVideosPanel
                 userId={creatorId}
                 currentVideoId={video.id}
-                onSelect={(id) => router.replace(`/video/${id}`)}
+                onSelect={(id) => router.replace(`/video/${id}${window.location.search}`)}
               />
             )}
           </div>

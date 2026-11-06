@@ -53,16 +53,22 @@ describe("ReactionBar", () => {
     expect(outer).not.toHaveBeenCalled();
   });
 
-  it("floats copies of the emoji that disappear after 900ms", () => {
+  it("floats 3 to 5 copies of the emoji, one after another, gone once the last has landed", () => {
     vi.useFakeTimers();
     render(<ReactionBar value={null} onChange={() => {}} signedIn onRequireLogin={() => {}} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Love" }));
-    const floating = document.querySelectorAll("[data-float]").length;
-    expect(floating).toBeGreaterThanOrEqual(4);
-    expect(floating).toBeLessThanOrEqual(6);
+    const floating = Array.from(document.querySelectorAll<HTMLElement>("[data-float]"));
+    expect(floating.length).toBeGreaterThanOrEqual(3);
+    expect(floating.length).toBeLessThanOrEqual(5);
+    expect(floating.every((el) => el.textContent === "❤️")).toBe(true);
+    // Staggered: each copy leaves after the one before it.
+    const delays = floating.map((el) => parseInt(el.style.animationDelay, 10));
+    expect(delays).toEqual([...delays].sort((a, b) => a - b));
 
-    act(() => vi.advanceTimersByTime(900));
+    act(() => vi.advanceTimersByTime(2399));
+    expect(document.querySelectorAll("[data-float]").length).toBe(floating.length);
+    act(() => vi.advanceTimersByTime(1));
     expect(document.querySelectorAll("[data-float]")).toHaveLength(0);
   });
 });

@@ -11,4 +11,12 @@ describe("appendUnique", () => {
       { id: "3" },
     ]);
   });
+
+  it("dedupes by the key it is given", () => {
+    const shown = [{ commentId: "1" }];
+    expect(appendUnique(shown, [{ commentId: "1" }, { commentId: "2" }], (c) => c.commentId)).toEqual([
+      { commentId: "1" },
+      { commentId: "2" },
+    ]);
+  });
 });

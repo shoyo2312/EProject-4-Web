@@ -31,4 +31,12 @@ describe("splitMentions", () => {
       { text: "@x.com", mention: false },
     ]);
   });
+
+  it("leaves a sentence's period out of the handle", () => {
+    expect(splitMentions("thanks @bob.builder.")).toEqual([
+      { text: "thanks ", mention: false },
+      { text: "@bob.builder", mention: true },
+      { text: ".", mention: false },
+    ]);
+  });
 });

@@ -5,11 +5,11 @@ import { overviewMetrics } from "@/lib/studio/overview";
 describe("overviewMetrics", () => {
   it("keeps the five metrics in TikTok's order with their days and the window before", () => {
     const metrics = overviewMetrics({
-      current: { views: 12, likes: 3, comments: 1, shares: 0, netFollowers: 2 },
-      previous: { views: 8, likes: 4, comments: 0, shares: 1, netFollowers: 0 },
+      current: { views: 12, likes: 3, comments: 1, shares: 0, saves: 0, netFollowers: 2 },
+      previous: { views: 8, likes: 4, comments: 0, shares: 1, saves: 0, netFollowers: 0 },
       daily: [
-        { day: "2026-10-01", views: 5, likes: 1, comments: 0, shares: 0, followersGained: 3, followersLost: 1 },
-        { day: "2026-10-02", views: 7, likes: 2, comments: 1, shares: 0, followersGained: 0, followersLost: 0 },
+        { day: "2026-10-01", views: 5, likes: 1, comments: 0, shares: 0, saves: 0, followersGained: 3, followersLost: 1 },
+        { day: "2026-10-02", views: 7, likes: 2, comments: 1, shares: 0, saves: 0, followersGained: 0, followersLost: 0 },
       ],
     });
 

@@ -137,4 +137,42 @@ describe("UploadPage", () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/studio/content"));
     expect(updateVideoCommentsSetting).toHaveBeenCalledWith("42", true);
   });
+
+  it("offers no Cancel once the bytes are in and the post is being made", async () => {
+    createVideo.mockReturnValue(new Promise(() => {}));
+    await chooseClip();
+
+    fireEvent.click(screen.getByRole("button", { name: "Post" }));
+
+    await waitFor(() => expect(createVideo).toHaveBeenCalled());
+    expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it.each(["UPLOAD_NOT_FOUND", "FOREIGN_UPLOAD"])(
+    "uploads the file again after %s instead of retrying a dead upload",
+    async (code) => {
+      createVideo
+        .mockRejectedValueOnce(new ApiError(400, code, "upload gone"))
+        .mockResolvedValueOnce(video("PROCESSING"));
+      await chooseClip();
+
+      fireEvent.click(screen.getByRole("button", { name: "Post" }));
+      await waitFor(() => expect(createVideo).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.getByRole("button", { name: "Post" })).toHaveProperty("disabled", false));
+      fireEvent.click(screen.getByRole("button", { name: "Post" }));
+
+      await waitFor(() => expect(replace).toHaveBeenCalledWith("/studio/content"));
+      expect(uploadToStorage).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("treats RAW_FILE_ALREADY_PUBLISHED as the post that already went out", async () => {
+    createVideo.mockRejectedValueOnce(new ApiError(400, "RAW_FILE_ALREADY_PUBLISHED", "already published"));
+    await chooseClip();
+
+    fireEvent.click(screen.getByRole("button", { name: "Post" }));
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/studio/content"));
+    expect(createVideo).toHaveBeenCalledTimes(1);
+  });
 });

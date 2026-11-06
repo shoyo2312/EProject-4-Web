@@ -24,6 +24,7 @@ import { formatCount, formatRelativeTime } from "@/lib/format";
 import { markOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
 import type { Author } from "@/types/tiktok";
+import { videoHref } from "@/lib/watch-source";
 
 const PAGE_SIZE = 24;
 /** The Top tab shows three rows of the four-column grid, then points at the Videos tab. */
@@ -66,9 +67,14 @@ function searchFailure(cause: unknown): string {
  *
  * A leading `#` switches the request to the tag filter — see `searchParamsFor`.
  */
+/** The search term as the address bar has it: the one thing that says what is being searched. */
+function useSearchTerm(): string {
+  return (useSearchParams().get("q") ?? "").trim();
+}
+
 export function SearchResults() {
   const params = useSearchParams();
-  const term = (params.get("q") ?? "").trim();
+  const term = useSearchTerm();
   const requested = params.get("tab");
   const tab: Tab = requested === "accounts" || requested === "videos" ? requested : "top";
 
@@ -272,10 +278,11 @@ function VideoResults({
  * what the Kafka events publish, and the playable URL is not among them.
  */
 function VideoCard({ video, author }: { video: VideoSearchResponse; author?: Author }) {
+  const term = useSearchTerm();
   return (
     <div>
       <Link
-        href={`/video/${encodeURIComponent(video.id)}`}
+        href={videoHref(video.id, "search", term)}
         onClick={() => markOverlayOrigin("/search")}
         className="relative block aspect-[3/4] overflow-hidden rounded-[8px] bg-[#252525]"
       >
@@ -398,13 +405,14 @@ function TopAccount({ term }: { term: string }) {
  */
 function VideoStrip({ videos }: { videos: VideoResponse[] }) {
   const ref = useRef<HTMLDivElement>(null);
+  const term = useSearchTerm();
   return (
     <div className="relative mt-2.5">
       <div ref={ref} className="no-scrollbar flex gap-2.5 overflow-x-auto scroll-smooth">
         {videos.map((video) => (
           <Link
             key={video.id}
-            href={`/video/${encodeURIComponent(video.id)}`}
+            href={videoHref(video.id, "search", term)}
             onClick={() => markOverlayOrigin("/search")}
             className="relative h-[203px] w-[153px] flex-none overflow-hidden rounded-[8px] bg-[#252525]"
           >

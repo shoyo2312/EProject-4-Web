@@ -1,5 +1,33 @@
 /** Studio's number formatting and chart geometry. No data, no React. */
 
+import type { AgeGroup, TrafficSource } from "@/lib/api/types";
+
+/** The age groups in the order Studio lists them. */
+export const AGE_GROUPS: AgeGroup[] = ["13-17", "18-24", "25-34", "35-44", "45-54", "55+", "UNKNOWN"];
+
+export const AGE_GROUP_LABELS: Record<AgeGroup, string> = {
+  "13-17": "13-17",
+  "18-24": "18-24",
+  "25-34": "25-34",
+  "35-44": "35-44",
+  "45-54": "45-54",
+  "55+": "55+",
+  UNKNOWN: "Unknown",
+};
+
+/** TikTok Studio's names for where a view came from. */
+export const TRAFFIC_SOURCE_LABELS: Record<TrafficSource, string> = {
+  FOR_YOU: "For You",
+  FOLLOWING: "Following",
+  FRIENDS: "Friends",
+  EXPLORE: "Explore",
+  PROFILE: "Personal profile",
+  SEARCH: "Search",
+  MESSAGE: "Messages",
+  DIRECT: "Direct link",
+  OTHER: "Other",
+};
+
 /** The windows Studio's picker offers, as TikTok labels them. */
 export const RANGE_OPTIONS = [7, 28, 60, 365] as const;
 export type RangeDays = (typeof RANGE_OPTIONS)[number];
@@ -34,21 +62,21 @@ export function niceMax(max: number): number {
 }
 
 /**
- * An SVG path through `values`, spread evenly over `width`, 0 at the bottom and
- * `max` at the top. One value draws a flat line across, so a one-day window
- * still shows something.
+ * Where a retention curve falls the most: the index whose step down from the
+ * point before is the largest, the first one on a tie. Null when there is no
+ * step down at all — fewer than two points, a flat line, or no views.
  */
-export function linePath(values: number[], width: number, height: number, max: number): string {
-  if (values.length === 0) return "";
-  const top = max > 0 ? max : 1;
-  const y = (value: number) => round(height - (Math.max(0, value) / top) * height);
-  if (values.length === 1) return `M0 ${y(values[0])} L${width} ${y(values[0])}`;
-  const step = width / (values.length - 1);
-  return values.map((value, i) => `${i === 0 ? "M" : "L"}${round(i * step)} ${y(value)}`).join(" ");
-}
-
-function round(n: number): number {
-  return Math.round(n * 100) / 100;
+export function retentionInsight(points: number[]): number | null {
+  let best: number | null = null;
+  let largest = 0;
+  for (let i = 1; i < points.length; i++) {
+    const drop = points[i - 1] - points[i];
+    if (drop > largest) {
+      largest = drop;
+      best = i;
+    }
+  }
+  return best;
 }
 
 /**

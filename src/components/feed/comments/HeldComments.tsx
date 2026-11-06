@@ -177,7 +177,7 @@ export function HeldComments({
               type="button"
               onClick={() => void loadMore()}
               disabled={loadingMore}
-              className="w-full py-1 text-center text-[14px] font-medium text-white/60 hover:underline disabled:opacity-40"
+              className="w-full py-1 text-center text-[14px] font-medium text-[var(--tt-text-subtle)] hover:underline disabled:opacity-40"
             >
               {loadingMore ? "Loading…" : "Show more"}
             </button>

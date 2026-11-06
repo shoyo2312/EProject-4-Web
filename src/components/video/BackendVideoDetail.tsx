@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { CommentListSkeleton } from "@/components/feed/comments/CommentStates";
@@ -15,7 +16,9 @@ import { messageFor } from "@/lib/api/errors";
 import { getVideoCounts } from "@/lib/api/interactions";
 import { getUserVideos, getVideo, pollUntilReady } from "@/lib/api/videos";
 import { getOverlayCollection } from "@/lib/overlay-origin";
+import { watchSourceFromParams } from "@/lib/watch-source";
 import type { VideoStatus } from "@/lib/api/types";
+import { STATUS_NOTE } from "@/lib/studio/overview";
 import type { FeedVideo } from "@/types/tiktok";
 
 /**
@@ -35,6 +38,9 @@ export function BackendVideoDetail({
   /** The reader's last panel choice, read from the cookie on the server. */
   initialPanelOpen?: boolean;
 }) {
+  const params = useSearchParams();
+  const source = watchSourceFromParams(params.get("src"));
+  const searchQuery = source === "SEARCH" ? (params.get("q") ?? undefined) : undefined;
   const [video, setVideo] = useState<FeedVideo | null>(null);
   const [status, setStatus] = useState<VideoStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -133,23 +139,12 @@ export function BackendVideoDetail({
         previousId={neighbours.previousId}
         nextId={neighbours.nextId}
         initialPanelOpen={initialPanelOpen}
+        source={source}
+        searchQuery={searchQuery}
       />
     </>
   );
 }
-
-/** Only the owner ever sees any of these — everyone else got a 404. */
-const STATUS_NOTE: Record<VideoStatus, string> = {
-  PROCESSING: "Still processing — it will play once transcoding finishes.",
-  PENDING_MODERATION:
-    "Being checked — it goes live as soon as the check clears.",
-  PENDING_REVIEW: "Waiting on a moderator. It goes live once it is approved.",
-  PUBLISHED: "",
-  FAILED: "Transcoding failed. Delete this video and upload it again.",
-  REJECTED:
-    "Removed automatically for likely adult content. Contact support to have it reviewed.",
-  TAKEN_DOWN: "This video was taken down by a moderator.",
-};
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (

@@ -65,6 +65,23 @@ export interface TokenResponse {
   expiresInMillis: number;
 }
 
+/** `POST /auth/qr` — a code for this browser to show. Only `qrContent` goes in the image. */
+export interface QrLoginCreatedResponse {
+  qrId: string;
+  pollToken: string;
+  qrContent: string;
+  expiresAt: string;
+}
+
+export type QrLoginStatus = "PENDING" | "SCANNED" | "APPROVED" | "REJECTED" | "EXPIRED";
+
+/** `POST /auth/qr/{id}/status` — `tokens` only on the single APPROVED answer. */
+export interface QrLoginStatusResponse {
+  status: QrLoginStatus;
+  username: string | null;
+  tokens: TokenResponse | null;
+}
+
 /** `POST /auth/register/verify` — proof the mailbox was verified. */
 export interface SignupTicketResponse {
   signupToken: string;
@@ -132,6 +149,8 @@ export interface UserProfileResponse {
    * null for everyone else, and for the owner when it may change now.
    */
   displayNameChangeableAt?: string | null;
+  /** `YYYY-MM-DD`, only on the owner's own profile; null until they have given one. */
+  birthDate?: string | null;
 }
 
 export type SuggestionReason = "FOLLOWS_YOU" | "FOLLOWED_BY" | "POPULAR";
@@ -257,6 +276,11 @@ export interface MeResponse {
    * gateway older than the field, which reads as true: nothing is offered.
    */
   hasPassword?: boolean;
+  /**
+   * `YYYY-MM-DD`; null until the owner has given one, which the client asks for
+   * once after sign-in when `profileReady` is true. Left out by an older gateway.
+   */
+  birthDate?: string | null;
   /**
    * Whether `email` is proven, and the providers linked to the account
    * (`GOOGLE`, `FACEBOOK`): together with `hasPassword`, how the owner
@@ -650,16 +674,19 @@ export interface CreatorDailyStats {
   likes: number;
   comments: number;
   shares: number;
+  saves: number;
+  /** On the account's chart the account's; on a video's, the follows that came from it. */
   followersGained: number;
   followersLost: number;
 }
 
-/** Likes and comments are net of unlikes and deletions in the window, so they can be negative. */
+/** Likes, comments and saves are net of their undo in the window, so they can be negative. */
 export interface CreatorTotals {
   views: number;
   likes: number;
   comments: number;
   shares: number;
+  saves: number;
   netFollowers: number;
 }
 
@@ -681,9 +708,61 @@ export interface CreatorVideoStats {
   likes: number;
   comments: number;
   shares: number;
+  saves: number;
 }
 
-/** `GET /analytics/creator/videos/{videoId}` — lifetime totals, the window's days. */
+/** Where a watch started, as `recordWatch` reports it; the server files an unknown one as `OTHER`. */
+export type WatchSource =
+  | "FOR_YOU"
+  | "FOLLOWING"
+  | "FRIENDS"
+  | "EXPLORE"
+  | "PROFILE"
+  | "SEARCH"
+  | "MESSAGE"
+  | "DIRECT";
+export type TrafficSource = WatchSource | "OTHER";
+
+/** One video's numbers over a window. `newFollowers` is the follows that came from it, gross. */
+export interface CreatorVideoTotals {
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  newFollowers: number;
+}
+
+export interface TrafficSourceRow {
+  source: TrafficSource;
+  views: number;
+}
+
+export interface SearchQueryRow {
+  query: string;
+  views: number;
+}
+
+export type AgeGroup = "13-17" | "18-24" | "25-34" | "35-44" | "45-54" | "55+" | "UNKNOWN";
+
+/** Who watched one video in the window. The four breakdowns are null below the privacy threshold. */
+export interface CreatorVideoViewers {
+  total: number;
+  newViewers: number;
+  previousTotal: number;
+  previousNewViewers: number;
+  breakdownAvailable: boolean;
+  returning: number | null;
+  followers: number | null;
+  nonFollowers: number | null;
+  /** All seven keys, in order; `UNKNOWN` is a viewer without a birth date. */
+  ageGroups: Record<AgeGroup, number> | null;
+}
+
+/**
+ * `GET /analytics/creator/videos/{videoId}` — the top-level numbers are lifetime;
+ * `current`/`previous` are the window and the one before it; the rest is the window's.
+ */
 export interface CreatorVideoDetail {
   videoId: string;
   views: number;
@@ -695,9 +774,19 @@ export interface CreatorVideoDetail {
   likes: number;
   comments: number;
   shares: number;
+  saves: number;
+  /** Follows that came from this video, gross, lifetime. */
+  newFollowers: number;
   /** 21 points, 0% to 100% of the video in 5% steps: the share of views still watching there. */
   retention: number[];
   daily: CreatorDailyStats[];
+  current: CreatorVideoTotals;
+  previous: CreatorVideoTotals;
+  /** Busiest first; only surfaces with views. */
+  trafficSources: TrafficSourceRow[];
+  /** Most viewed first, at most ten, only queries with enough views to name no one. */
+  searchQueries: SearchQueryRow[];
+  audience: CreatorVideoViewers;
 }
 
 /** `GET /analytics/creator/viewers`. The breakdowns are null below the privacy threshold. */

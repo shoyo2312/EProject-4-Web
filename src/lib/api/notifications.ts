@@ -44,6 +44,13 @@ export function referencesUser(type: NotificationType): boolean {
  */
 export const ACCOUNT_SECURITY_REFERENCE = "account-security";
 
+/**
+ * The `title` of a `COMMENT` that tags the recipient rather than landing on their video
+ * (notification-service `InteractionEventConsumer.MENTION_TITLE`). A COMMENT, not a type of its
+ * own, for the same mobile reason as above.
+ */
+export const MENTION_TITLE = "New mention";
+
 export interface NotificationResponse {
   id: string;
   /** Who did the thing (liked/commented/shared/followed). Null for SYSTEM. */

@@ -86,6 +86,7 @@ const MESSAGES: Record<string, string> = {
   EMAIL_NOT_VERIFIED: "Verify your email address to continue.",
   TOO_MANY_LOGIN_ATTEMPTS:
     "Too many failed attempts. Try again in about 15 minutes.",
+  TOO_MANY_QR_LOGIN_REQUESTS: "Too many QR codes requested. Try again in a few minutes.",
   USERNAME_ALREADY_EXISTS: "That username is taken.",
   USERNAME_CHANGE_TOO_SOON: "You can only change your username once every 30 days.",
   EMAIL_ALREADY_EXISTS: "An account already exists for that email.",

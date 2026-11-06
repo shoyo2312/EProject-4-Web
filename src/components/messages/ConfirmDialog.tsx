@@ -19,6 +19,7 @@ export function ConfirmDialog({
   error,
   onCancel,
   onConfirm,
+  closing,
 }: {
   title: string;
   children: React.ReactNode;
@@ -29,9 +30,11 @@ export function ConfirmDialog({
   error: string | null;
   onCancel: () => void;
   onConfirm: () => void;
+  /** See `Modal`: set it to animate in and out. */
+  closing?: boolean;
 }) {
   return (
-    <Modal onClose={busy ? () => {} : onCancel} className={DIALOG_SHEET}>
+    <Modal onClose={busy ? () => {} : onCancel} className={DIALOG_SHEET} closing={closing}>
       <h2 className="text-center text-[19px] leading-6 font-bold text-[var(--tt-text)]">{title}</h2>
       <div className="mt-3 text-center text-[14px] leading-[21px] text-[var(--chat-meta)]">{children}</div>
       {error && (

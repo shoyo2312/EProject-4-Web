@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 export type StoryRingState = "unseen" | "seen" | "none";
 
 /**
- * The ring around an avatar that has live stories: a red gradient while any is unseen, grey after,
+ * The ring around an avatar that has live stories: a cyan-to-green gradient while any is unseen, grey after,
  * fading from one to the other instead of snapping. `thin` draws it 1px with a 1px gap, for small
  * avatars; `fill` makes it fill the box the caller sized, instead of growing around the picture.
  *
@@ -56,7 +56,7 @@ export function StoryRing({
       <span
         aria-hidden
         className={cn(
-          "absolute inset-0 rounded-full bg-[conic-gradient(var(--tt-red),#ff2d55,#ff7a45,var(--tt-red))] transition-opacity duration-400",
+          "absolute inset-0 rounded-full bg-[conic-gradient(#16c6f5,#25e6a4,#16c6f5)] transition-opacity duration-400",
           state === "unseen" ? "opacity-100" : "opacity-0",
           state === "unseen" && spin && "tt-ring-spin",
         )}

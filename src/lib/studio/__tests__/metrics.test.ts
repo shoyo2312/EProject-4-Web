@@ -7,8 +7,8 @@ import {
   formatPercent,
   formatWatchTime,
   labelIndexes,
-  linePath,
   niceMax,
+  retentionInsight,
 } from "@/lib/studio/metrics";
 
 describe("changeLine", () => {
@@ -37,17 +37,19 @@ describe("niceMax", () => {
   });
 });
 
-describe("linePath", () => {
-  it("spreads the points over the width with zero at the bottom", () => {
-    expect(linePath([0, 10, 5], 100, 50, 10)).toBe("M0 50 L50 0 L100 25");
+describe("retentionInsight", () => {
+  it("retentionInsightFindsTheLargestDrop", () => {
+    expect(retentionInsight([1, 0.9, 0.85, 0.4, 0.38])).toBe(3);
   });
 
-  it("draws one value as a flat line", () => {
-    expect(linePath([5], 100, 50, 10)).toBe("M0 25 L100 25");
+  it("retentionInsightIsNullWithoutADrop", () => {
+    expect(retentionInsight([1, 1, 1])).toBeNull();
+    expect(retentionInsight([])).toBeNull();
+    expect(retentionInsight([0, 0])).toBeNull();
   });
 
-  it("keeps a negative day on the axis", () => {
-    expect(linePath([-3, 10], 100, 50, 10)).toBe("M0 50 L100 0");
+  it("retentionInsightPrefersTheFirstStepOnATie", () => {
+    expect(retentionInsight([1, 0.6, 0.2])).toBe(1);
   });
 });
 

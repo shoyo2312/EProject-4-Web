@@ -79,6 +79,29 @@ export async function apiFetch<T>(
   return unwrap<T>(response);
 }
 
+/**
+ * An authenticated binary GET (a chat picture): an `<img src>` cannot carry the bearer token, so the
+ * bytes are fetched here, with the same one-refresh-one-replay rule as `apiFetch`. A failure throws
+ * `ApiError` with the envelope's code when the server sent one.
+ */
+export async function apiFetchBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  const url = BASE + path;
+  let response = await send(url, "GET", undefined, getAccessToken(), signal);
+  if (response.status === 401 && (getAccessToken() || getRefreshToken())) {
+    const fresh = await refreshAccessToken();
+    if (!fresh) throw new ApiError(401, "INVALID_REFRESH_TOKEN", "Session expired");
+    response = await send(url, "GET", undefined, fresh, signal);
+  }
+  if (!response.ok) {
+    const code = await response
+      .json()
+      .then((body: { code?: string }) => body.code ?? null)
+      .catch(() => null);
+    throw new ApiError(response.status, code, response.statusText);
+  }
+  return response.blob();
+}
+
 function buildQuery(query: RequestOptions["query"]): string {
   if (!query) return "";
   const params = new URLSearchParams();
@@ -171,17 +194,51 @@ async function unwrap<T>(response: Response): Promise<T> {
  */
 let inFlightRefresh: Promise<string | null> | null = null;
 
+const REFRESH_TIMEOUT_MS = 15_000;
+
 /** Refresh answers that mean the token itself was rejected: invalid, revoked, or the account barred. */
 const SESSION_OVER_STATUSES = new Set([400, 401, 403]);
 
 export function refreshAccessToken(): Promise<string | null> {
   if (inFlightRefresh) return inFlightRefresh;
 
-  inFlightRefresh = performRefresh().finally(() => {
+  // The latch above is per tab, but every tab shares one pair — and chat-service closes every
+  // tab's socket in the same sweep when the shared access token expires, so they all refresh at
+  // once. The loser presented the spent token, got a 401, and cleared the winner's fresh pair,
+  // signing every tab out. A cross-tab lock serialises them; whoever waited finds the pair
+  // already rotated and uses it.
+  const seen = getRefreshToken();
+  const run = () =>
+    getRefreshToken() !== seen ? Promise.resolve(getAccessToken()) : performRefresh();
+
+  // ponytail: Web Locks only exists in secure contexts; over plain http on a LAN IP the tabs fall
+  // back to racing as before. `Promise.resolve` only flattens the type: lib.dom types `request`
+  // as resolving to the callback's promise, while it really resolves to that promise's value.
+  inFlightRefresh = Promise.resolve(
+    "locks" in navigator ? lockedRefresh(run) : run(),
+  ).finally(() => {
     inFlightRefresh = null;
   });
 
   return inFlightRefresh;
+}
+
+/**
+ * `locks` can exist and still refuse (SecurityError in sandboxed or opaque-origin frames). Every
+ * refresh then failed and the session quietly died at its next expiry, so a refused lock runs the
+ * refresh unlocked. Only the lock's own refusal falls back: a failed refresh is not retried.
+ */
+async function lockedRefresh(run: () => Promise<string | null>): Promise<string | null> {
+  let started = false;
+  try {
+    return await navigator.locks.request("tiktok.refresh", () => {
+      started = true;
+      return run();
+    });
+  } catch (cause) {
+    if (started) throw cause;
+    return run();
+  }
 }
 
 /**
@@ -204,6 +261,8 @@ async function performRefresh(): Promise<string | null> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
+      // A hung request would hold the cross-tab lock, and with it every tab's refresh and socket.
+      signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
     });
   } catch {
     // The network dropped; the session itself is probably still fine, so the
@@ -215,20 +274,26 @@ async function performRefresh(): Promise<string | null> {
   // auth-service restarts, or the gateway's per-IP 429, says nothing about the
   // token — clearing on those signed the viewer out of a perfectly good session.
   if (SESSION_OVER_STATUSES.has(response.status)) {
-    clearTokens();
-    return null;
+    return endSession(refreshToken);
   }
   if (!response.ok) {
     throw new ApiError(response.status, null, response.statusText);
   }
 
-  const envelope = parseJsonPreservingIds<ApiEnvelope<TokenResponse>>(
-    await response.text(),
-  );
-  if (!envelope.success || !envelope.data) {
-    clearTokens();
-    return null;
+  let envelope: ApiEnvelope<TokenResponse>;
+  try {
+    envelope = parseJsonPreservingIds<ApiEnvelope<TokenResponse>>(await response.text());
+  } catch {
+    // Not our envelope — a proxy page. Says nothing about the token, so the tokens stay.
+    throw new ApiError(response.status, null, response.statusText);
   }
+  if (!envelope.success || !envelope.data) {
+    return endSession(refreshToken);
+  }
+
+  // Another tab signed out (or in) while this was in flight: writing the late pair over that
+  // would sign every tab back in. Its pair, or none, wins.
+  if (getRefreshToken() !== refreshToken) return getAccessToken();
 
   // Persisted here, synchronously, before any waiting request is replayed.
   storeTokens({
@@ -237,4 +302,15 @@ async function performRefresh(): Promise<string | null> {
   });
 
   return envelope.data.accessToken;
+}
+
+/**
+ * The refused token is gone, but the pair may already have been replaced while the request was in
+ * flight — a sign-in in another tab, or a tab without Web Locks that won the rotation. Clearing then
+ * would wipe that fresh pair and sign every tab out.
+ */
+function endSession(sent: string): string | null {
+  if (getRefreshToken() !== sent) return getAccessToken();
+  clearTokens();
+  return null;
 }

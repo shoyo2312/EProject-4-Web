@@ -81,7 +81,7 @@ function ViewerFollowFeed({ source }: { source: FollowFeedSource }) {
           {stories}
         </div>
       )}
-      <Feed videos={videos} onReachEnd={loadMore} />
+      <Feed videos={videos} onReachEnd={loadMore} source={source === "friends" ? "FRIENDS" : "FOLLOWING"} />
     </div>
   );
 }

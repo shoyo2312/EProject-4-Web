@@ -15,11 +15,15 @@ vi.mock("@/components/ui/toast", () => ({ toast: { error: vi.fn(), success: vi.f
 vi.mock("@/hooks/use-comment-context", () => ({
   useCommentContext: () => ({ authors: new Map(), videos: new Map() }),
 }));
-const deleteComment = vi.fn();
+const addComment = vi.fn();
 vi.mock("@/lib/api/interactions", () => ({
-  addComment: vi.fn(),
+  addComment: (...args: unknown[]) => addComment(...args),
   approveComment: vi.fn(),
-  deleteComment: (...args: unknown[]) => deleteComment(...args),
+  deleteComment: vi.fn(),
+  likeComment: vi.fn(),
+  unlikeComment: vi.fn(),
+  listReplies: vi.fn(),
+  getVideoCounts: vi.fn(),
 }));
 
 const listInboxComments = vi.fn();
@@ -59,48 +63,82 @@ describe("/studio/comment route", () => {
   });
 });
 
-describe("StudioComments — delete", () => {
-  const comment = (commentId: string, userId: string) => ({
+describe("Studio comment inbox", () => {
+  it("answers a reply with that reply's id, so the post shows whom the owner answered", async () => {
+    const reply = {
+      commentId: "r1",
+      videoId: "1001",
+      userId: "3",
+      content: "a reply in the inbox",
+      createdAt: "2026-11-05T00:00:00Z",
+      parentId: "c1",
+      replyToUserId: null,
+      likeCount: 0,
+      likedByMe: false,
+      replyCount: 0,
+      status: "VISIBLE",
+    };
+    listInboxComments.mockResolvedValue({ items: [reply], nextCursor: null, hasMore: false });
+    addComment.mockResolvedValueOnce({ ...reply, commentId: "r2", userId: "1", replyToUserId: "3", content: "thanks" });
+    render(<StudioComments />);
+
+    await screen.findByText("a reply in the inbox");
+    fireEvent.click(screen.getByRole("button", { name: /Reply/ }));
+    const box = screen.getByPlaceholderText(/Reply to/);
+    fireEvent.change(box, { target: { value: "thanks" } });
+    fireEvent.submit(box.closest("form")!);
+
+    // Not "c1", the thread's root: the backend derives "owner ▸ user" from the id it is given.
+    await waitFor(() => expect(addComment).toHaveBeenCalledWith("1001", "thanks", "r1"));
+    // And the owner's reply shows at once, under the row it answers.
+    expect(await screen.findByText("thanks")).toBeTruthy();
+  });
+
+  const row = (commentId: string, content: string) => ({
     commentId,
-    videoId: "v1",
-    userId,
-    content: `Comment ${commentId}`,
-    createdAt: "2026-11-01T00:00:00Z",
+    videoId: "1001",
+    userId: "3",
+    content,
+    createdAt: "2026-11-05T00:00:00Z",
     parentId: null,
     replyToUserId: null,
     likeCount: 0,
     likedByMe: false,
     replyCount: 0,
+    status: "VISIBLE",
   });
 
-  it("asks before deleting someone else's comment, and Cancel deletes nothing", async () => {
-    listInboxComments.mockResolvedValue({ items: [comment("c1", "someone")], nextCursor: null, hasMore: false });
-    deleteComment.mockResolvedValue(undefined);
+  it("drops a Load more page that answers the filter the owner already left", async () => {
+    let finishStale: (page: unknown) => void = () => {};
+    listInboxComments
+      .mockResolvedValueOnce({ items: [row("c1", "first page")], nextCursor: "cur-1", hasMore: true })
+      .mockReturnValueOnce(new Promise((resolve) => (finishStale = resolve)))
+      .mockResolvedValueOnce({ items: [row("h1", "held comment")], nextCursor: null, hasMore: false });
     render(<StudioComments />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
-    expect(screen.getByText("Delete this comment?")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(deleteComment).not.toHaveBeenCalled();
-    expect(screen.queryByText("Delete this comment?")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
+    fireEvent.click(screen.getByRole("button", { name: /All comments/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Held for review" }));
+    await screen.findByText("held comment");
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
-    const confirm = screen.getAllByRole("button", { name: "Delete" }).at(-1)!;
-    fireEvent.click(confirm);
-    await waitFor(() => expect(screen.queryByText("Comment c1")).toBeNull());
-    expect(deleteComment).toHaveBeenCalledWith("v1", "c1");
+    finishStale({ items: [row("c2", "stale page")], nextCursor: null, hasMore: false });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByText("stale page")).toBeNull();
+    const staleSignal = listInboxComments.mock.calls[1][3] as AbortSignal;
+    expect(staleSignal.aborted).toBe(true);
   });
 
-  it("asks before deleting the creator's own comment too", async () => {
-    listInboxComments.mockResolvedValue({ items: [comment("c2", "me")], nextCursor: null, hasMore: false });
-    deleteComment.mockResolvedValue(undefined);
+  it("asks for the next page once, however fast Load more is clicked", async () => {
+    listInboxComments
+      .mockResolvedValueOnce({ items: [row("c1", "first page")], nextCursor: "cur-1", hasMore: true })
+      .mockReturnValueOnce(new Promise(() => {}));
     render(<StudioComments />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
-    expect(screen.getByText("Delete this comment?")).toBeTruthy();
-    expect(deleteComment).not.toHaveBeenCalled();
+    const button = await screen.findByRole("button", { name: "Load more" });
+    fireEvent.click(button);
+    fireEvent.click(button);
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Delete" }).at(-1)!);
-    await waitFor(() => expect(deleteComment).toHaveBeenCalledWith("v1", "c2"));
+    expect(listInboxComments).toHaveBeenCalledTimes(2);
   });
 });

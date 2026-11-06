@@ -4,6 +4,7 @@ import "./globals.css";
 
 import { TopBar } from "@/components/layout/TopBar";
 import { ChatUnreadProvider } from "@/components/messages/ChatUnreadProvider";
+import { MessagesPanelProvider } from "@/components/messages/panel/MessagesPanelProvider";
 import { FloatingChat } from "@/components/messages/floating/FloatingChat";
 import { PlayerSettingsProvider } from "@/components/player/PlayerSettingsProvider";
 import { ScreenTimeGuard } from "@/components/screen-time/ScreenTimeGuard";
@@ -75,6 +76,7 @@ export default function RootLayout({
                 {/* One unread tally and one floating chat for every route, so a message counts, and
                     the panel stays open, while the viewer moves between pages. */}
                 <ChatUnreadProvider>
+                  <MessagesPanelProvider>
                   <div className="flex min-h-screen flex-col">
                     <div className="flex h-screen justify-between bg-[var(--tt-page)]">
                       {children}
@@ -83,6 +85,7 @@ export default function RootLayout({
                     <TopBar />
                   </div>
                   <FloatingChat />
+                  </MessagesPanelProvider>
                 </ChatUnreadProvider>
               </StoriesProvider>
             </PlayerSettingsProvider>

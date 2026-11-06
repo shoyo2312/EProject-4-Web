@@ -23,8 +23,10 @@ import { clearCommentCache } from "@/lib/comment-cache";
 import { appendUnique } from "@/lib/paging";
 import { changedProfileFields } from "@/lib/profile/changed-fields";
 import { gridAccessChanged } from "@/lib/profile/grid-access";
+import { patchGrid } from "@/lib/profile/live-grid";
 import { toast } from "@/components/ui/toast";
 import { useUserRealtime } from "@/hooks/use-user-realtime";
+import { useVideoChanges } from "@/hooks/use-video-changes";
 import type { FollowStatus, ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
 
 /** How many videos the grid asks for in one page. */
@@ -64,6 +66,14 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
   const videoPage = useRef(0);
   const [moreVideos, setMoreVideos] = useState(false);
   const loadingMoreVideos = useRef(false);
+  /**
+   * Bumped whenever the grid is replaced from scratch (a profile load, a reload). A page that
+   * answers for an older generation — another profile, or a reload overtaken by a newer one — is
+   * dropped instead of landing on the grid it no longer belongs to.
+   */
+  const gridGeneration = useRef(0);
+  /** The latest profile load; an older one that answers late is dropped (the viewer moved on). */
+  const loadRun = useRef(0);
 
   /** What `/friendship` last said, to tell whether a fresh answer changes the grid. */
   const relationship = useRef<FriendshipResponse | null>(null);
@@ -79,12 +89,16 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
     if (!sessionSettled) return;
     if (!userId && !viewerId) return;
 
+    gridGeneration.current += 1;
+    const run = ++loadRun.current;
+    const stale = () => run !== loadRun.current;
     setError(null);
 
     try {
       const raw = userId
         ? await usersApi.getProfile(userId)
         : await usersApi.getMyProfile();
+      if (stale()) return;
 
       const isOwnPage = viewerId !== undefined && viewerId === raw.userId;
       const author = authorFromProfile(raw);
@@ -112,6 +126,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
         // becoming an error over one number.
         getUserVideoStats(raw.userId).catch(() => null),
       ]);
+      if (stale()) return;
       relationship.current = friendship;
 
       const withVideos = (videos: ProfileVideo[], postsLocked = false) =>
@@ -138,6 +153,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       });
 
       const videos = await videosLoading;
+      if (stale()) return;
 
       if (videos === null) {
         setProfile(withVideos([], true));
@@ -152,6 +168,7 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       setMoreVideos(!isLastPage(videos.page));
       setPending(null);
     } catch (cause) {
+      if (stale()) return;
       // A 404 is deliberately ambiguous — no such account, or a block in either
       // direction. It is never presented as one or the other.
       setError(messageFor(cause));
@@ -163,9 +180,11 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
   const loadMoreVideos = useCallback(async () => {
     if (!profileId || loadingMoreVideos.current) return;
     loadingMoreVideos.current = true;
+    const generation = gridGeneration.current;
     try {
       const next = videoPage.current + 1;
       const page = await getUserVideos(profileId, next, VIDEO_PAGE);
+      if (generation !== gridGeneration.current) return;
       videoPage.current = next;
       const incoming = page.content.map(videoToProfileVideo);
       setProfile((current) =>
@@ -183,6 +202,48 @@ export function BackendProfilePage({ userId }: { userId?: string }) {
       loadingMoreVideos.current = false;
     }
   }, [profileId]);
+
+  /** The Videos grid alone, from its first page — the header and the other tabs stay as they are. */
+  const reloadVideos = useCallback(async () => {
+    if (!profileId) return;
+    const generation = ++gridGeneration.current;
+    const page = await getUserVideos(profileId, 0, VIDEO_PAGE).catch(() => null);
+    if (!page || generation !== gridGeneration.current) return;
+    videoPage.current = 0;
+    setMoreVideos(!isLastPage(page.page));
+    setProfile((current) =>
+      current ? { ...current, posts: { ...current.posts, videos: page.content.map(videoToProfileVideo) } } : current,
+    );
+  }, [profileId]);
+
+  /**
+   * A delete, pin or privacy change made in Studio, another tab or another device reaches the grid
+   * without a reload. A deleted video leaves every tab it sits in (Liked and Favorites too).
+   */
+  useVideoChanges(profile?.posts.videos.map((video) => video.id) ?? [], {
+    onUpdated: (video) => {
+      if (!profile || !profileId) return;
+      // Patched from the latest grid, not this render's: one recheck reports many videos in a row,
+      // and each patch built on the same stale array kept only the last. Whether to reload is read
+      // off this render's grid, which only costs a spare refetch when it is behind.
+      if (patchGrid(profile.posts.videos, profileId, video) === "reload") {
+        void reloadVideos();
+        return;
+      }
+      setProfile((current) => {
+        if (current?.author.userId !== profileId) return current;
+        const next = patchGrid(current.posts.videos, profileId, video);
+        return Array.isArray(next) ? { ...current, posts: { ...current.posts, videos: next } } : current;
+      });
+    },
+    onDeleted: (videoId) =>
+      setProfile((current) => {
+        if (!current) return current;
+        const posts = { ...current.posts };
+        for (const tab of Object.keys(posts) as ProfileTab[]) posts[tab] = posts[tab].filter((video) => video.id !== videoId);
+        return { ...current, posts };
+      }),
+  });
 
   /**
    * Followers/following/total-likes only, no video refetch. Used after a

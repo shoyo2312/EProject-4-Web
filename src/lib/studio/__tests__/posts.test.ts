@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { insertToken, nextSort, videoFileName } from "@/lib/studio/posts";
+import { insertToken, nextSort, pinnedFirst, videoFileName } from "@/lib/studio/posts";
 
 describe("insertToken", () => {
   it("puts the token at the caret and moves the caret past it", () => {
@@ -35,5 +35,18 @@ describe("nextSort", () => {
 
   it("starts another column high to low whatever the last one was", () => {
     expect(nextSort({ key: "VIEWS", order: "ASC" }, "LIKES")).toEqual({ key: "LIKES", order: "DESC" });
+  });
+});
+
+describe("pinnedFirst", () => {
+  it("moves pinned items ahead and keeps the ranking inside each group", () => {
+    const rows = [
+      { id: "a", pinnedAt: null },
+      { id: "b", pinnedAt: "2026-11-01T00:00:00Z" },
+      { id: "c", pinnedAt: undefined },
+      { id: "d", pinnedAt: "2026-10-01T00:00:00Z" },
+    ];
+    expect(pinnedFirst(rows, (row) => row.pinnedAt).map((row) => row.id)).toEqual(["b", "d", "a", "c"]);
+    expect(rows.map((row) => row.id)).toEqual(["a", "b", "c", "d"]);
   });
 });

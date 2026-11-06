@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef } from "react";
 
 import { recordView, recordWatch } from "@/lib/api/interactions";
+import type { WatchSource } from "@/lib/api/types";
+import { markLastWatched } from "@/lib/last-watched";
 
 interface UseWatchSessionOptions {
   videoId: string;
@@ -13,6 +15,10 @@ interface UseWatchSessionOptions {
   duration: number;
   /** False for a signed-out viewer: the endpoint has no identity to record. */
   enabled: boolean;
+  /** Where the viewer was when the card played — Studio's traffic source. */
+  source: WatchSource;
+  /** What they searched, when `source` is `SEARCH`; dropped otherwise. */
+  searchQuery?: string;
 }
 
 /**
@@ -34,6 +40,8 @@ export function useWatchSession({
   isPlaying,
   duration,
   enabled,
+  source,
+  searchQuery,
 }: UseWatchSessionOptions): void {
   /** Accumulated ms, plus when the current playing stretch began (0 = paused). */
   const watchedMs = useRef(0);
@@ -47,10 +55,10 @@ export function useWatchSession({
    * the effects that flush, so this commit's values are in place before any of
    * them can fire.
    */
-  const latest = useRef({ videoId, duration, enabled });
+  const latest = useRef({ videoId, duration, enabled, source, searchQuery });
   useEffect(() => {
-    latest.current = { videoId, duration, enabled };
-  }, [videoId, duration, enabled]);
+    latest.current = { videoId, duration, enabled, source, searchQuery };
+  }, [videoId, duration, enabled, source, searchQuery]);
 
   /**
    * The view counter, which nothing else was moving — the watch report above is
@@ -64,6 +72,9 @@ export function useWatchSession({
    */
   const playId = useRef<string | null>(null);
   useEffect(() => {
+    // Ahead of the `enabled` gate: the "Just watched" tile on a profile is for
+    // every viewer, signed in or not, and needs no server.
+    if (isPlaying) markLastWatched(latest.current.videoId);
     if (!isPlaying || viewed.current || !latest.current.enabled) return;
     viewed.current = true;
     playId.current ??= crypto.randomUUID();
@@ -93,7 +104,7 @@ export function useWatchSession({
    * every call as its own session, so a double fire is a fabricated view.
    */
   const flush = useCallback(() => {
-    const { videoId: id, duration: seconds, enabled: on } = latest.current;
+    const { videoId: id, duration: seconds, enabled: on, source: from, searchQuery: query } = latest.current;
     if (sent.current || !on) return;
 
     if (startedAt.current !== 0) {
@@ -111,7 +122,9 @@ export function useWatchSession({
     // the way out, and there is no one left to tell. `recordWatch` sends it with
     // `keepalive`, which, unlike `sendBeacon`, carries the bearer header and
     // survives the tab closing.
-    void recordWatch(id, watchedMs.current, seconds * 1000).catch(() => undefined);
+    void recordWatch(id, watchedMs.current, seconds * 1000, from, from === "SEARCH" ? query : undefined).catch(
+      () => undefined,
+    );
   }, []);
 
   // Scrolled away from: the card is no longer the one on screen. Resets rather

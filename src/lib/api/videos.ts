@@ -2,6 +2,7 @@
 
 import { apiFetch } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/errors";
+import { announceVideoChange } from "@/lib/video-events";
 import type {
   CreateVideoRequest,
   UploadUrlRequest,
@@ -242,11 +243,23 @@ export function createVideo(input: CreateVideoRequest): Promise<VideoResponse> {
 }
 
 /** `DELETE /api/v1/videos/{videoId}` — soft delete, one way, owner only. */
-export function deleteVideo(videoId: string): Promise<void> {
-  return apiFetch<void>(`/videos/${videoId}`, {
+export async function deleteVideo(videoId: string): Promise<void> {
+  await apiFetch<void>(`/videos/${videoId}`, {
     method: "DELETE",
     auth: "required",
   });
+  announceVideoChange({ kind: "deleted", videoId });
+}
+
+/**
+ * Every owner edit goes through here, so every open copy of the video — Studio's Posts table, the
+ * profile grid, another tab — hears about it, whichever screen made it. Only after the server
+ * accepted it: a refused edit changed nothing.
+ */
+async function announced(edit: Promise<VideoResponse>): Promise<VideoResponse> {
+  const video = await edit;
+  announceVideoChange({ kind: "updated", video });
+  return video;
 }
 
 /**
@@ -262,31 +275,31 @@ export function updateVideoCaption(
   videoId: string,
   caption: { title: string; description?: string },
 ): Promise<VideoResponse> {
-  return apiFetch<VideoResponse>(`/videos/${videoId}/caption`, {
+  return announced(apiFetch<VideoResponse>(`/videos/${videoId}/caption`, {
     method: "PATCH",
     body: caption,
     auth: "required",
-  });
+  }));
 }
 
 /** `PATCH /api/v1/videos/{id}/pin` — owner only; 409 `PIN_LIMIT_REACHED` past three. */
 export function updateVideoPinned(videoId: string, pinned: boolean): Promise<VideoResponse> {
-  return apiFetch<VideoResponse>(`/videos/${videoId}/pin`, {
+  return announced(apiFetch<VideoResponse>(`/videos/${videoId}/pin`, {
     method: "PATCH",
     body: { pinned },
     auth: "required",
-  });
+  }));
 }
 
 export function updateVideoVisibility(
   videoId: string,
   visibility: VideoVisibility,
 ): Promise<VideoResponse> {
-  return apiFetch<VideoResponse>(`/videos/${videoId}/visibility`, {
+  return announced(apiFetch<VideoResponse>(`/videos/${videoId}/visibility`, {
     method: "PATCH",
     body: { visibility },
     auth: "required",
-  });
+  }));
 }
 
 /**
@@ -298,11 +311,11 @@ export function updateVideoCommentsSetting(
   videoId: string,
   disabled: boolean,
 ): Promise<VideoResponse> {
-  return apiFetch<VideoResponse>(`/videos/${videoId}/comments-setting`, {
+  return announced(apiFetch<VideoResponse>(`/videos/${videoId}/comments-setting`, {
     method: "PATCH",
     body: { disabled },
     auth: "required",
-  });
+  }));
 }
 
 /** 2s, 5s, then 10s apart — backing off because the gateway caps 20 req/s per IP. */

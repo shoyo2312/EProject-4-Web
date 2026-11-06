@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type Ref, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import {
+  DoubleChevronUpIcon,
   EmptyGridIcon,
   FavoritesIcon,
   LikedIcon,
@@ -19,9 +20,11 @@ import { toast } from "@/components/ui/toast";
 import { deleteVideo } from "@/lib/api/videos";
 import type { VideoStatus } from "@/lib/api/types";
 import { formatCount } from "@/lib/format";
+import { getLastWatchedId } from "@/lib/last-watched";
 import { markOverlayOrigin } from "@/lib/overlay-origin";
 import { cn } from "@/lib/utils";
 import type { ProfileTab, ProfileVideo, UserProfile } from "@/types/tiktok";
+import { videoHref } from "@/lib/watch-source";
 
 const TABS: { id: ProfileTab; label: string; Icon: typeof PlayIcon }[] = [
   { id: "videos", label: "Videos", Icon: ProfileVideosIcon },
@@ -125,6 +128,40 @@ export function ProfileBody({
    */
   const tab = tabFromParam(searchParams.get("tab"));
   const [sort, setSort] = useState<Sort>("Latest");
+
+  // Read after mount: `sessionStorage` is not there on the server, and a tile
+  // that differs between the two renders would be a hydration mismatch.
+  const [lastWatchedId, setLastWatchedId] = useState<string | null>(null);
+  useEffect(() => setLastWatchedId(getLastWatchedId()), []);
+
+  /**
+   * Which way the just-watched tile went when it left the viewport, or null
+   * while it is on screen (or not in this grid). Drives the "Just watched" pill
+   * and the direction its chevrons point.
+   */
+  const [lastWatchedAway, setLastWatchedAway] = useState<"above" | "below" | null>(null);
+  const [lastWatchedTile, setLastWatchedTile] = useState<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!lastWatchedTile) {
+      setLastWatchedAway(null);
+      return;
+    }
+    // Half the tile counts as on screen; a sliver at the edge does not, since
+    // the viewer cannot tell it is the one.
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.intersectionRatio >= 0.5) {
+          setLastWatchedAway(null);
+          return;
+        }
+        const top = entry.rootBounds?.top ?? 0;
+        setLastWatchedAway(entry.boundingClientRect.top < top ? "above" : "below");
+      },
+      { threshold: 0.5 },
+    );
+    observer.observe(lastWatchedTile);
+    return () => observer.disconnect();
+  }, [lastWatchedTile]);
 
   const selectTab = (id: ProfileTab) => {
     const query = id === "videos" ? "" : `?tab=${id}`;
@@ -240,6 +277,8 @@ export function ProfileBody({
             <ProfileTile
               key={post.id}
               post={post}
+              justWatched={post.id === lastWatchedId}
+              ref={post.id === lastWatchedId ? setLastWatchedTile : undefined}
               onDelete={isOwner ? () => setConfirmingId(post.id) : undefined}
               onOpen={() =>
                 markOverlayOrigin(
@@ -252,6 +291,19 @@ export function ProfileBody({
         </div>
       )}
       {loadMore && posts.length > 0 && <div ref={sentinelRef} aria-hidden className="h-px" />}
+
+      {lastWatchedAway && lastWatchedTile && (
+        <button
+          type="button"
+          onClick={() => lastWatchedTile.scrollIntoView({ behavior: "smooth", block: "center" })}
+          className="fixed right-10 bottom-[88px] z-20 flex h-12 items-center gap-2 rounded-full bg-[#fe2c55] px-6 text-[16px] font-semibold text-white shadow-[0_4px_12px_rgba(0,0,0,0.3)] hover:bg-[var(--tt-red-active)]"
+        >
+          Just watched
+          <DoubleChevronUpIcon
+            className={cn("h-4 w-4", lastWatchedAway === "below" && "rotate-180")}
+          />
+        </button>
+      )}
 
       {confirmingId && (
         <Modal
@@ -362,10 +414,16 @@ function SegmentedControl({
 /** `.DivItemContainerV2` — cover, view count, muted preview on hover. */
 function ProfileTile({
   post,
+  justWatched,
+  ref,
   onOpen,
   onDelete,
 }: {
   post: ProfileVideo;
+  /** The clip the viewer came here from; the tile says so, as TikTok's does. */
+  justWatched?: boolean;
+  /** The tile's element, for the grid to watch whether it is on screen. */
+  ref?: Ref<HTMLAnchorElement>;
   /** Records the origin route and this grid's id list for the overlay. */
   onOpen: () => void;
   /** Owner's grid only; the button shows on tiles that are not live. */
@@ -388,7 +446,8 @@ function ProfileTile({
 
   return (
     <Link
-      href={`/video/${encodeURIComponent(post.id)}`}
+      ref={ref}
+      href={videoHref(post.id, "profile")}
       onClick={onOpen}
       onMouseEnter={() => preview(true)}
       onMouseLeave={() => preview(false)}
@@ -427,6 +486,13 @@ function ProfileTile({
               <span className="sr-only">Private</span>
             </div>
           )}
+        </div>
+      )}
+
+      {justWatched && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-1 bg-black/50 text-[16px] font-semibold text-white">
+          <PlayIcon className="h-4 w-4" />
+          Just watched
         </div>
       )}
 

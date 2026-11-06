@@ -17,6 +17,7 @@ import {
 import { authorFromProfile, DEFAULT_AVATAR, unknownAuthor } from "@/lib/api/adapters";
 import {
   ACCOUNT_SECURITY_REFERENCE,
+  MENTION_TITLE,
   referencesUser,
   type NotificationResponse,
 } from "@/lib/api/notifications";
@@ -410,7 +411,9 @@ function describe(item: NotificationResponse): string {
     case "REPOST":
       return "reposted your video";
     case "COMMENT":
-      return `commented: ${item.body}`;
+      return item.title === MENTION_TITLE
+        ? `mentioned you in a comment: ${item.body}`
+        : `commented: ${item.body}`;
     case "SYSTEM":
     case "SCREEN_TIME":
       return item.body;
