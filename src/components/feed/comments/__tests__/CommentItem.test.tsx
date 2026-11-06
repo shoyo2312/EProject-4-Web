@@ -107,4 +107,20 @@ describe("CommentItem", () => {
     expect(dialog()?.className).toContain("starting:scale-10");
     expect(dialog()?.parentElement?.className).toContain("starting:opacity-0");
   });
+
+  it("offers Report on someone else's comment", () => {
+    render(<CommentItem comment={comment("2", { id: "123" })} videoId="v" currentUserId="1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More options" }));
+    expect(screen.getByRole("menuitem", { name: "Report" })).toBeTruthy();
+  });
+
+  it("does not offer Report on the viewer's own comment, only Delete, matched by userId", () => {
+    // Same display name as the viewer would have is irrelevant: the ids decide.
+    render(<CommentItem comment={comment("1", { id: "123" })} videoId="v" currentUserId="1" onDelete={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More options" }));
+    expect(screen.queryByRole("menuitem", { name: "Report" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toBeTruthy();
+  });
 });

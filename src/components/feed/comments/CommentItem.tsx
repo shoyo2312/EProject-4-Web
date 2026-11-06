@@ -145,12 +145,10 @@ import type { Comment } from "@/types/tiktok";
   const avatarSize = isReply ? 24 : 32;
   const canDelete =
     Boolean(currentUserId) && (comment.author.userId === currentUserId || canModerate);
-  // Reporting stands beside Delete rather than replacing it: an owner who
-  // clears a comment off their video still wants it in front of a moderator,
-  // and the comment's own author is the one who notices when their account has
-  // been posting things they did not write. An optimistic row not yet saved
-  // has no id admin-service could act on.
-  const canReport = canPersistLike;
+  // Nobody reports their own comment (admin-service refuses it too); an optimistic row
+  // not yet saved has no id admin-service could act on. Ownership is by userId, not by name.
+  const isOwnComment = Boolean(currentUserId) && comment.author.userId === currentUserId;
+  const canReport = canPersistLike && !isOwnComment;
   const menuHasItems = canDelete || canReport;
 
   /* Click anywhere else — including the next comment's "⋯" — closes the menu. */
@@ -239,7 +237,7 @@ import type { Comment } from "@/types/tiktok";
                 <MoreDotsGlyph />
               </button>
 
-              {/* Report is offered to everyone the comment is actionable for;
+              {/* Report is offered on other people's comments;
                   Delete only to its author and the video's owner, and last, so
                   the destructive item is never the one under a stray click. */}
               {menuOpen && menuHasItems && (

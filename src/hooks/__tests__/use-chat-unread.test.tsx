@@ -125,14 +125,14 @@ describe("alerts for a new message", () => {
     expect(result.current.byConversation.a).toBe(1);
   });
 
-  it("raises none while muted — and still counts, previews and orders the message", async () => {
+  it("raises none while muted and shows no badge — yet still previews, orders and keeps it unread", async () => {
     const { result } = await open([convo("a", { muteMode: "INDEFINITE" }), convo("b", { lastMessageAt: "2026-10-27T09:00:00.000Z" })]);
 
     act(() => api.queue.handler?.(incoming("a", "m1", "while muted")));
 
     expect(api.notify).not.toHaveBeenCalled();
-    expect(result.current.total).toBe(1);
-    expect(result.current.byConversation.a).toBe(1);
+    expect(result.current.total).toBe(0);
+    expect(result.current.byConversation.a).toBeUndefined();
     expect(result.current.conversations[0]).toMatchObject({ id: "a", lastMessageContent: "while muted", hasUnread: true });
   });
 

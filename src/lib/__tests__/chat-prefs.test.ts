@@ -5,6 +5,8 @@ import { EMPTY_UNREAD, addUnread, dropConversation, unreadTotal } from "@/lib/ch
 import {
   applyIncoming,
   isMuted,
+  muteStatus,
+  requestCounts,
   nextMuteExpiry,
   noticeBody,
   placeConversation,
@@ -167,5 +169,32 @@ describe("dropConversation", () => {
     expect(unreadTotal(next)).toBe(1);
     expect(next.unread.a).toBeUndefined();
     expect(next.readThrough).toEqual({ b: at(1) });
+  });
+});
+
+describe("mute status and badges", () => {
+  const now = Date.parse(at(30));
+
+  it("says an indefinite mute lasts until it is turned back on", () => {
+    expect(muteStatus(convo("a", { muteMode: "INDEFINITE" }), now)).toMatch(/until you turn them back on/);
+  });
+
+  it("says when a timed mute ends and how long is left", () => {
+    const text = muteStatus(convo("a", { muteMode: "TIMED", mutedUntil: new Date(now + 135 * 60_000).toISOString() }), now);
+    expect(text).toMatch(/back on at/);
+    expect(text).toMatch(/2h 15m left/);
+  });
+
+  it("has nothing to say once a timed mute has ended, or when never muted", () => {
+    expect(muteStatus(convo("a", { muteMode: "TIMED", mutedUntil: at(29) }), now)).toBeNull();
+    expect(muteStatus(convo("a"), now)).toBeNull();
+  });
+
+  it("leaves a muted request out of the unread count but keeps it pending", () => {
+    const requests = [
+      convo("r1", { hasUnread: true, muteMode: "INDEFINITE" }),
+      convo("r2", { hasUnread: true }),
+    ];
+    expect(requestCounts(requests, now)).toEqual({ pending: 2, unread: 1 });
   });
 });

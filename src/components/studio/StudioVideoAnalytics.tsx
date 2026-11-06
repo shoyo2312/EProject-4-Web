@@ -13,7 +13,8 @@ import { SearchQueries } from "@/components/studio/video/SearchQueries";
 import { TrafficSources } from "@/components/studio/video/TrafficSources";
 import { ViewerBreakdown } from "@/components/studio/video/ViewerBreakdown";
 import { BookmarkIcon, CommentIcon, HeartIcon, PlayIcon, ShareIcon } from "@/components/icons";
-import { useStudioQuery } from "@/hooks/use-studio-query";
+import { useStudioPulse } from "@/hooks/use-studio-pulse";
+import { ANALYTICS_REFRESH_MS, useStudioQuery } from "@/hooks/use-studio-query";
 import { getVideoCounts } from "@/lib/api/interactions";
 import { getCreatorVideo } from "@/lib/api/studio";
 import { getVideo } from "@/lib/api/videos";
@@ -29,7 +30,13 @@ export function StudioVideoAnalytics({ videoId }: { videoId: string }) {
   const openVideo = useOpenStudioVideo();
   const { days, setDays } = useStudioRange();
   const video = useStudioQuery(`video:${videoId}`, (signal) => getVideo(videoId, signal));
-  const stats = useStudioQuery(`video-stats:${videoId}:${days}`, (signal) => getCreatorVideo(videoId, days, signal));
+  const stats = useStudioQuery(
+    `video-stats:${videoId}:${days}`,
+    (signal) => getCreatorVideo(videoId, days, signal),
+    ANALYTICS_REFRESH_MS,
+  );
+  // A like, comment, share or view on this post is pushed here; the charts follow once it is counted.
+  useStudioPulse(`/topic/videos.${videoId}`, stats.refresh);
   const data = stats.data;
 
   return (
@@ -138,9 +145,13 @@ export function StudioVideoAnalytics({ videoId }: { videoId: string }) {
 
 /** Lifetime counters beside the post, as TikTok Studio shows them. Saves live only in interaction-service. */
 function VideoCounts({ videoId }: { videoId: string }) {
-  const query = useStudioQuery(`video-counts:${videoId}`, (signal) =>
-    getVideoCounts([videoId], signal).then(([row]) => row),
+  const query = useStudioQuery(
+    `video-counts:${videoId}`,
+    (signal) => getVideoCounts([videoId], signal).then(([row]) => row),
+    ANALYTICS_REFRESH_MS,
   );
+  // interaction-service holds these counters itself, so they are current the moment the frame lands.
+  useStudioPulse(`/topic/videos.${videoId}`, query.refresh, 0);
   const counts = query.data;
   if (query.error) return null;
 

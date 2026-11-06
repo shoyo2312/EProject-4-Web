@@ -17,7 +17,7 @@ import { useMounted } from "@/hooks/use-mounted";
 import { isApiError } from "@/lib/api/errors";
 import type { ConversationResponse, MuteLength } from "@/lib/api/conversations";
 import { block, unblock } from "@/lib/api/users";
-import { chatErrorMessage, isMuted } from "@/lib/chat";
+import { chatErrorMessage, isMuted, muteStatus } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 
 type Dialog = "mute" | "block" | "delete" | "report" | null;
@@ -225,6 +225,9 @@ export function ConversationMenu({
           >
             {muted ? (
               <>
+                <p className="px-3 pt-1.5 pb-1 text-[12.5px] leading-4 text-[var(--chat-meta)]">
+                  {muteStatus(item, chat.nowMs)}
+                </p>
                 <button type="button" role="menuitem" className={itemClass} onClick={() => void quick(() => chat.unmute(item.id))}>
                   <Bell aria-hidden className="h-5 w-5" />
                   Unmute notifications

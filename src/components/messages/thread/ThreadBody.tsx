@@ -277,7 +277,7 @@ export function ThreadBody({
         </div>
       ) : thread.messages.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <ChatAvatar userId={otherId} src={avatar} className="h-20 w-20" />
+          <ChatAvatar userId={otherId} name={name} src={avatar} className="h-20 w-20" />
           <p className="mt-3 text-[16px] font-semibold text-[var(--tt-text)]">{name}</p>
           <p className="mt-1 text-[14px] text-[var(--tt-text-muted)]">Say hello to start the conversation.</p>
         </div>

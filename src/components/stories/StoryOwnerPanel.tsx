@@ -1,11 +1,11 @@
 "use client";
 
 import { Eye } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { authorFromProfile, unknownAuthor } from "@/lib/api/adapters";
 import { messageFor } from "@/lib/api/errors";
-import { getStoryViewers } from "@/lib/api/stories";
+import { getStory, getStoryViewers } from "@/lib/api/stories";
 import type { StoryResponse, StoryStatus, StoryViewer, UserProfileResponse } from "@/lib/api/types";
 import { getProfiles } from "@/lib/api/users";
 import { formatRelativeTime } from "@/lib/format";
@@ -13,6 +13,9 @@ import { emojiOf, REACTIONS } from "@/lib/stories/reactions";
 
 /** The server's page size for viewers — a shorter page is the last. */
 const VIEWERS_PAGE = 20;
+
+/** How often the open panel asks again for views and reactions given since it opened. */
+const REFRESH_MS = 5000;
 
 const STATUS_LABEL: Partial<Record<StoryStatus, string>> = {
   PENDING_MODERATION: "Pending review",
@@ -38,6 +41,12 @@ export function StoryOwnerPanel({
   const [more, setMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Views and reactions arrive while the owner watches: the story handed in is a snapshot from when
+  // the player opened, so the counts are re-read here and the open list is reloaded with them.
+  const [live, setLive] = useState<Pick<StoryResponse, "viewCount" | "reactionCounts"> | null>(null);
+  const viewCount = live?.viewCount ?? story.viewCount;
+  const reactionCounts = live?.reactionCounts ?? story.reactionCounts;
+
   const label = story.status ? STATUS_LABEL[story.status] : undefined;
 
   const open = viewers !== null;
@@ -49,7 +58,7 @@ export function StoryOwnerPanel({
     onBusyRef.current(open);
   }, [open]);
 
-  async function loadViewers(before?: string) {
+  const loadViewers = useCallback(async (before?: string) => {
     let page: StoryViewer[];
     try {
       page = await getStoryViewers(story.id, before);
@@ -66,7 +75,28 @@ export function StoryOwnerPanel({
       ...current,
       ...Object.fromEntries(found.map((profile) => [profile.userId, profile])),
     }));
-  }
+  }, [story.id]);
+
+  const viewersOpen = useRef(false);
+  useEffect(() => {
+    viewersOpen.current = open;
+  }, [open]);
+  useEffect(() => {
+    if (story.status && story.status !== "ACTIVE") return;
+    let stopped = false;
+    const refresh = async () => {
+      if (document.hidden) return;
+      const fresh = await getStory(story.id).catch(() => null);
+      if (stopped || !fresh) return;
+      setLive({ viewCount: fresh.viewCount, reactionCounts: fresh.reactionCounts });
+      if (viewersOpen.current) void loadViewers();
+    };
+    const timer = window.setInterval(() => void refresh(), REFRESH_MS);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [story.id, story.status, loadViewers]);
 
   function toggleViewers() {
     if (viewers) setViewers(null);
@@ -83,12 +113,12 @@ export function StoryOwnerPanel({
         <button type="button" onClick={toggleViewers}
           className="flex items-center gap-1.5 text-[14px] font-semibold hover:underline">
           <Eye className="h-4 w-4" />
-          {story.viewCount ?? 0} {story.viewCount === 1 ? "view" : "views"}
+          {viewCount ?? 0} {viewCount === 1 ? "view" : "views"}
         </button>
-        {REACTIONS.filter(({ type }) => (story.reactionCounts?.[type] ?? 0) > 0).map(({ type, emoji, label }) => (
-          <span key={type} aria-label={`${story.reactionCounts?.[type]} ${label}`}
+        {REACTIONS.filter(({ type }) => (reactionCounts?.[type] ?? 0) > 0).map(({ type, emoji, label }) => (
+          <span key={type} aria-label={`${reactionCounts?.[type]} ${label}`}
             className="rounded-full bg-white/10 px-2 py-0.5 text-[13px]">
-            {emoji} {story.reactionCounts?.[type]}
+            {emoji} {reactionCounts?.[type]}
           </span>
         ))}
 
@@ -108,7 +138,11 @@ export function StoryOwnerPanel({
                 <img src={author.avatarUrl} alt="" referrerPolicy="no-referrer"
                   className="h-7 w-7 rounded-full bg-[rgb(136_136_136/0.5)] object-cover" />
                 <span className="truncate">{author.nickname}</span>
-                {viewer.reaction && <span aria-label={viewer.reaction.toLowerCase()}>{emojiOf(viewer.reaction)}</span>}
+                {viewer.reaction && (
+                  <span aria-label={`Reacted ${viewer.reaction.toLowerCase()}`} className="text-[18px] leading-none">
+                    {emojiOf(viewer.reaction)}
+                  </span>
+                )}
                 <span className="ml-auto text-[12px] text-white/60">{formatRelativeTime(viewer.viewedAt)}</span>
               </li>
             );
