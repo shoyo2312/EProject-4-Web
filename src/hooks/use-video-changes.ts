@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 
-import { useVideoRealtime } from "@/hooks/use-video-realtime";
+import { type VideoFrame, useVideoRealtime } from "@/hooks/use-video-realtime";
 import { isApiError } from "@/lib/api/errors";
 import type { VideoResponse } from "@/lib/api/types";
 import { getVideo, getVideosByIds } from "@/lib/api/videos";
@@ -21,10 +21,17 @@ const BATCH = 50;
  *
  * Handlers may be told about ids the caller does not hold (a change in this browser is announced
  * to everyone); replacing by id makes that a no-op.
+ *
+ * `onCounts`, for a list that shows counters: the topic's `counts` frames, a snapshot of the
+ * post's views, likes and comments the moment one moves. Patch with `withCounts`.
  */
 export function useVideoChanges(
   videoIds: string[],
-  handlers: { onUpdated: (video: VideoResponse) => void; onDeleted: (videoId: string) => void },
+  handlers: {
+    onUpdated: (video: VideoResponse) => void;
+    onDeleted: (videoId: string) => void;
+    onCounts?: (frame: VideoFrame) => void;
+  },
 ): void {
   // Swapped in the commit itself: a change announced between a commit and its passive effects
   // (a task later) must reach the handlers of the rows on screen, not the previous render's.
@@ -51,6 +58,10 @@ export function useVideoChanges(
   );
 
   useVideoRealtime(ids, (frame) => {
+    if (frame.type === "counts") {
+      handler.current.onCounts?.(frame);
+      return;
+    }
     if (frame.type !== "state") return;
     if (frame.status === "DELETED") {
       handler.current.onDeleted(frame.videoId);
@@ -83,4 +94,14 @@ export function useVideoChanges(
     document.addEventListener("visibilitychange", recheck);
     return () => document.removeEventListener("visibilitychange", recheck);
   }, []);
+}
+
+/** `video` with the counters a `counts` frame carries; a counter the frame leaves out is kept. */
+export function withCounts(video: VideoResponse, frame: VideoFrame): VideoResponse {
+  return {
+    ...video,
+    viewCount: frame.viewCount ?? video.viewCount,
+    likeCount: frame.likeCount ?? video.likeCount,
+    commentCount: frame.commentCount ?? video.commentCount,
+  };
 }

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { CommentRow } from "@/components/studio/CommentRow";
 import { MetricTabs } from "@/components/studio/MetricTabs";
 import { PostCell } from "@/components/studio/PostCell";
+import { POSTS_POLL_MS } from "@/components/studio/StudioPosts";
 import { useStudioRange } from "@/components/studio/StudioRange";
 import {
   EmptyState,
@@ -18,7 +19,8 @@ import { useSession } from "@/components/session/SessionProvider";
 import { useCommentContext } from "@/hooks/use-comment-context";
 import { useMyStudioPulse } from "@/hooks/use-studio-pulse";
 import { ANALYTICS_REFRESH_MS, useStudioQuery } from "@/hooks/use-studio-query";
-import { useVideoChanges } from "@/hooks/use-video-changes";
+import { INBOX_POLL_MS } from "@/hooks/use-inbox-comments";
+import { useVideoChanges, withCounts } from "@/hooks/use-video-changes";
 import {
   getCreatorOverview,
   listInboxComments,
@@ -110,8 +112,11 @@ function ProfileCard() {
 }
 
 function RecentPosts() {
-  const posts = useStudioQuery("recent-posts", (signal) =>
-    listStudioPosts({ size: 3 }, signal),
+  // Asked again for a post just uploaded or a verdict just given; counters come by frame below.
+  const posts = useStudioQuery(
+    "recent-posts",
+    (signal) => listStudioPosts({ size: 3 }, signal),
+    POSTS_POLL_MS,
   );
   // Edits seen since this answer arrived. Tied to the answer, so a newer one from the server is
   // never painted over by an older edit.
@@ -140,6 +145,18 @@ function RecentPosts() {
     // The three newest, so a delete pulls the fourth up: asked again rather than patched.
     onDeleted: (id) => {
       if (shown.includes(id)) posts.reload();
+    },
+    // A view, like or comment from anyone, the moment it happens.
+    onCounts: (frame) => {
+      const base = posts.data?.content.find((video) => video.id === frame.videoId);
+      if (!base) return;
+      setPatched((current) => {
+        const videos = current.base === posts.data ? current.videos : {};
+        return {
+          base: posts.data,
+          videos: { ...videos, [frame.videoId]: withCounts(videos[frame.videoId] ?? base, frame) },
+        };
+      });
     },
   });
 
@@ -213,8 +230,11 @@ function PostNumbers({
 }
 
 function LatestComments() {
-  const page = useStudioQuery("latest-comments", (signal) =>
-    listInboxComments({}, undefined, 3, signal),
+  // Nothing pushes a comment on my posts to Studio — and a held one publishes nothing at all.
+  const page = useStudioQuery(
+    "latest-comments",
+    (signal) => listInboxComments({}, undefined, 3, signal),
+    INBOX_POLL_MS,
   );
   const comments = page.data?.items ?? [];
   const { authors, videos } = useCommentContext(comments);

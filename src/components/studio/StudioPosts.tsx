@@ -19,7 +19,8 @@ import {
 } from "@/components/studio/ui";
 import { toast } from "@/components/ui/toast";
 import { useDebounced } from "@/hooks/use-debounced";
-import { useVideoChanges } from "@/hooks/use-video-changes";
+import { useVideoChanges, withCounts } from "@/hooks/use-video-changes";
+import type { VideoFrame } from "@/hooks/use-video-realtime";
 import { messageFor } from "@/lib/api/errors";
 import { listStudioPosts, type StudioPostQuery } from "@/lib/api/studio";
 import { getVideo } from "@/lib/api/videos";
@@ -169,10 +170,19 @@ export function StudioPosts() {
     }
     replace(video);
   };
-  // A delete or pin made on the profile, in another tab or on another device lands here without a reload.
+  /** Rows whose counters a frame moved, and when — a poll that left before keeps the frame's. */
+  const counted = useRef(new Map<string, { at: number; frame: VideoFrame }>());
+  // A delete or pin made on the profile, in another tab or on another device lands here without a
+  // reload; a view, like or comment from anyone moves its row's counters the moment it happens.
   useVideoChanges(posts?.map((video) => video.id) ?? [], {
     onUpdated: update,
     onDeleted: remove,
+    onCounts: (frame) => {
+      counted.current.set(frame.videoId, { at: performance.now(), frame });
+      setPosts(
+        (current) => current?.map((item) => (item.id === frame.videoId ? withCounts(item, frame) : item)) ?? null,
+      );
+    },
   });
   // Rows the pipeline is still working on are fetched again until they settle, so a verdict
   // shows up without a reload. Only those rows, by id: reloading the list would drop the pages
@@ -199,11 +209,16 @@ export function StudioPosts() {
       const signal = controller.current?.signal;
       if (!signal || signal.aborted || document.visibilityState !== "visible") return;
       const before = edits.current;
+      const startedAt = performance.now();
       listStudioPosts({ ...query, page: 0, size: PAGE_SIZE }, signal)
         .then((result) => {
           if (signal.aborted || edits.current !== before) return;
-          const top = new Set(result.content.map((item) => item.id));
-          setPosts((current) => [...result.content, ...(current ?? []).filter((item) => !top.has(item.id))]);
+          const fresh = result.content.map((item) => {
+            const framed = counted.current.get(item.id);
+            return framed && framed.at >= startedAt ? withCounts(item, framed.frame) : item;
+          });
+          const top = new Set(fresh.map((item) => item.id));
+          setPosts((current) => [...fresh, ...(current ?? []).filter((item) => !top.has(item.id))]);
         })
         // Tried again next tick.
         .catch(() => {});

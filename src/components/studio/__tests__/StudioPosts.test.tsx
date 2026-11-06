@@ -14,7 +14,15 @@ vi.mock("next/link", () => ({
 }));
 vi.mock("@/components/ui/toast", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 // Rows subscribe to their video's topic; a test must not open a socket to whatever is on :8080.
-vi.mock("@/lib/realtime/stompClient", () => ({ subscribeTopic: () => () => {} }));
+const topics = vi.hoisted(() => new Map<string, (body: string) => void>());
+vi.mock("@/lib/realtime/stompClient", () => ({
+  subscribeTopic: (destination: string, onBody: (body: string) => void) => {
+    topics.set(destination, onBody);
+    return () => topics.delete(destination);
+  },
+}));
+const push = (videoId: string, counts: Record<string, number>) =>
+  act(() => topics.get(`/topic/videos.${videoId}`)!(JSON.stringify({ type: "counts", videoId, ...counts })));
 
 const listStudioPosts = vi.fn();
 vi.mock("@/lib/api/studio", () => ({
@@ -214,6 +222,29 @@ describe("StudioPosts — live first page", () => {
       await act(async () => stale.resolve(page([post("1", "Doomed")], 0, 1)));
 
       expect(screen.queryByText("Doomed")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("StudioPosts — live counters", () => {
+  it("moves a row's counters the moment a frame lands, and a poll that left before keeps them", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const stale = deferred<PageResponse<VideoResponse>>();
+      listStudioPosts.mockResolvedValueOnce(page([post("1", "Mine")], 0, 1)).mockReturnValueOnce(stale.promise);
+
+      render(<StudioPosts />);
+      await screen.findByText("Mine");
+      await act(() => vi.advanceTimersByTimeAsync(POSTS_POLL_MS));
+
+      push("1", { likeCount: 7, viewCount: 31 });
+      expect(screen.getByText("7")).toBeTruthy();
+      expect(screen.getByText("31")).toBeTruthy();
+
+      await act(async () => stale.resolve(page([post("1", "Mine")], 0, 1)));
+      expect(screen.getByText("7")).toBeTruthy();
     } finally {
       vi.useRealTimers();
     }
