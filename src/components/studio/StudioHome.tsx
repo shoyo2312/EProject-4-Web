@@ -16,7 +16,8 @@ import {
 } from "@/components/studio/ui";
 import { useSession } from "@/components/session/SessionProvider";
 import { useCommentContext } from "@/hooks/use-comment-context";
-import { useStudioQuery } from "@/hooks/use-studio-query";
+import { useMyStudioPulse } from "@/hooks/use-studio-pulse";
+import { ANALYTICS_REFRESH_MS, useStudioQuery } from "@/hooks/use-studio-query";
 import { useVideoChanges } from "@/hooks/use-video-changes";
 import {
   getCreatorOverview,
@@ -31,9 +32,12 @@ import { overviewMetrics } from "@/lib/studio/overview";
 /** `/studio` — TikTok Studio's Home: who you are, key metrics, recent posts and comments. */
 export function StudioHome() {
   const { days, setDays } = useStudioRange();
-  const overview = useStudioQuery(`overview:${days}`, (signal) =>
-    getCreatorOverview(days, signal),
+  const overview = useStudioQuery(
+    `overview:${days}`,
+    (signal) => getCreatorOverview(days, signal),
+    ANALYTICS_REFRESH_MS,
   );
+  useMyStudioPulse(overview.refresh);
 
   return (
     <div className="flex flex-col gap-8">
@@ -69,6 +73,8 @@ function ProfileCard() {
   const stats = useStudioQuery(`stats:${user?.userId}`, (signal) =>
     getUserVideoStats(user!.userId, signal),
   );
+  // The frame is sent once video-service has the new total, so it is read straight away.
+  useMyStudioPulse(stats.refresh, 0);
   if (!user)
     return (
       <StudioCard className="flex items-center gap-4 p-5" aria-hidden>

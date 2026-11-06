@@ -8,7 +8,8 @@ import { MetricTabs } from "@/components/studio/MetricTabs";
 import { formatPostDate, PostCell } from "@/components/studio/PostCell";
 import { useStudioRange } from "@/components/studio/StudioRange";
 import { EmptyState, StudioCard, StudioSkeleton } from "@/components/studio/ui";
-import { useStudioQuery } from "@/hooks/use-studio-query";
+import { useMyStudioPulse } from "@/hooks/use-studio-pulse";
+import { ANALYTICS_REFRESH_MS, useStudioQuery } from "@/hooks/use-studio-query";
 import { getCreatorOverview, getCreatorTopVideos, getCreatorViewers } from "@/lib/api/studio";
 import type { CreatorVideoSort, CreatorVideoStats } from "@/lib/api/types";
 import { getVideosByIds } from "@/lib/api/videos";
@@ -21,7 +22,8 @@ import { cn } from "@/lib/utils";
 /** `/studio/analytics` — the metric strip and its chart, for the range in the header. */
 export function AnalyticsOverview() {
   const { days } = useStudioRange();
-  const overview = useStudioQuery(`overview:${days}`, (signal) => getCreatorOverview(days, signal));
+  const overview = useStudioQuery(`overview:${days}`, (signal) => getCreatorOverview(days, signal), ANALYTICS_REFRESH_MS);
+  useMyStudioPulse(overview.refresh);
 
   return overview.error ? (
     <StudioCard>
@@ -54,7 +56,8 @@ export function AnalyticsContent() {
     const videos = new Map((await getVideosByIds(rows.map((row) => row.videoId), signal)).map((video) => [video.id, video]));
     // The pinned post leads, as on the profile — among the posts the window ranked, not beyond them.
     return { rows: pinnedFirst(rows, (row) => videos.get(row.videoId)?.pinnedAt), videos };
-  });
+  }, ANALYTICS_REFRESH_MS);
+  useMyStudioPulse(top.refresh);
 
   return (
     <div className="flex flex-col gap-4">
@@ -131,7 +134,7 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 /** `/studio/analytics/viewers` — totals, then when they watch once there are enough of them. */
 export function AnalyticsViewers() {
   const { days } = useStudioRange();
-  const viewers = useStudioQuery(`viewers:${days}`, (signal) => getCreatorViewers(days, signal));
+  const viewers = useStudioQuery(`viewers:${days}`, (signal) => getCreatorViewers(days, signal), ANALYTICS_REFRESH_MS);
   const [byDay, setByDay] = useState(false);
   const data = viewers.data;
 
