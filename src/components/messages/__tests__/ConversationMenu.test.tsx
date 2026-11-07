@@ -151,7 +151,7 @@ describe("pin", () => {
     mount();
     openMenu();
     await act(async () => choose("Pin to top"));
-    expect(toast.error).toHaveBeenCalledWith("You can pin at most 3 conversations. Unpin one first.");
+    expect(toast.error).toHaveBeenCalledWith("You can pin at most 5 conversations. Unpin one first.");
     expect(chat.unpin).not.toHaveBeenCalled();
   });
 });
