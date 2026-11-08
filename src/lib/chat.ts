@@ -595,6 +595,8 @@ export function chatErrorMessage(error: unknown): string {
         return "That message was recalled.";
       case "MESSAGE_NOT_FOUND":
         return "That message is no longer here.";
+      case "MESSAGE_ALREADY_SEEN":
+        return "This message has already been seen and can no longer be recalled.";
       case "NOT_MESSAGE_AUTHOR":
         return "Only the sender can recall a message.";
       case "REACTION_NOT_ALLOWED":

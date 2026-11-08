@@ -12,17 +12,15 @@ export const KEYWORD_FEEDS = [
 
 export type KeywordFeeds = Omit<KeywordFilterInput, "keyword">;
 
-/** One word or one hashtag — user-service's own rule. */
-const SINGLE_WORD = /^#?[^\s#]+$/;
-
 /**
  * Why `text` cannot be saved, or null when it can. `existing` are the
  * account's other keywords; a match in any capitalization is a duplicate, as
  * user-service sees it.
  */
 export function keywordError(text: string, existing: readonly string[]): string | null {
-  const keyword = text.trim();
-  if (!SINGLE_WORD.test(keyword)) return "Enter a single word or hashtag";
+  // user-service trims and folds runs of spaces to one before it checks, so a phrase is compared that way.
+  const keyword = text.trim().replace(/\s+/g, " ");
+  if (!keyword) return "Enter a word, hashtag or phrase";
   if ([...keyword].length > KEYWORD_MAX_LENGTH) return "Keywords can be up to 200 characters";
   const lower = keyword.toLowerCase();
   if (existing.some((other) => other.toLowerCase() === lower)) {

@@ -3,12 +3,16 @@ import { describe, expect, it } from "vitest";
 import { feedsLabel, keywordError } from "@/lib/settings/keyword-filters";
 
 describe("keywordError", () => {
-  it("takes one word or one hashtag", () => {
+  it("takes a word, a hashtag or a phrase", () => {
     expect(keywordError("cat", [])).toBeNull();
     expect(keywordError("#cat", [])).toBeNull();
-    expect(keywordError("cat video", [])).toBe("Enter a single word or hashtag");
-    expect(keywordError("##cat", [])).toBe("Enter a single word or hashtag");
-    expect(keywordError("cat#video", [])).toBe("Enter a single word or hashtag");
+    expect(keywordError("cat video", [])).toBeNull();
+    expect(keywordError("nhà cái", [])).toBeNull();
+    expect(keywordError("   ", [])).toBe("Enter a word, hashtag or phrase");
+  });
+
+  it("compares a phrase with its spaces folded", () => {
+    expect(keywordError("Cat   Video", ["cat video"])).toBe("You've already added this keyword");
   });
 
   it("allows 200 characters", () => {
