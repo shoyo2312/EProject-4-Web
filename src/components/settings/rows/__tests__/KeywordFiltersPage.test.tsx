@@ -67,8 +67,8 @@ it("keeps Save disabled until a keyword and a feed are chosen", async () => {
   expect(save().hasAttribute("disabled")).toBe(false);
 
   type("dog video");
-  expect(screen.getByText("Enter a single word or hashtag")).toBeTruthy();
-  expect(save().hasAttribute("disabled")).toBe(true);
+  expect(screen.queryByText("Enter a single word or hashtag")).toBeNull();
+  expect(save().hasAttribute("disabled")).toBe(false);
 });
 
 it("refuses a keyword already on the list, in any capitalization", async () => {

@@ -292,7 +292,7 @@ function KeywordForm({
             {editing ? "Edit keyword" : "Add keyword"}
           </h1>
           <p className="text-[13px] leading-[16.9px] text-[rgb(255_255_255/0.6)]">
-            Enter a single word or hashtag to filter from selected feeds. Spelling isn’t
+            Enter a word, hashtag or phrase to filter from selected feeds. Spelling isn’t
             case-sensitive.
           </p>
         </div>
@@ -303,7 +303,7 @@ function KeywordForm({
               aria-label="Keyword"
               value={text}
               onChange={(event) => setText(event.target.value)}
-              placeholder="Enter a word or hashtag"
+              placeholder="Enter a word, hashtag or phrase"
               autoComplete="off"
               className="h-full min-w-0 flex-1 bg-transparent px-0.5 text-[16px] leading-[20.8px] text-[#f6f6f6] caret-[#fe2c55] outline-none placeholder:text-[rgb(255_255_255/0.6)]"
             />
