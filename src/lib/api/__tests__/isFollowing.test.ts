@@ -140,3 +140,16 @@ describe("clearFollowCache", () => {
     expect(peekFollowState("1")).toBeUndefined();
   });
 });
+
+describe("the following list on one page load", () => {
+  it("is read once when the Follow buttons and the repost badges both need it", async () => {
+    apiFetch.mockImplementation(followingPages);
+    const { isFollowing, getFollowingIds } = await load();
+
+    await isFollowing("viewer", "1");
+    const ids = await getFollowingIds("viewer");
+
+    expect(ids).toEqual(["1", "2", "3"]);
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+  });
+});

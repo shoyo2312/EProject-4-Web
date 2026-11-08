@@ -21,6 +21,8 @@ const cache = new Map<string, RepostContextResponse>();
 const listeners = new Set<() => void>();
 
 let queue = new Set<string>();
+/** Asked for and not answered yet: the feed asks before its cards mount, and the cards ask again. */
+const inFlight = new Set<string>();
 let flushing: Promise<void> | null = null;
 let following: Promise<Set<string>> | null = null;
 
@@ -44,7 +46,7 @@ export function getRepostContext(videoId: string): RepostContextResponse | undef
  * the id uncached so the next mount retries — a signed-out viewer simply never gets a badge.
  */
 export function loadRepostContext(videoId: string): void {
-  if (cache.has(videoId) || queue.has(videoId)) return;
+  if (cache.has(videoId) || queue.has(videoId) || inFlight.has(videoId)) return;
   queue.add(videoId);
   if (flushing) return;
 
@@ -52,14 +54,18 @@ export function loadRepostContext(videoId: string): void {
     const ids = [...queue];
     queue = new Set();
     flushing = null;
+    for (const id of ids) inFlight.add(id);
 
     for (let i = 0; i < ids.length; i += MAX_BATCH) {
+      const batch = ids.slice(i, i + MAX_BATCH);
       try {
-        for (const context of await getRepostContexts(ids.slice(i, i + MAX_BATCH))) {
+        for (const context of await getRepostContexts(batch)) {
           cache.set(context.videoId, context);
         }
       } catch {
         // No badge rather than a broken card; the ids stay uncached and are retried later.
+      } finally {
+        for (const id of batch) inFlight.delete(id);
       }
     }
     notify();
@@ -93,6 +99,7 @@ export function followingIdSet(viewerId: string): Promise<Set<string>> {
 /** Called on sign-in/sign-out: both halves are per-viewer. */
 export function clearRepostContextCache(): void {
   cache.clear();
+  inFlight.clear();
   following = null;
   notify();
 }

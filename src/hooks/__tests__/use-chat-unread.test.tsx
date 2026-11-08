@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   muteConversation: vi.fn(),
   deleteConversationForMe: vi.fn(),
   queue: { handler: null as ((body: string) => void) | null },
+  socket: { connected: true, onConnect: null as (() => void) | null },
   notify: vi.fn(),
   getBlocked: vi.fn(),
   acknowledgeDelivered: vi.fn(),
@@ -42,7 +43,13 @@ vi.mock("@/lib/realtime/stompClient", () => ({
       api.queue.handler = null;
     };
   },
-  onStompConnect: () => () => {},
+  onStompConnect: (listener: () => void) => {
+    api.socket.onConnect = listener;
+    return () => {
+      api.socket.onConnect = null;
+    };
+  },
+  isStompConnected: () => api.socket.connected,
 }));
 vi.mock("@/lib/settings/browser-notifications", () => ({ showBrowserNotification: (n: unknown) => api.notify(n) }));
 
@@ -98,6 +105,7 @@ async function open(rows: ConversationResponse[]) {
 beforeEach(() => {
   for (const fn of Object.values(api)) if (typeof fn === "function" && "mockReset" in fn) fn.mockReset();
   api.queue.handler = null;
+  api.socket.connected = true;
   api.listMessageRequests.mockResolvedValue([]);
   api.acknowledgeDelivered.mockImplementation(async (_id: string, ids: string[]) => ({
     userId: "1",
@@ -112,6 +120,31 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+});
+
+describe("first sync", () => {
+  it("waits for the socket's connect on a fresh load, so the inbox is read once, not twice", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    api.socket.connected = false;
+    api.listConversations.mockResolvedValue([]);
+    renderHook(() => useChatUnread("1"));
+    await flush();
+    expect(api.listConversations).not.toHaveBeenCalled();
+
+    act(() => api.socket.onConnect?.());
+    await flush();
+    await act(async () => vi.advanceTimersByTime(5_000));
+    expect(api.listConversations).toHaveBeenCalledTimes(1);
+  });
+
+  it("goes ahead alone when the socket is slow to come up", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    api.socket.connected = false;
+    api.listConversations.mockResolvedValue([]);
+    renderHook(() => useChatUnread("1"));
+    await act(async () => vi.advanceTimersByTime(3_000));
+    expect(api.listConversations).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("alerts for a new message", () => {

@@ -1,13 +1,14 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useVideoFeed } from "@/hooks/use-video-feed";
 import { getPersonalizedFeed } from "@/lib/api/recommendations";
 import type { VideoResponse } from "@/lib/api/types";
 import { getFeed, getVideo, getVideosByIds } from "@/lib/api/videos";
 
+const session = vi.hoisted(() => ({ isSignedIn: true }));
 vi.mock("@/components/session/SessionProvider", () => ({
-  useSession: () => ({ isSignedIn: true, isLoading: false }),
+  useSession: () => ({ isSignedIn: session.isSignedIn, isLoading: false }),
 }));
 /** The `/topic/feed` handler the hook subscribed, to publish a video into it. */
 let publish: ((frame: { videoId?: string }) => void) | null = null;
@@ -26,7 +27,10 @@ vi.mock("@/lib/api/feed-cards", () => ({
   toFeedCards: vi.fn(async (rows: VideoResponse[]) => rows.map((row) => ({ id: row.id }))),
 }));
 
-afterEach(() => vi.resetAllMocks());
+afterEach(() => {
+  vi.resetAllMocks();
+  session.isSignedIn = true;
+});
 
 it("asks for For You, and pages on when its keywords leave a ranked batch empty", async () => {
   vi.mocked(getPersonalizedFeed).mockResolvedValue([{ videoId: "v1" }] as never);
@@ -68,4 +72,35 @@ it("appends a just-published video the filters let through", async () => {
   await act(async () => publish?.({ videoId: "v9" }));
 
   await waitFor(() => expect(result.current.videos).toHaveLength(2));
+});
+
+describe("the first page the server read for a guest", () => {
+  const guestPage = (fetchedAt: number) => ({
+    page: { items: [{ id: "g1" } as VideoResponse], nextCursor: "c1" },
+    fetchedAt,
+  });
+
+  it("opens a guest's feed without asking for it again", async () => {
+    session.isSignedIn = false;
+    const { result } = renderHook(() => useVideoFeed(guestPage(Date.now())));
+
+    await waitFor(() => expect(result.current.videos).toEqual([{ id: "g1" }]));
+    expect(getFeed).not.toHaveBeenCalled();
+  });
+
+  it("is read again when the copy is old", async () => {
+    session.isSignedIn = false;
+    vi.mocked(getFeed).mockResolvedValue({ items: [{ id: "v9" } as VideoResponse], nextCursor: null });
+    const { result } = renderHook(() => useVideoFeed(guestPage(Date.now() - 5 * 60_000)));
+
+    await waitFor(() => expect(result.current.videos).toEqual([{ id: "v9" }]));
+  });
+
+  it("is never shown to a signed-in viewer, whose own filters it did not pass", async () => {
+    vi.mocked(getPersonalizedFeed).mockResolvedValue([] as never);
+    vi.mocked(getFeed).mockResolvedValue({ items: [{ id: "v9" } as VideoResponse], nextCursor: null });
+    const { result } = renderHook(() => useVideoFeed(guestPage(Date.now())));
+
+    await waitFor(() => expect(result.current.videos).toEqual([{ id: "v9" }]));
+  });
 });

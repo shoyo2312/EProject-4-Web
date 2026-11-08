@@ -194,6 +194,7 @@ export function clearFollowCache(): void {
   followState.clear();
   requestedState.clear();
   followingWalk = null;
+  followingPages.clear();
   notifyFollowState();
 }
 
@@ -441,7 +442,7 @@ export async function getFollowingIds(
   viewerId: string,
   max = 500,
 ): Promise<string[]> {
-  const ids = await collectIds((page) => getFollowing(viewerId, page, 50), max);
+  const ids = await collectIds((page) => followingPage(viewerId, page), max);
   for (const userId of ids) followState.set(userId, true);
   notifyFollowState();
   return ids;
@@ -502,13 +503,38 @@ let followingWalk: { viewerId: string; complete: Promise<boolean> } | null = nul
 /** Bumped by `clearFollowCache`, so a walk still in flight knows its viewer is gone. */
 let followEpoch = 0;
 
+/**
+ * One page of the viewer's following list, shared by the two walks above for a few seconds: on a
+ * page load the Follow buttons (`walkFollowing`) and the repost badges (`getFollowingIds`) read
+ * the same pages within a second of each other, and were each paying for them.
+ */
+const followingPages = new Map<string, Promise<PageResponse<UserProfileResponse>>>();
+const FOLLOWING_PAGE_SHARE_MS = 5_000;
+
+function followingPage(
+  viewerId: string,
+  page: number,
+): Promise<PageResponse<UserProfileResponse>> {
+  const key = `${viewerId}:${page}`;
+  const shared = followingPages.get(key);
+  if (shared) return shared;
+
+  const fetched = getFollowing(viewerId, page, 50);
+  followingPages.set(key, fetched);
+  const forget = () => {
+    if (followingPages.get(key) === fetched) followingPages.delete(key);
+  };
+  fetched.then(() => setTimeout(forget, FOLLOWING_PAGE_SHARE_MS), forget);
+  return fetched;
+}
+
 function walkFollowing(viewerId: string, maxPages: number): Promise<boolean> {
   if (followingWalk?.viewerId === viewerId) return followingWalk.complete;
 
   const epoch = followEpoch;
   const complete = (async () => {
     for (let page = 0; page < maxPages; page += 1) {
-      const result = await getFollowing(viewerId, page, 50);
+      const result = await followingPage(viewerId, page);
       // `clearFollowCache` (a sign-out, another account) dropped this walk while
       // the page was in flight: its answers belong to the previous viewer.
       if (epoch !== followEpoch) return false;

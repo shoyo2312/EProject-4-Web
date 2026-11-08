@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 
-import { useLikeStatuses } from "@/hooks/use-like-statuses";
+import { prefetchLikeStatuses, useLikeStatuses } from "@/hooks/use-like-statuses";
 import type { LikeStatusResponse } from "@/lib/api/types";
 
 const getLikeStatuses = vi.fn<(ids: string[]) => Promise<LikeStatusResponse[]>>();
@@ -111,5 +111,27 @@ describe("useLikeStatuses", () => {
 
     expect(result.current.liked).toEqual({ "1": false, "2": true });
     expect(result.current.counts).toEqual({ "1": 3, "2": 8 });
+  });
+});
+
+describe("prefetchLikeStatuses", () => {
+  it("is what the hook answers from, so the cards ask nothing more", async () => {
+    getLikeStatuses.mockImplementation(likedAll);
+    prefetchLikeStatuses(["p1", "p2"], "viewer");
+
+    const { result } = render(["p1", "p2", "p3"], "viewer");
+    await waitFor(() => expect(result.current.liked).toEqual({ p1: true, p2: true, p3: true }));
+
+    expect(getLikeStatuses.mock.calls).toEqual([[["p1", "p2"]], [["p3"]]]);
+  });
+
+  it("is not handed to another viewer", async () => {
+    getLikeStatuses.mockImplementation(likedAll);
+    prefetchLikeStatuses(["q1"], "viewer");
+
+    const { result } = render(["q1"], "someone-else");
+    await waitFor(() => expect(result.current.liked).toEqual({ q1: true }));
+
+    expect(getLikeStatuses.mock.calls).toEqual([[["q1"]], [["q1"]]]);
   });
 });

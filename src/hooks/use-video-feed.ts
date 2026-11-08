@@ -3,12 +3,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useSession } from "@/components/session/SessionProvider";
+import { prefetchLikeStatuses } from "@/hooks/use-like-statuses";
 import { useStompTopic } from "@/hooks/use-stomp-topic";
 import { toFeedCards } from "@/lib/api/feed-cards";
 import { getPersonalizedFeed } from "@/lib/api/recommendations";
 import { getFeed, getVideosByIds } from "@/lib/api/videos";
-import type { VideoResponse } from "@/lib/api/types";
+import type { GuestFeedPage } from "@/lib/api/guest-feed";
+import type { CursorPage, VideoResponse } from "@/lib/api/types";
+import { loadRepostContext } from "@/lib/repost-context";
 import type { FeedVideo } from "@/types/tiktok";
+
+/**
+ * Starts the viewer's hearts and repost badges for `videoIds` now, alongside the authors and
+ * counts, rather than after the cards mount and ask for them one round trip later.
+ */
+function prefetchViewerState(videoIds: readonly string[], viewerId: string | undefined): void {
+  if (!viewerId || videoIds.length === 0) return;
+  prefetchLikeStatuses(videoIds, viewerId);
+  for (const videoId of videoIds) loadRepostContext(videoId);
+}
 
 export interface VideoFeedState {
   videos: FeedVideo[];
@@ -22,6 +35,13 @@ export interface VideoFeedState {
 }
 
 const PAGE_SIZE = 20;
+
+/**
+ * Oldest server-read first page a guest is shown as is. The page cache can hand out a copy well
+ * past its revalidate window to the first visitor after a quiet spell; past this the browser
+ * reads the feed itself rather than open on videos that may have been taken down since.
+ */
+const GUEST_PAGE_MAX_AGE_MS = 60_000;
 
 /**
  * How many chronological pages one `loadMore` may pull while every video on
@@ -47,8 +67,21 @@ const MAX_EMPTY_PAGES = 3;
  * after it returned nothing would just re-ask a server that already told us it
  * has nothing left within its 30-minute suppression window.
  */
-export function useVideoFeed(): VideoFeedState {
-  const { isSignedIn, isLoading: sessionLoading } = useSession();
+export function useVideoFeed(guestPage: GuestFeedPage | null = null): VideoFeedState {
+  const { isSignedIn, isLoading: sessionLoading, user } = useSession();
+  const viewerId = user?.userId;
+
+  /**
+   * The first chronological page as the server read it, used once and only by a guest: a signed-in
+   * viewer's chronological pages are filtered by their own keywords, which the server's read was not.
+   */
+  const unusedGuestPage = useRef(guestPage);
+  const takeGuestPage = useCallback((): CursorPage<VideoResponse> | null => {
+    const held = unusedGuestPage.current;
+    unusedGuestPage.current = null;
+    if (!held || Date.now() - held.fetchedAt > GUEST_PAGE_MAX_AGE_MS) return null;
+    return held.page;
+  }, []);
 
   const [videos, setVideos] = useState<FeedVideo[]>([]);
   const [isLoading, setLoading] = useState(true);
@@ -85,14 +118,12 @@ export function useVideoFeed(): VideoFeedState {
       // Order is the ranking; the batch endpoint answers in the order asked, so
       // it survives the round trip and nothing here needs to re-sort. "For You"
       // leaves out what the viewer filtered from this feed in Settings.
-      const rows = await getVideosByIds(
-        ranked.map((item) => item.videoId),
-        signal,
-        "FOR_YOU",
-      );
+      const ids = ranked.map((item) => item.videoId);
+      prefetchViewerState(ids, viewerId);
+      const rows = await getVideosByIds(ids, signal, "FOR_YOU");
       return { cards: await toCards(rows), spent: false };
     },
-    [toCards],
+    [toCards, viewerId],
   );
 
   const loadChronological = useCallback(
@@ -102,12 +133,18 @@ export function useVideoFeed(): VideoFeedState {
       for (let attempt = 0; attempt < MAX_EMPTY_PAGES; attempt += 1) {
         if (chronologicalExhausted.current) break;
 
-        const page = await getFeed(cursor.current, PAGE_SIZE, signal, "FOR_YOU");
+        const page =
+          (!isSignedIn && cursor.current === undefined ? takeGuestPage() : null) ??
+          (await getFeed(cursor.current, PAGE_SIZE, signal, "FOR_YOU"));
         cursor.current = page.nextCursor ?? undefined;
         // Null cursor is the end of the feed; that is the whole protocol. A
         // short page says nothing — the last full page still hands one back.
         if (page.nextCursor === null) chronologicalExhausted.current = true;
 
+        prefetchViewerState(
+          page.items.filter((video) => !seenIds.current.has(video.id)).map((video) => video.id),
+          viewerId,
+        );
         cards.push(...(await toCards(page.items)));
         // Everything on that page was already on screen — from the ranked pass,
         // most likely, which draws from the same library — or filtered out by
@@ -118,7 +155,7 @@ export function useVideoFeed(): VideoFeedState {
 
       return cards;
     },
-    [toCards],
+    [toCards, viewerId, isSignedIn, takeGuestPage],
   );
 
   const load = useCallback(

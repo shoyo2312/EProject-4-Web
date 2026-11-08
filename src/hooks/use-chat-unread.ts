@@ -48,7 +48,7 @@ import {
 } from "@/lib/chat-unread";
 import { isLastPage } from "@/lib/api/types";
 import { getBlocked, setFollowRequested, setFollowState } from "@/lib/api/users";
-import { onStompConnect, subscribeTopic } from "@/lib/realtime/stompClient";
+import { isStompConnected, onStompConnect, subscribeTopic } from "@/lib/realtime/stompClient";
 import { showBrowserNotification } from "@/lib/settings/browser-notifications";
 import type { Author } from "@/types/tiktok";
 
@@ -101,6 +101,8 @@ export interface ChatUnread {
 
 /** How often to look again, which also finds anything the socket missed. */
 const RESYNC_MS = 30_000;
+/** How long the first sync waits for the socket's connect, which syncs too, before going alone. */
+const FIRST_SYNC_WAIT_MS = 3_000;
 const TAIL_PAGE = 100;
 /** How much of a conversation is read to hold what arrived while this client was away. */
 const ACK_PAGE = 100;
@@ -259,16 +261,27 @@ export function useChatUnread(me: string | null): ChatUnread {
 
   useEffect(() => {
     if (!me) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- the first sync fills state from the network once the account is known
-    void sync();
+    // The socket's connect syncs anyway, and has to: what arrives between a REST read and the
+    // subscription is otherwise lost. So on a fresh load the first sync waits for that connect
+    // instead of running twice, and only goes ahead alone if the socket is slow to come up.
+    let firstSync: number | undefined;
+    if (isStompConnected()) {
+      void sync();
+    } else {
+      firstSync = window.setTimeout(() => void sync(), FIRST_SYNC_WAIT_MS);
+    }
     const onVisible = () => {
       if (document.visibilityState === "visible") void sync();
     };
     const timer = window.setInterval(onVisible, RESYNC_MS);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", onVisible);
-    const stopReconnect = onStompConnect(() => void sync());
+    const stopReconnect = onStompConnect(() => {
+      window.clearTimeout(firstSync);
+      void sync();
+    });
     return () => {
+      window.clearTimeout(firstSync);
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onVisible);

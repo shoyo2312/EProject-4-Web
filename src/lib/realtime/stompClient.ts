@@ -110,6 +110,11 @@ export function subscribeTopic(destination: string, onMessage: (body: string) =>
   };
 }
 
+/** Whether the shared connection is open right now. */
+export function isStompConnected(): boolean {
+  return client?.connected ?? false;
+}
+
 /**
  * Calls `listener` every time the shared connection (re)connects, including the first. The broker
  * keeps no history, so anything sent while the socket was down is only recoverable by asking REST

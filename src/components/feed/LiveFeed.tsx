@@ -6,6 +6,7 @@ import { Feed } from "@/components/feed/Feed";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useVideoFeed } from "@/hooks/use-video-feed";
+import type { GuestFeedPage } from "@/lib/api/guest-feed";
 
 /**
  * "For You", backed by `GET /api/v1/videos/feed`.
@@ -18,8 +19,8 @@ import { useVideoFeed } from "@/hooks/use-video-feed";
  * There is no offline fallback: with the gateway down the page says so, and an
  * empty response from a healthy backend is an empty feed.
  */
-export function LiveFeed() {
-  const { videos, isLoading, error, loadMore } = useVideoFeed();
+export function LiveFeed({ guestPage = null }: { guestPage?: GuestFeedPage | null }) {
+  const { videos, isLoading, error, loadMore } = useVideoFeed(guestPage);
 
   if (isLoading) {
     return <FeedSkeleton />;
