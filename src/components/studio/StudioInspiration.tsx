@@ -268,7 +268,7 @@ function CreatorCard({
           >
             {name}
           </button>
-          {profile.bio && <span className="truncate text-[12px] leading-4 text-black/50">{profile.bio}</span>}
+          {profile.bio && <span className="max-w-full truncate text-[12px] leading-4 text-black/50">{profile.bio}</span>}
         </span>
         <span className="flex flex-none flex-col items-end">
           <span className="text-[15px] leading-5 font-semibold text-black">{formatCount(profile.followerCount)}</span>
