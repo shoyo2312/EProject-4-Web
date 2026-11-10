@@ -220,9 +220,9 @@ export function ConversationRow({
           </span>
           {pinned && <Pin aria-label="Pinned" className="ml-auto h-3 w-3 flex-none -rotate-45 text-[var(--chat-meta)]" />}
           {muted && <BellOff aria-label="Notifications muted" className={cn("h-3 w-3 flex-none text-[var(--chat-meta)]", !pinned && "ml-auto")} />}
-          {/* A muted thread keeps its bold "unread" text but raises no red dot or count. */}
-          {item.hasUnread && !muted &&
-            (unreadAsCount ? (
+          {/* A muted thread raises no red dot or count, but a quiet grey dot still says something is unread. */}
+          {item.hasUnread &&
+            (unreadAsCount && !muted ? (
               <span className="ml-auto flex-none">
                 <CountBadge count={1} label="Unread" />
               </span>
@@ -230,7 +230,11 @@ export function ConversationRow({
               <span
                 role="img"
                 aria-label="Unread"
-                className={cn("h-2.5 w-2.5 flex-none rounded-full bg-[var(--tt-red)]", !pinned && !muted && "ml-auto")}
+                className={cn(
+                  "h-2.5 w-2.5 flex-none rounded-full",
+                  muted ? "bg-[var(--chat-meta)]" : "bg-[var(--tt-red)]",
+                  !pinned && !muted && "ml-auto",
+                )}
               />
             ))}
         </span>

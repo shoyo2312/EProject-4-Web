@@ -71,6 +71,12 @@ describe("ConversationRow draft preview", () => {
     expect(screen.getByRole("img", { name: "Unread" })).toBeTruthy();
   });
 
+  it("keeps a quiet unread mark when the thread is muted", () => {
+    render(<ConversationRow item={{ ...item, muteMode: "INDEFINITE" }} author={undefined} me="1" active={false} />);
+    act(() => saveDraft("1", "A", "abc"));
+    expect(screen.getByRole("img", { name: "Unread" }).className).not.toContain("tt-red");
+  });
+
   it("flattens a multi-line draft onto one truncating line", () => {
     row();
     act(() => saveDraft("1", "A", "line one\n\nline two"));

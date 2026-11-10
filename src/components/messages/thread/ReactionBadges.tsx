@@ -53,7 +53,7 @@ export function ReactionBadges({
             motion.get(group.emoji) === "pop" && "motion-safe:animate-chat-react-pop",
             motion.get(group.emoji) === "bump" && "motion-safe:animate-chat-react-bump",
             group.mine
-              ? "border-[var(--chat-own)]/60 bg-[var(--chat-own)]/15"
+              ? "border-[var(--chat-own)]/60 bg-[color-mix(in_srgb,var(--chat-own)_18%,var(--chat-raised))]"
               : "border-[var(--chat-line-strong)] hover:bg-[var(--chat-active)]",
           )}
         >

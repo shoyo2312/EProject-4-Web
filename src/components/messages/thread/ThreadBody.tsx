@@ -243,10 +243,11 @@ export function ThreadBody({
     if (!deleting || deleteBusy) return;
     setDeleteBusy(true);
     setSendError(null);
-    const ok = await act(forEveryone ? thread.recall(deleting.id) : thread.hide(deleting.id));
+    const result = await (forEveryone ? thread.recall(deleting.id) : thread.hide(deleting.id));
     setDeleteBusy(false);
-    // A failure leaves the dialog's choice to be made again; the reason is in the alert line.
-    if (ok) setDeleting(null);
+    // Either way the dialog is done: a refusal is told as a toast, not left as a line under the composer.
+    setDeleting(null);
+    if (!result.ok) toast.error(chatErrorMessage(result.error));
   };
 
   return (

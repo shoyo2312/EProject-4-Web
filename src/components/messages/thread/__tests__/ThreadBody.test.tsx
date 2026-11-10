@@ -68,6 +68,7 @@ vi.mock("@/lib/realtime/stompClient", () => ({
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
 
+import { toast } from "@/components/ui/toast";
 import { ThreadBody } from "@/components/messages/thread/ThreadBody";
 
 const msg: MessageResponse = {
@@ -411,7 +412,7 @@ describe("ThreadBody reply, delete and recall", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("recall calls recall, never hide, and a failure keeps the dialog and says why", async () => {
+  it("recall calls recall, never hide, and a failure closes the dialog and says why in a toast", async () => {
     const recall = vi.fn().mockResolvedValue({ ok: false, error: new ApiError(403, "NOT_MESSAGE_AUTHOR", "x") });
     const hide = vi.fn();
     open({ hide, recall });
@@ -422,8 +423,9 @@ describe("ThreadBody reply, delete and recall", () => {
 
     expect(recall).toHaveBeenCalledWith("5");
     expect(hide).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog")).toBeTruthy();
-    expect(screen.getByRole("alert").textContent).toMatch(/only the sender/i);
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(vi.mocked(toast.error).mock.calls.at(-1)?.[0]).toMatch(/only the sender/i);
   });
 
   it("passes a reaction to the thread", async () => {
